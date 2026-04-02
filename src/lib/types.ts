@@ -51,7 +51,7 @@ export interface Pauta {
 
 export interface TitleOption {
   text: string;
-  style: 'clickbait' | 'curiosity' | 'impact';
+  style: 'clickbait' | 'curiosidade' | 'impacto';
 }
 
 export interface EpisodeMaterial {

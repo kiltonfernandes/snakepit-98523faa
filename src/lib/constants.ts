@@ -18,6 +18,7 @@ export const WEEKDAY_SECTIONS = [
 ] as const;
 
 export const SATURDAY_SECTIONS = [
+  { key: 'anniversary', label: 'Aniversário' },
   { key: 'next_week_releases', label: 'Lançamentos da Semana' },
 ] as const;
 
