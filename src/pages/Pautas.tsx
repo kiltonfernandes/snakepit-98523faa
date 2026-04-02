@@ -739,7 +739,7 @@ export default function Pautas() {
           {activePauta && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs flex-wrap">
-                <Badge variant="secondary">Tom: {tonePreset.split('–')[0].trim()}</Badge>
+                <Badge variant="secondary">Tom: {tone.label}</Badge>
                 {bannedTerms.length > 0 && <Badge variant="outline">{bannedTerms.length} termos banidos</Badge>}
                 <Badge variant="outline">{activeSection ? `Seção: ${activeSection}` : 'Pauta completa'}</Badge>
               </div>
