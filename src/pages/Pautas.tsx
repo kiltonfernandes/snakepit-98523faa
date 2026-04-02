@@ -39,10 +39,10 @@ function getEligibleReviews(releases: Release[], publicationDate: string): Relea
 function getEligibleSaturdayReleases(releases: Release[], publicationDate: string): Release[] {
   const pub = new Date(publicationDate + 'T12:00:00');
   const dPlus2 = new Date(pub); dPlus2.setDate(pub.getDate() + 2);
-  const dPlus10 = new Date(pub); dPlus10.setDate(pub.getDate() + 10);
+  const dPlus8 = new Date(pub); dPlus8.setDate(pub.getDate() + 8);
   return releases.filter(r => {
     const rd = new Date(r.release_date + 'T12:00:00');
-    return rd >= dPlus2 && rd <= dPlus10;
+    return rd >= dPlus2 && rd <= dPlus8;
   });
 }
 
