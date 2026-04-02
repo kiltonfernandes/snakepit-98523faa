@@ -1,36 +1,54 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, ArrowRight, Plus } from 'lucide-react';
+import { LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
+import { DAY_SLOTS } from '@/lib/constants';
+import { EpisodeCompletionIndicators } from '@/lib/types';
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { releases, weeks, pautas, materials, episodes } = useApp();
+  const { releases, weeks, pautas, materials } = useApp();
 
-  const finalizedPautas = pautas.filter(p => p.status === 'finalized').length;
-  const totalPautas = pautas.length;
-  const materialsWithTitle = materials.filter(m => m.selectedTitle).length;
-  const totalMaterials = materials.length;
-  const readyEpisodes = episodes.filter(e => e.status === 'ready' || e.status === 'published').length;
-  const totalEpisodes = episodes.length;
+  const currentWeek = weeks[0];
+  const weekPautas = currentWeek ? pautas.filter(p => p.week_id === currentWeek.id) : [];
+  const weekMaterials = currentWeek ? materials.filter(m => m.week_id === currentWeek.id) : [];
 
-  const pct = (n: number, t: number) => t > 0 ? Math.round((n / t) * 100) : 0;
+  function getIndicators(slotKey: string): EpisodeCompletionIndicators {
+    const pauta = weekPautas.find(p => {
+      const mat = weekMaterials.find(m => m.slot_key === slotKey);
+      return mat && p.id === mat.source_pauta_id;
+    });
+    const mat = weekMaterials.find(m => m.slot_key === slotKey);
+    return {
+      pauta: pauta?.status === 'finalized',
+      title: mat?.selected_title_index != null,
+      description: !!mat?.description_html,
+      cover: !!mat?.cover_url,
+      scheduling: !!mat?.spotify_link,
+    };
+  }
+
+  const allIndicators = DAY_SLOTS.map(day => ({ day, indicators: getIndicators(day.key) }));
+  const totalChecks = allIndicators.length * 5;
+  const completedChecks = allIndicators.reduce((sum, { indicators }) => {
+    return sum + (indicators.pauta ? 1 : 0) + (indicators.title ? 1 : 0) +
+      (indicators.description ? 1 : 0) + (indicators.cover ? 1 : 0) + (indicators.scheduling ? 1 : 0);
+  }, 0);
+  const weekProgress = totalChecks > 0 ? Math.round((completedChecks / totalChecks) * 100) : 0;
+
+  const Dot = ({ active }: { active: boolean }) => (
+    active
+      ? <Check className="h-3.5 w-3.5 text-emerald-400" />
+      : <Circle className="h-3.5 w-3.5 text-muted-foreground/40" />
+  );
 
   const stats = [
     { label: 'Lançamentos', value: String(releases.length), icon: Disc, route: '/releases' },
-    { label: 'Pautas', value: `${finalizedPautas}/${totalPautas}`, icon: FileText, route: '/pautas' },
-    { label: 'Materiais', value: `${materialsWithTitle}/${totalMaterials}`, icon: Palette, route: '/materials' },
-    { label: 'Episódios', value: `${readyEpisodes}/${totalEpisodes}`, icon: Mic, route: '/rivaldo' },
-  ];
-
-  const pipeline = [
-    { label: 'Lançamentos', progress: releases.length > 0 ? 100 : 0 },
-    { label: 'Pautas', progress: pct(finalizedPautas, totalPautas) },
-    { label: 'Assets', progress: pct(materialsWithTitle, totalMaterials) },
-    { label: 'Áudio', progress: pct(readyEpisodes, totalEpisodes) },
-    { label: 'Publicação', progress: pct(episodes.filter(e => e.status === 'published').length, totalEpisodes) },
+    { label: 'Semanas', value: String(weeks.length), icon: Calendar, route: '/calendar' },
+    { label: 'Pautas', value: `${pautas.filter(p => p.status === 'finalized').length}/${pautas.length}`, icon: FileText, route: '/pautas' },
+    { label: 'Materiais', value: `${materials.filter(m => m.selected_title_index != null).length}/${materials.length}`, icon: Palette, route: '/materials' },
   ];
 
   return (
@@ -57,22 +75,41 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm font-medium">Pipeline da Semana</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {pipeline.map((step, i) => (
-            <div key={step.label} className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">{i + 1}. {step.label}</span>
-                <span className="text-muted-foreground">{step.progress}%</span>
-              </div>
-              <Progress value={step.progress} className="h-1.5" />
+      {currentWeek && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-medium">
+                Pipeline da Semana — {currentWeek.start_date}
+              </CardTitle>
+              <span className="text-xs text-muted-foreground">{weekProgress}%</span>
             </div>
-          ))}
-        </CardContent>
-      </Card>
+            <Progress value={weekProgress} className="h-2 mt-2" />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              <div className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 text-[10px] text-muted-foreground font-medium mb-2 px-1">
+                <span>Episódio</span>
+                <span className="text-center">Pauta</span>
+                <span className="text-center">Título</span>
+                <span className="text-center">Descrição</span>
+                <span className="text-center">Capa</span>
+                <span className="text-center">Agend.</span>
+              </div>
+              {allIndicators.map(({ day, indicators }) => (
+                <div key={day.key} className="grid grid-cols-[120px_repeat(5,1fr)] gap-2 items-center py-1.5 px-1 rounded hover:bg-muted/30">
+                  <span className="text-sm font-medium">{day.label}</span>
+                  <span className="flex justify-center"><Dot active={indicators.pauta} /></span>
+                  <span className="flex justify-center"><Dot active={indicators.title} /></span>
+                  <span className="flex justify-center"><Dot active={indicators.description} /></span>
+                  <span className="flex justify-center"><Dot active={indicators.cover} /></span>
+                  <span className="flex justify-center"><Dot active={indicators.scheduling} /></span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => navigate('/pautas')} className="gap-2">
