@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Palette, Sparkles, Image, ExternalLink, Download } from 'lucide-react';
+import { Palette, Sparkles, Image, ExternalLink, Download, Copy } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,14 +10,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { useApp } from '@/contexts/AppContext';
-import { TitleOption, DaySlot } from '@/lib/types';
+import { TitleOption, DaySlot, EpisodeMaterial } from '@/lib/types';
+import { toast } from 'sonner';
 
 function parseProperNouns(title: string): string {
   return title.split(' ').filter(w => w.length > 2 && w[0] === w[0].toUpperCase()).join(' ');
 }
 
 export default function Materials() {
-  const { weeks, materials, getMaterialsForWeek, updateMaterial } = useApp();
+  const { weeks, materials, pautas, getMaterialsForWeek, getPautasForWeek, updateMaterial } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
@@ -26,12 +27,39 @@ export default function Materials() {
 
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekMaterials = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
+  const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
 
   const getTitle = (mat: { title_options_json: any[]; selected_title_index: number | null }) => {
     if (mat.selected_title_index != null && mat.title_options_json[mat.selected_title_index]) {
       return (mat.title_options_json[mat.selected_title_index] as any)?.text || '';
     }
     return '';
+  };
+
+  const getPautaStatus = (mat: EpisodeMaterial) => {
+    if (!mat.source_pauta_id) return null;
+    return pautas.find(p => p.id === mat.source_pauta_id);
+  };
+
+  const isPautaReady = (mat: EpisodeMaterial) => {
+    const pauta = getPautaStatus(mat);
+    return pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review');
+  };
+
+  // Sunday compilation: generate summary from week's pautas
+  const generateSundayContent = (mat: EpisodeMaterial) => {
+    const finalized = weekPautas.filter(p => p.week_id === mat.week_id && p.pauta_type !== 'sunday' && (p.status === 'finalized' || p.status === 'generated'));
+    if (finalized.length === 0) {
+      toast.warning('Nenhuma pauta pronta para compilação');
+      return;
+    }
+    const summary = finalized.map(p => {
+      const sections = (p.sections_json || {}) as Record<string, string>;
+      const mainContent = Object.values(sections).filter(Boolean).join(' ').slice(0, 200);
+      return `${p.publication_date}: ${mainContent}...`;
+    }).join('\n\n');
+    updateMaterial(mat.id, { description_html: `<h3>Compilação Semanal</h3>\n${summary}` });
+    toast.success('Compilação semanal gerada');
   };
 
   const generateTitles = (materialId: string) => {
@@ -96,24 +124,47 @@ export default function Materials() {
     return encodeURIComponent(parseProperNouns(title) || 'metal band');
   };
 
-  const handleBulkTitles = () => weekMaterials.forEach(m => generateTitles(m.id));
+  const handleBulkTitles = () => weekMaterials.forEach(m => {
+    if (isPautaReady(m)) generateTitles(m.id);
+  });
 
-  const handleExportMaterials = () => {
-    const content = weekMaterials.map(m => ({
-      slot: m.slot_key,
-      date: m.episode_date,
-      title: getTitle(m),
-      description: m.description_html,
-      cover: m.cover_url ? '(gerada)' : null,
-      spotify: m.spotify_link,
+  const handleBulkDescriptions = () => {
+    weekMaterials.forEach(m => {
+      if (m.slot_key === 'sunday') {
+        generateSundayContent(m);
+      }
+      // Placeholder for non-Sunday - in a real implementation, this would use AI
+    });
+    toast.info('Descrições em lote: use o prompt para gerar conteúdo personalizado');
+  };
+
+  const handleExportMaterials = (format: 'json' | 'clipboard' | 'per-episode') => {
+    if (format === 'per-episode') {
+      weekMaterials.forEach(m => {
+        const content = `Título: ${getTitle(m)}\nDescrição: ${m.description_html || ''}\nSpotify: ${m.spotify_link || 'Não agendado'}`;
+        const blob = new Blob([content], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `material_${m.slot_key}_${m.episode_date}.txt`; a.click();
+        URL.revokeObjectURL(url);
+      });
+      return;
+    }
+    const data = weekMaterials.map(m => ({
+      slot: m.slot_key, date: m.episode_date, title: getTitle(m),
+      description: m.description_html, cover: m.cover_url ? '(gerada)' : null, spotify: m.spotify_link,
     }));
-    const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' });
+    if (format === 'clipboard') {
+      const text = data.map(d => `${d.slot} (${d.date}): ${d.title}\n${d.description || 'Sem descrição'}`).join('\n\n---\n\n');
+      navigator.clipboard.writeText(text);
+      toast.success('Copiado para clipboard');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = `materiais_${selectedWeek?.start_date}.json`; a.click();
     URL.revokeObjectURL(url);
   };
 
-  // Traffic light for material completeness
   const matLight = (mat: { selected_title_index: number | null; description_html: string | null; cover_url: string | null; spotify_link: string | null }) => {
     const count = [mat.selected_title_index != null, !!mat.description_html, !!mat.cover_url, !!mat.spotify_link].filter(Boolean).length;
     if (count >= 3) return 'bg-emerald-500';
@@ -150,9 +201,17 @@ export default function Materials() {
           <p className="text-muted-foreground mt-1">Títulos, descrições e capas dos episódios</p>
         </div>
         {selectedWeek && (
-          <Button size="sm" variant="outline" className="gap-1" onClick={handleExportMaterials}>
-            <Download className="h-3.5 w-3.5" /> Exportar
-          </Button>
+          <div className="flex gap-2">
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => handleExportMaterials('clipboard')}>
+              <Copy className="h-3.5 w-3.5" /> Clipboard
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => handleExportMaterials('json')}>
+              <Download className="h-3.5 w-3.5" /> JSON
+            </Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => handleExportMaterials('per-episode')}>
+              <Download className="h-3.5 w-3.5" /> Por Episódio
+            </Button>
+          </div>
         )}
       </div>
 
@@ -185,21 +244,19 @@ export default function Materials() {
               const mat = weekMaterials.find(m => m.slot_key === day.key);
               if (!mat) return null;
               const opts = mat.title_options_json as TitleOption[];
+              const ready = isPautaReady(mat);
               return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className={`h-2 w-2 rounded-full ${matLight(mat)}`} />
                     <span className="text-[10px] text-muted-foreground">{mat.episode_date}</span>
+                    {!ready && <Badge variant="outline" className="text-[8px] text-orange-400 border-orange-400/30">Pauta não pronta</Badge>}
                   </div>
                   {opts.length > 0 ? (
                     opts.map((opt, i) => (
-                      <button
-                        key={i}
-                        className={`w-full text-left p-2 rounded-md text-xs border transition-colors ${
-                          mat.selected_title_index === i ? 'border-primary bg-primary/10 text-foreground' : 'border-border hover:border-primary/30 text-muted-foreground'
-                        }`}
-                        onClick={() => selectTitle(mat.id, i)}
-                      >
+                      <button key={i} className={`w-full text-left p-2 rounded-md text-xs border transition-colors ${
+                        mat.selected_title_index === i ? 'border-primary bg-primary/10 text-foreground' : 'border-border hover:border-primary/30 text-muted-foreground'
+                      }`} onClick={() => selectTitle(mat.id, i)}>
                         <Badge variant="secondary" className="text-[9px] mb-1">{opt.style}</Badge>
                         <p>{opt.text}</p>
                       </button>
@@ -207,7 +264,7 @@ export default function Materials() {
                   ) : (
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">Sem títulos gerados</p>
-                      <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => generateTitles(mat.id)}>
+                      <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => generateTitles(mat.id)} disabled={!ready}>
                         <Sparkles className="h-3 w-3 mr-1" /> Gerar
                       </Button>
                     </div>
@@ -227,16 +284,22 @@ export default function Materials() {
         <TabsContent value="descriptions">
           <WorkspaceShell
             weekLabel="Descrições da Semana"
-            actions={<Button size="sm"><Sparkles className="h-4 w-4 mr-1" /> Gerar Todas</Button>}
+            actions={<Button size="sm" onClick={handleBulkDescriptions}><Sparkles className="h-4 w-4 mr-1" /> Gerar Todas</Button>}
             renderDay={(day) => {
               const mat = weekMaterials.find(m => m.slot_key === day.key);
               if (!mat) return null;
+              const isSunday = day.key === 'sunday';
               return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className={`h-2 w-2 rounded-full ${matLight(mat)}`} />
                     <span className="text-[10px] text-muted-foreground">{mat.episode_date}</span>
                   </div>
+                  {isSunday && (
+                    <Button size="sm" variant="outline" className="w-full text-xs mb-2" onClick={() => generateSundayContent(mat)}>
+                      <Sparkles className="h-3 w-3 mr-1" /> Compilar Semana
+                    </Button>
+                  )}
                   <Textarea
                     className="min-h-[120px] text-xs resize-none"
                     placeholder="Descrição HTML do episódio..."
@@ -302,7 +365,7 @@ export default function Materials() {
               <Input placeholder="Cole aqui a URL da imagem..." value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
             </div>
             {imageUrl && (
-              <div className="flex-1 space-y-2">
+              <div className="space-y-2">
                 <Label>Preview</Label>
                 <img src={imageUrl} alt="Preview" className="w-full aspect-video rounded-md object-cover bg-muted" onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
               </div>

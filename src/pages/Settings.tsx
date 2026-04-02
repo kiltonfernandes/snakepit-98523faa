@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -8,10 +8,24 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
+import { toast } from 'sonner';
+
+const EDITORIAL_IDENTITY = `Você é o editor-chefe do Heavynauta, podcast diário de heavy metal que combina informação profunda com linguagem acessível. Mantenha a identidade: referências a subgêneros (death, black, doom, thrash, power), precisão factual, tom firme mas acolhedor para a comunidade metal brasileira.`;
+
+const TONE_PRESETS = [
+  { label: 'Cirúrgico', value: 30, desc: 'Extremamente preciso e direto. Mínimo de adjetivos, foco em dados.' },
+  { label: 'Sóbrio', value: 50, desc: 'Informativo e equilibrado. Tom jornalístico respeitoso.' },
+  { label: 'Equilibrado', value: 55, desc: 'Informativo com personalidade. O padrão Heavynauta.' },
+  { label: 'Quente', value: 70, desc: 'Empolgante e envolvente. Paixão pelo metal evidente.' },
+  { label: 'Incendiário', value: 90, desc: 'Máximo entusiasmo e energia. Linguagem visceral e intensa.' },
+];
 
 export default function Settings() {
   const { settings, updateSettings, activityLog } = useApp();
   const [newTerm, setNewTerm] = useState('');
+  const [copied, setCopied] = useState(false);
+  const [logSearch, setLogSearch] = useState('');
+  const [logFilter, setLogFilter] = useState<string>('all');
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
@@ -28,6 +42,30 @@ export default function Settings() {
   };
 
   const temperature = settings.brand_tone_temperature / 100;
+  const currentPreset = TONE_PRESETS.find(p => Math.abs(settings.brand_tone_temperature - p.value) < 3);
+
+  const labPrompt = `${EDITORIAL_IDENTITY}
+
+TOM EDITORIAL: ${currentPreset?.label || 'Custom'} (temperatura: ${temperature.toFixed(2)})
+${currentPreset?.desc || ''}
+
+Escreva um parágrafo sobre um lançamento fictício de uma banda de death metal técnico, mostrando como a temperatura editorial afeta o estilo de escrita. Demonstre o tom configurado acima.`;
+
+  const copyLabPrompt = async () => {
+    await navigator.clipboard.writeText(labPrompt);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    toast.success('Prompt do laboratório copiado');
+  };
+
+  // Filtered activity log
+  const filteredLog = activityLog.filter(entry => {
+    const matchSearch = !logSearch || entry.action.toLowerCase().includes(logSearch.toLowerCase()) || entry.details.toLowerCase().includes(logSearch.toLowerCase());
+    const matchFilter = logFilter === 'all' || entry.action.toLowerCase().includes(logFilter.toLowerCase());
+    return matchSearch && matchFilter;
+  });
+
+  const logActions = [...new Set(activityLog.map(e => e.action))];
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -39,6 +77,7 @@ export default function Settings() {
         <p className="text-muted-foreground mt-1">Preferências da workstation</p>
       </div>
 
+      {/* Tone Lab */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -64,13 +103,7 @@ export default function Settings() {
             <span className="ml-auto">Criativo</span>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {[
-              { label: 'Cirúrgico', value: 30 },
-              { label: 'Sóbrio', value: 50 },
-              { label: 'Equilibrado', value: 55 },
-              { label: 'Quente', value: 70 },
-              { label: 'Incendiário', value: 90 },
-            ].map(preset => (
+            {TONE_PRESETS.map(preset => (
               <Button
                 key={preset.label}
                 variant={Math.abs(settings.brand_tone_temperature - preset.value) < 3 ? 'default' : 'outline'}
@@ -82,9 +115,27 @@ export default function Settings() {
               </Button>
             ))}
           </div>
+          {currentPreset && (
+            <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">{currentPreset.desc}</p>
+          )}
+
+          {/* Lab prompt preview */}
+          <div className="space-y-2 border-t border-border pt-4">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-medium">Preview do Prompt de Tom</label>
+              <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={copyLabPrompt}>
+                {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                Copiar
+              </Button>
+            </div>
+            <pre className="text-[10px] bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[150px] overflow-y-auto text-muted-foreground">
+              {labPrompt}
+            </pre>
+          </div>
         </CardContent>
       </Card>
 
+      {/* Banned Terms */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -122,6 +173,7 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* Export defaults */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Padrões de Exportação</CardTitle>
@@ -153,6 +205,7 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* Activity Log with filters */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -160,11 +213,26 @@ export default function Settings() {
           </CardTitle>
           <CardDescription>Histórico de ações do sistema</CardDescription>
         </CardHeader>
-        <CardContent>
-          {activityLog.length > 0 ? (
+        <CardContent className="space-y-3">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input placeholder="Buscar no log..." className="pl-8 h-8 text-xs" value={logSearch} onChange={e => setLogSearch(e.target.value)} />
+            </div>
+            <Select value={logFilter} onValueChange={setLogFilter}>
+              <SelectTrigger className="w-[150px] h-8 text-xs">
+                <Filter className="h-3 w-3 mr-1" /><SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas as ações</SelectItem>
+                {logActions.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          {filteredLog.length > 0 ? (
             <ScrollArea className="h-[300px]">
               <div className="space-y-2">
-                {activityLog.map(entry => (
+                {filteredLog.map(entry => (
                   <div key={entry.id} className="flex items-start gap-3 p-2 rounded-md bg-muted/30 text-xs">
                     <span className="text-muted-foreground/50 font-mono shrink-0 mt-0.5">
                       {new Date(entry.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -178,7 +246,7 @@ export default function Settings() {
               </div>
             </ScrollArea>
           ) : (
-            <p className="text-sm text-muted-foreground">Nenhuma atividade registrada.</p>
+            <p className="text-sm text-muted-foreground">Nenhuma atividade encontrada.</p>
           )}
         </CardContent>
       </Card>
