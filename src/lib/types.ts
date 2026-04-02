@@ -1,35 +1,52 @@
-export type ReleaseStatus = 'pending' | 'reviewed' | 'used' | 'archived';
+export type WeekStatus = 'draft' | 'in_progress' | 'review' | 'finalized';
+export type PautaStatus = 'draft' | 'generated' | 'needs_review' | 'finalized';
+export type PautaType = 'weekday' | 'saturday' | 'sunday';
+
+export type DaySlot = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 
 export interface Release {
   id: string;
   artist: string;
   album: string;
-  releaseDate: string;
-  genres: string[];
-  rating: number;
-  comments: string;
-  status: ReleaseStatus;
-  createdAt: string;
+  release_date: string;
+  rating: number | null;
+  comments: string | null;
+  created_at: string;
+  updated_at: string;
+  genres?: string[];
 }
 
-export type WeekStatus = 'draft' | 'in_progress' | 'review' | 'finalized';
-export type PautaStatus = 'draft' | 'generated' | 'needs_review' | 'finalized';
-export type DaySlot = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday';
+export interface EditorialWeek {
+  id: string;
+  start_date: string;
+  status: WeekStatus;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface PautaSections {
-  intro: string;
-  research: string;
-  consolidation: string;
-  content: string;
-  description: string;
+  anniversary: string;
+  review_rafa: string;
+  news: string;
+  review_kilton: string;
+  next_week_releases: string;
 }
 
 export interface Pauta {
   id: string;
-  weekId: string;
-  daySlot: DaySlot;
-  sections: PautaSections;
+  week_id: string;
+  publication_date: string;
+  pauta_type: PautaType;
   status: PautaStatus;
+  raw_inputs_json: Record<string, unknown>;
+  sections_json: Partial<PautaSections>;
+  rendered_markdown: string | null;
+  rendered_text: string | null;
+  warnings_json: unknown[];
+  discovered_links_json: unknown[];
+  created_at: string;
+  updated_at: string;
+  finalized_at: string | null;
 }
 
 export interface TitleOption {
@@ -39,40 +56,42 @@ export interface TitleOption {
 
 export interface EpisodeMaterial {
   id: string;
-  weekId: string;
-  daySlot: DaySlot;
-  titleOptions: TitleOption[];
-  selectedTitle: string;
-  descriptionHtml: string;
-  coverUrl: string;
-  coverData: string | null;
-}
-
-export type EpisodeStatus = 'draft' | 'processing' | 'ready' | 'published';
-
-export interface Episode {
-  id: string;
-  weekId: string;
-  daySlot: DaySlot;
-  pautaId: string;
-  materialId: string;
-  audioUrl: string;
-  status: EpisodeStatus;
-  publishedAt: string | null;
-}
-
-export interface EditorialWeek {
-  id: string;
-  startDate: string;
-  status: WeekStatus;
-  createdAt: string;
+  week_id: string;
+  slot_key: DaySlot;
+  episode_date: string;
+  source_pauta_id: string | null;
+  title_options_json: TitleOption[];
+  selected_title_index: number | null;
+  description_html: string | null;
+  cover_url: string | null;
+  spotify_link: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface AppSettings {
-  toneTemperature: number;
-  bannedTerms: string[];
-  exportDefaults: {
-    format: 'mp3' | 'wav';
-    bitrate: number;
-  };
+  singleton_id: number;
+  brand_tone_temperature: number;
+  banned_terms_text: string;
+  default_export_layout: string;
+  default_export_container: string;
+  theme_name: string;
+}
+
+export interface ActivityLog {
+  id: string;
+  action_type: string;
+  entity_type: string;
+  entity_id: string | null;
+  summary: string;
+  details_json: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface EpisodeCompletionIndicators {
+  pauta: boolean;
+  title: boolean;
+  description: boolean;
+  cover: boolean;
+  scheduling: boolean;
 }
