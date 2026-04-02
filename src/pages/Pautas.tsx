@@ -15,9 +15,9 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS } from '@/lib/constants';
 import { Pauta, PautaSections, DaySlot, Release } from '@/lib/types';
+import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, type PromptBuildContext } from '@/lib/prompt-builder';
+import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
-
-const EDITORIAL_IDENTITY = `Você é o editor-chefe do Heavynauta, podcast diário de heavy metal que combina informação profunda com linguagem acessível. Mantenha a identidade: referências a subgêneros (death, black, doom, thrash, power), precisão factual, tom firme mas acolhedor para a comunidade metal brasileira. Use "Papo Sério Sobre Música Pesada" como tagline quando apropriado.`;
 
 function getPautaSlot(pauta: Pauta): DaySlot {
   const d = new Date(pauta.publication_date + 'T12:00:00');
