@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Trash2 } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -13,15 +13,21 @@ export default function Settings() {
   const { settings, updateSettings, activityLog } = useApp();
   const [newTerm, setNewTerm] = useState('');
 
+  const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
+
   const addBannedTerm = () => {
-    if (!newTerm.trim() || settings.bannedTerms.includes(newTerm.trim())) return;
-    updateSettings({ bannedTerms: [...settings.bannedTerms, newTerm.trim()] });
+    if (!newTerm.trim() || bannedTerms.includes(newTerm.trim())) return;
+    const updated = [...bannedTerms, newTerm.trim()].join('\n');
+    updateSettings({ banned_terms_text: updated });
     setNewTerm('');
   };
 
   const removeBannedTerm = (term: string) => {
-    updateSettings({ bannedTerms: settings.bannedTerms.filter(t => t !== term) });
+    const updated = bannedTerms.filter(t => t !== term).join('\n');
+    updateSettings({ banned_terms_text: updated });
   };
+
+  const temperature = settings.brand_tone_temperature / 100;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -33,7 +39,6 @@ export default function Settings() {
         <p className="text-muted-foreground mt-1">Preferências da workstation</p>
       </div>
 
-      {/* Tone Lab */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -45,13 +50,13 @@ export default function Settings() {
           <div className="space-y-2">
             <div className="flex justify-between text-xs">
               <span className="text-muted-foreground">Temperatura</span>
-              <span className="font-mono text-muted-foreground">{settings.toneTemperature.toFixed(2)}</span>
+              <span className="font-mono text-muted-foreground">{temperature.toFixed(2)}</span>
             </div>
             <Slider
-              value={[settings.toneTemperature * 100]}
+              value={[settings.brand_tone_temperature]}
               max={100}
               step={1}
-              onValueChange={([v]) => updateSettings({ toneTemperature: v / 100 })}
+              onValueChange={([v]) => updateSettings({ brand_tone_temperature: v })}
             />
           </div>
           <div className="flex gap-2 text-xs text-muted-foreground">
@@ -60,17 +65,18 @@ export default function Settings() {
           </div>
           <div className="flex gap-2 flex-wrap">
             {[
-              { label: 'Técnico', value: 0.3 },
-              { label: 'Equilibrado', value: 0.5 },
-              { label: 'Heavynauta', value: 0.7 },
-              { label: 'Caótico', value: 0.9 },
+              { label: 'Cirúrgico', value: 30 },
+              { label: 'Sóbrio', value: 50 },
+              { label: 'Equilibrado', value: 55 },
+              { label: 'Quente', value: 70 },
+              { label: 'Incendiário', value: 90 },
             ].map(preset => (
               <Button
                 key={preset.label}
-                variant={Math.abs(settings.toneTemperature - preset.value) < 0.05 ? 'default' : 'outline'}
+                variant={Math.abs(settings.brand_tone_temperature - preset.value) < 3 ? 'default' : 'outline'}
                 size="sm"
                 className="text-xs"
-                onClick={() => updateSettings({ toneTemperature: preset.value })}
+                onClick={() => updateSettings({ brand_tone_temperature: preset.value })}
               >
                 {preset.label}
               </Button>
@@ -79,7 +85,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Banned Terms */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -100,9 +105,9 @@ export default function Settings() {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          {settings.bannedTerms.length > 0 ? (
+          {bannedTerms.length > 0 ? (
             <div className="flex gap-2 flex-wrap">
-              {settings.bannedTerms.map(term => (
+              {bannedTerms.map(term => (
                 <Badge key={term} variant="secondary" className="gap-1 pr-1">
                   {term}
                   <button onClick={() => removeBannedTerm(term)} className="ml-1 hover:text-destructive">
@@ -117,33 +122,30 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Export Defaults */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">Padrões de Exportação</CardTitle>
-          <CardDescription>Configurações padrão para exportação de áudio</CardDescription>
+          <CardDescription>Layout e container padrão para exportação</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Formato</label>
-              <Select value={settings.exportDefaults.format} onValueChange={v => updateSettings({ exportDefaults: { ...settings.exportDefaults, format: v as 'mp3' | 'wav' } })}>
+              <label className="text-xs text-muted-foreground">Layout</label>
+              <Select value={settings.default_export_layout} onValueChange={v => updateSettings({ default_export_layout: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="mp3">MP3</SelectItem>
-                  <SelectItem value="wav">WAV</SelectItem>
+                  <SelectItem value="split">Split</SelectItem>
+                  <SelectItem value="unified">Unificado</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs text-muted-foreground">Bitrate</label>
-              <Select value={String(settings.exportDefaults.bitrate)} onValueChange={v => updateSettings({ exportDefaults: { ...settings.exportDefaults, bitrate: Number(v) } })}>
+              <label className="text-xs text-muted-foreground">Container</label>
+              <Select value={settings.default_export_container} onValueChange={v => updateSettings({ default_export_container: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="128">128 kbps</SelectItem>
-                  <SelectItem value="192">192 kbps</SelectItem>
-                  <SelectItem value="256">256 kbps</SelectItem>
-                  <SelectItem value="320">320 kbps</SelectItem>
+                  <SelectItem value="zip">ZIP</SelectItem>
+                  <SelectItem value="flat">Flat</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -151,7 +153,6 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Activity Log */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Palette, Sparkles, Image, ExternalLink, Eye } from 'lucide-react';
+import { Palette, Sparkles, Image, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -27,17 +27,24 @@ export default function Materials() {
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekMaterials = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
 
+  const getTitle = (mat: { title_options_json: any[]; selected_title_index: number | null }) => {
+    if (mat.selected_title_index != null && mat.title_options_json[mat.selected_title_index]) {
+      return (mat.title_options_json[mat.selected_title_index] as any)?.text || '';
+    }
+    return '';
+  };
+
   const generateTitles = (materialId: string) => {
     const options: TitleOption[] = [
       { text: 'Título estilo clickbait aqui', style: 'clickbait' },
       { text: 'Título estilo curiosidade aqui', style: 'curiosity' },
       { text: 'Título estilo impacto aqui', style: 'impact' },
     ];
-    updateMaterial(materialId, { titleOptions: options });
+    updateMaterial(materialId, { title_options_json: options as any });
   };
 
-  const selectTitle = (materialId: string, text: string) => {
-    updateMaterial(materialId, { selectedTitle: text });
+  const selectTitle = (materialId: string, index: number) => {
+    updateMaterial(materialId, { selected_title_index: index });
   };
 
   const openCoverCreator = (daySlot: DaySlot) => {
@@ -49,76 +56,54 @@ export default function Materials() {
 
   const generateCover = () => {
     if (!imageUrl || !coverDaySlot || !selectedWeek) return;
-    const mat = weekMaterials.find(m => m.daySlot === coverDaySlot);
+    const mat = weekMaterials.find(m => m.slot_key === coverDaySlot);
     if (!mat) return;
 
     const canvas = document.createElement('canvas');
     canvas.width = 1080; canvas.height = 1080;
     const ctx = canvas.getContext('2d')!;
 
-    // Background
     ctx.fillStyle = '#1a0e2e';
     ctx.fillRect(0, 0, 1080, 1080);
 
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      // Draw image in top 60%
       ctx.drawImage(img, 40, 40, 1000, 600);
-
-      // Gray bar
       ctx.fillStyle = '#3a3a3a';
       ctx.fillRect(0, 650, 1080, 6);
-
-      // Lavender label
       ctx.fillStyle = '#C8A2C8';
       ctx.font = 'bold 28px sans-serif';
       ctx.fillText('Heavynauta', 50, 710);
-
-      // Title
       ctx.fillStyle = '#e8d5f5';
       ctx.font = 'bold 42px sans-serif';
-      const title = mat.selectedTitle || `Episódio ${coverDaySlot}`;
+      const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
       ctx.fillText(title, 50, 800, 900);
-
-      // Tagline
       ctx.fillStyle = '#8a7a9a';
       ctx.font = '22px sans-serif';
       ctx.fillText('Papo Sério Sobre Música Pesada', 50, 860);
 
-      // Purple left border
-      ctx.fillStyle = '#2D1B4E';
-      ctx.fillRect(0, 0, 8, 1080);
-
-      // Sci-fi corner cuts
-      ctx.fillStyle = '#1a0e2e';
-      ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(30, 0); ctx.lineTo(0, 30); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(1080, 0); ctx.lineTo(1050, 0); ctx.lineTo(1080, 30); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(0, 1080); ctx.lineTo(30, 1080); ctx.lineTo(0, 1050); ctx.closePath(); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(1080, 1080); ctx.lineTo(1050, 1080); ctx.lineTo(1080, 1050); ctx.closePath(); ctx.fill();
-
       const dataUrl = canvas.toDataURL('image/png');
       setCoverPreview(dataUrl);
-      updateMaterial(mat.id, { coverData: dataUrl, coverUrl: imageUrl });
+      updateMaterial(mat.id, { cover_url: dataUrl });
     };
     img.onerror = () => {
-      // Fallback: generate without image
       ctx.fillStyle = '#C8A2C8';
       ctx.font = 'bold 28px sans-serif';
       ctx.fillText('Heavynauta', 50, 710);
       ctx.fillStyle = '#e8d5f5';
       ctx.font = 'bold 42px sans-serif';
-      ctx.fillText(mat.selectedTitle || 'Episódio', 50, 800, 900);
+      ctx.fillText(getTitle(mat) || 'Episódio', 50, 800, 900);
       const dataUrl = canvas.toDataURL('image/png');
       setCoverPreview(dataUrl);
-      updateMaterial(mat.id, { coverData: dataUrl });
+      updateMaterial(mat.id, { cover_url: dataUrl });
     };
     img.src = imageUrl;
   };
 
   const searchQuery = (daySlot: DaySlot) => {
-    const mat = weekMaterials.find(m => m.daySlot === daySlot);
-    const title = mat?.selectedTitle || '';
+    const mat = weekMaterials.find(m => m.slot_key === daySlot);
+    const title = mat ? getTitle(mat) : '';
     const nouns = parseProperNouns(title);
     return encodeURIComponent(nouns || 'metal band');
   };
@@ -155,7 +140,7 @@ export default function Materials() {
         <div className="flex gap-2 flex-wrap">
           {weeks.map(w => (
             <Button key={w.id} variant={selectedWeek?.id === w.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(w.id)}>
-              {new Date(w.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+              {new Date(w.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             </Button>
           ))}
         </div>
@@ -177,18 +162,19 @@ export default function Materials() {
               </Button>
             }
             renderDay={(day) => {
-              const mat = weekMaterials.find(m => m.daySlot === day.key);
+              const mat = weekMaterials.find(m => m.slot_key === day.key);
               if (!mat) return null;
+              const opts = mat.title_options_json as TitleOption[];
               return (
                 <div className="space-y-2">
-                  {mat.titleOptions.length > 0 ? (
-                    mat.titleOptions.map((opt, i) => (
+                  {opts.length > 0 ? (
+                    opts.map((opt, i) => (
                       <button
                         key={i}
                         className={`w-full text-left p-2 rounded-md text-xs border transition-colors ${
-                          mat.selectedTitle === opt.text ? 'border-primary bg-primary/10 text-foreground' : 'border-border hover:border-primary/30 text-muted-foreground'
+                          mat.selected_title_index === i ? 'border-primary bg-primary/10 text-foreground' : 'border-border hover:border-primary/30 text-muted-foreground'
                         }`}
-                        onClick={() => selectTitle(mat.id, opt.text)}
+                        onClick={() => selectTitle(mat.id, i)}
                       >
                         <Badge variant="secondary" className="text-[9px] mb-1">{opt.style}</Badge>
                         <p>{opt.text}</p>
@@ -202,10 +188,10 @@ export default function Materials() {
                       </Button>
                     </div>
                   )}
-                  {mat.selectedTitle && (
+                  {mat.selected_title_index != null && (
                     <div className="mt-2 p-2 rounded bg-primary/5 border border-primary/20">
                       <p className="text-[10px] text-primary font-medium">Selecionado:</p>
-                      <p className="text-xs">{mat.selectedTitle}</p>
+                      <p className="text-xs">{getTitle(mat)}</p>
                     </div>
                   )}
                 </div>
@@ -219,15 +205,15 @@ export default function Materials() {
             weekLabel="Descrições da Semana"
             actions={<Button size="sm"><Sparkles className="h-4 w-4 mr-1" /> Gerar Todas</Button>}
             renderDay={(day) => {
-              const mat = weekMaterials.find(m => m.daySlot === day.key);
+              const mat = weekMaterials.find(m => m.slot_key === day.key);
               if (!mat) return null;
               return (
                 <div className="space-y-2">
                   <Textarea
                     className="min-h-[120px] text-xs resize-none"
                     placeholder="Descrição HTML do episódio..."
-                    value={mat.descriptionHtml}
-                    onChange={e => updateMaterial(mat.id, { descriptionHtml: e.target.value })}
+                    value={mat.description_html || ''}
+                    onChange={e => updateMaterial(mat.id, { description_html: e.target.value })}
                   />
                 </div>
               );
@@ -240,13 +226,13 @@ export default function Materials() {
             weekLabel="Capas da Semana"
             actions={<Button size="sm"><Image className="h-4 w-4 mr-1" /> Criar Todas</Button>}
             renderDay={(day) => {
-              const mat = weekMaterials.find(m => m.daySlot === day.key);
+              const mat = weekMaterials.find(m => m.slot_key === day.key);
               if (!mat) return null;
               return (
                 <div className="space-y-2">
-                  {mat.coverData ? (
+                  {mat.cover_url ? (
                     <div className="space-y-2">
-                      <img src={mat.coverData} alt="Capa" className="w-full aspect-square rounded-md object-cover" />
+                      <img src={mat.cover_url} alt="Capa" className="w-full aspect-square rounded-md object-cover" />
                       <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => openCoverCreator(day.key)}>
                         Refazer Capa
                       </Button>
@@ -264,7 +250,6 @@ export default function Materials() {
         </TabsContent>
       </Tabs>
 
-      {/* Cover Creator Dialog */}
       <Dialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
