@@ -1,26 +1,37 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
-import { LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, ArrowRight } from 'lucide-react';
+import { LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, ArrowRight, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-const stats = [
-  { label: 'Lançamentos', value: '0', icon: Disc, route: '/releases' },
-  { label: 'Pautas', value: '0', icon: FileText, route: '/pautas' },
-  { label: 'Materiais', value: '0', icon: Palette, route: '/materials' },
-  { label: 'Episódios', value: '0', icon: Mic, route: '/rivaldo' },
-];
-
-const pipeline = [
-  { label: 'Lançamentos', progress: 0 },
-  { label: 'Pautas', progress: 0 },
-  { label: 'Assets', progress: 0 },
-  { label: 'Áudio', progress: 0 },
-  { label: 'Publicação', progress: 0 },
-];
+import { useApp } from '@/contexts/AppContext';
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { releases, weeks, pautas, materials, episodes } = useApp();
+
+  const finalizedPautas = pautas.filter(p => p.status === 'finalized').length;
+  const totalPautas = pautas.length;
+  const materialsWithTitle = materials.filter(m => m.selectedTitle).length;
+  const totalMaterials = materials.length;
+  const readyEpisodes = episodes.filter(e => e.status === 'ready' || e.status === 'published').length;
+  const totalEpisodes = episodes.length;
+
+  const pct = (n: number, t: number) => t > 0 ? Math.round((n / t) * 100) : 0;
+
+  const stats = [
+    { label: 'Lançamentos', value: String(releases.length), icon: Disc, route: '/releases' },
+    { label: 'Pautas', value: `${finalizedPautas}/${totalPautas}`, icon: FileText, route: '/pautas' },
+    { label: 'Materiais', value: `${materialsWithTitle}/${totalMaterials}`, icon: Palette, route: '/materials' },
+    { label: 'Episódios', value: `${readyEpisodes}/${totalEpisodes}`, icon: Mic, route: '/rivaldo' },
+  ];
+
+  const pipeline = [
+    { label: 'Lançamentos', progress: releases.length > 0 ? 100 : 0 },
+    { label: 'Pautas', progress: pct(finalizedPautas, totalPautas) },
+    { label: 'Assets', progress: pct(materialsWithTitle, totalMaterials) },
+    { label: 'Áudio', progress: pct(readyEpisodes, totalEpisodes) },
+    { label: 'Publicação', progress: pct(episodes.filter(e => e.status === 'published').length, totalEpisodes) },
+  ];
 
   return (
     <div className="space-y-8">
@@ -33,12 +44,8 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((s) => (
-          <Card
-            key={s.label}
-            className="cursor-pointer hover:border-primary/30 transition-colors"
-            onClick={() => navigate(s.route)}
-          >
+        {stats.map(s => (
+          <Card key={s.label} className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(s.route)}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{s.label}</CardTitle>
               <s.icon className="h-4 w-4 text-muted-foreground" />
