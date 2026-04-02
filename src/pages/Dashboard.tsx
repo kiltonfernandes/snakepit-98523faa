@@ -77,11 +77,19 @@ export default function Dashboard() {
     return 'bg-red-500';
   };
 
+  const currentWeek = weeks[0];
+  const weekEpisodeCount = currentWeek ? DAY_SLOTS.length : 0;
+  const weekFinalizedPautas = currentWeek ? pautas.filter(p => p.week_id === currentWeek.id && p.status === 'finalized').length : 0;
+  const weekTotalPautas = currentWeek ? pautas.filter(p => p.week_id === currentWeek.id).length : weekEpisodeCount;
+  const weekMatsWithTitle = currentWeek ? materials.filter(m => m.week_id === currentWeek.id && m.selected_title_index != null).length : 0;
+  const weekTotalMats = currentWeek ? materials.filter(m => m.week_id === currentWeek.id).length : weekEpisodeCount;
+  const weekScheduled = currentWeek ? materials.filter(m => m.week_id === currentWeek.id && m.spotify_link).length : 0;
+
   const stats = [
     { label: 'Lançamentos', value: String(releases.length), icon: Disc, route: '/releases' },
-    { label: 'Semanas', value: String(weeks.length), icon: Calendar, route: '/calendar' },
-    { label: 'Pautas', value: `${pautas.filter(p => p.status === 'finalized').length}/${pautas.length}`, icon: FileText, route: '/pautas' },
-    { label: 'Materiais', value: `${materials.filter(m => m.selected_title_index != null).length}/${materials.length}`, icon: Palette, route: '/materials' },
+    { label: 'Pautas', value: `${weekFinalizedPautas}/${weekTotalPautas || weekEpisodeCount}`, icon: FileText, route: '/pautas' },
+    { label: 'Materiais', value: `${weekMatsWithTitle}/${weekTotalMats || weekEpisodeCount}`, icon: Palette, route: '/materials' },
+    { label: 'Agendados', value: `${weekScheduled}/${weekTotalMats || weekEpisodeCount}`, icon: Calendar, route: '/calendar' },
   ];
 
   const INDICATOR_LABELS = ['Pauta', 'Título', 'Descrição', 'Capa', 'Agend.'];
