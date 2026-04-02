@@ -14,7 +14,363 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      activity_logs: {
+        Row: {
+          action_type: string
+          created_at: string
+          details_json: Json
+          entity_id: string | null
+          entity_type: string
+          id: string
+          summary: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          details_json?: Json
+          entity_id?: string | null
+          entity_type: string
+          id: string
+          summary: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          details_json?: Json
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          summary?: string
+        }
+        Relationships: []
+      }
+      app_settings: {
+        Row: {
+          banned_terms_text: string
+          brand_tone_temperature: number
+          default_export_container: string
+          default_export_layout: string
+          singleton_id: number
+          theme_name: string
+        }
+        Insert: {
+          banned_terms_text?: string
+          brand_tone_temperature?: number
+          default_export_container?: string
+          default_export_layout?: string
+          singleton_id?: number
+          theme_name?: string
+        }
+        Update: {
+          banned_terms_text?: string
+          brand_tone_temperature?: number
+          default_export_container?: string
+          default_export_layout?: string
+          singleton_id?: number
+          theme_name?: string
+        }
+        Relationships: []
+      }
+      editorial_weeks: {
+        Row: {
+          created_at: string
+          id: string
+          start_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          start_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          start_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      episode_materials: {
+        Row: {
+          cover_url: string | null
+          created_at: string
+          description_html: string | null
+          episode_date: string
+          id: string
+          selected_title_index: number | null
+          slot_key: string
+          source_pauta_id: string | null
+          spotify_link: string | null
+          title_options_json: Json
+          updated_at: string
+          week_id: string
+        }
+        Insert: {
+          cover_url?: string | null
+          created_at?: string
+          description_html?: string | null
+          episode_date: string
+          id: string
+          selected_title_index?: number | null
+          slot_key: string
+          source_pauta_id?: string | null
+          spotify_link?: string | null
+          title_options_json?: Json
+          updated_at?: string
+          week_id: string
+        }
+        Update: {
+          cover_url?: string | null
+          created_at?: string
+          description_html?: string | null
+          episode_date?: string
+          id?: string
+          selected_title_index?: number | null
+          slot_key?: string
+          source_pauta_id?: string | null
+          spotify_link?: string | null
+          title_options_json?: Json
+          updated_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "episode_materials_source_pauta_id_fkey"
+            columns: ["source_pauta_id"]
+            isOneToOne: false
+            referencedRelation: "pautas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "episode_materials_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "editorial_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pauta_news_links: {
+        Row: {
+          pauta_id: string
+          position: number
+          url: string
+        }
+        Insert: {
+          pauta_id: string
+          position: number
+          url: string
+        }
+        Update: {
+          pauta_id?: string
+          position?: number
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pauta_news_links_pauta_id_fkey"
+            columns: ["pauta_id"]
+            isOneToOne: false
+            referencedRelation: "pautas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pauta_releases: {
+        Row: {
+          pauta_id: string
+          position: number
+          release_id: string
+        }
+        Insert: {
+          pauta_id: string
+          position?: number
+          release_id: string
+        }
+        Update: {
+          pauta_id?: string
+          position?: number
+          release_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pauta_releases_pauta_id_fkey"
+            columns: ["pauta_id"]
+            isOneToOne: false
+            referencedRelation: "pautas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pauta_releases_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pautas: {
+        Row: {
+          created_at: string
+          discovered_links_json: Json
+          finalized_at: string | null
+          id: string
+          pauta_type: string
+          publication_date: string
+          raw_inputs_json: Json
+          rendered_markdown: string | null
+          rendered_text: string | null
+          sections_json: Json
+          status: string
+          updated_at: string
+          warnings_json: Json
+          week_id: string
+        }
+        Insert: {
+          created_at?: string
+          discovered_links_json?: Json
+          finalized_at?: string | null
+          id: string
+          pauta_type?: string
+          publication_date: string
+          raw_inputs_json?: Json
+          rendered_markdown?: string | null
+          rendered_text?: string | null
+          sections_json?: Json
+          status?: string
+          updated_at?: string
+          warnings_json?: Json
+          week_id: string
+        }
+        Update: {
+          created_at?: string
+          discovered_links_json?: Json
+          finalized_at?: string | null
+          id?: string
+          pauta_type?: string
+          publication_date?: string
+          raw_inputs_json?: Json
+          rendered_markdown?: string | null
+          rendered_text?: string | null
+          sections_json?: Json
+          status?: string
+          updated_at?: string
+          warnings_json?: Json
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pautas_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "editorial_weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      prompt_sessions: {
+        Row: {
+          applied_at: string | null
+          created_at: string
+          error_message: string | null
+          id: string
+          parsed_payload_json: Json | null
+          prompt_text: string
+          response_text: string | null
+          scope: string
+          status: string
+          target_json: Json
+          updated_at: string
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id: string
+          parsed_payload_json?: Json | null
+          prompt_text: string
+          response_text?: string | null
+          scope: string
+          status?: string
+          target_json: Json
+          updated_at?: string
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          parsed_payload_json?: Json | null
+          prompt_text?: string
+          response_text?: string | null
+          scope?: string
+          status?: string
+          target_json?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      release_genres: {
+        Row: {
+          genre: string
+          release_id: string
+        }
+        Insert: {
+          genre: string
+          release_id: string
+        }
+        Update: {
+          genre?: string
+          release_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_genres_release_id_fkey"
+            columns: ["release_id"]
+            isOneToOne: false
+            referencedRelation: "releases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      releases: {
+        Row: {
+          album: string
+          artist: string
+          comments: string | null
+          created_at: string
+          id: string
+          rating: number | null
+          release_date: string
+          updated_at: string
+        }
+        Insert: {
+          album: string
+          artist: string
+          comments?: string | null
+          created_at?: string
+          id: string
+          rating?: number | null
+          release_date: string
+          updated_at?: string
+        }
+        Update: {
+          album?: string
+          artist?: string
+          comments?: string | null
+          created_at?: string
+          id?: string
+          rating?: number | null
+          release_date?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
