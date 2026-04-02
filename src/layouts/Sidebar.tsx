@@ -2,6 +2,7 @@ import {
   LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
+import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { useLocation } from 'react-router-dom';
 import {
   Sidebar as SidebarRoot,
