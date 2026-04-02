@@ -708,7 +708,29 @@ export default function Pautas() {
             <DialogTitle>Nova Semana Editorial</DialogTitle>
             <DialogDescription>Selecione qualquer data da semana. O app normaliza para a segunda-feira.</DialogDescription>
           </DialogHeader>
-          <Input type="date" value={newWeekDate} onChange={e => setNewWeekDate(e.target.value)} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !newWeekDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {newWeekDate ? format(newWeekDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione uma data"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={newWeekDate}
+                onSelect={setNewWeekDate}
+                locale={ptBR}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateWeek} disabled={!newWeekDate}>Criar Semana</Button>
