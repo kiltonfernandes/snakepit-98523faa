@@ -42,13 +42,9 @@ export default function Settings() {
 
   const temperature = settings.brand_tone_temperature / 100;
   const currentPreset = TONE_PRESETS.find(p => Math.abs(settings.brand_tone_temperature - p.value) < 3);
+  const currentTone = toneProfileForTemperature(settings.brand_tone_temperature);
 
-  const labPrompt = `${EDITORIAL_IDENTITY}
-
-TOM EDITORIAL: ${currentPreset?.label || 'Custom'} (temperatura: ${temperature.toFixed(2)})
-${currentPreset?.desc || ''}
-
-Escreva um parágrafo sobre um lançamento fictício de uma banda de death metal técnico, mostrando como a temperatura editorial afeta o estilo de escrita. Demonstre o tom configurado acima.`;
+  const labPrompt = buildToneProbePrompt(settings);
 
   const copyLabPrompt = async () => {
     await navigator.clipboard.writeText(labPrompt);
