@@ -730,63 +730,47 @@ export default function Pautas() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Protocolo de Prompt {activeSection ? `(${activeSection})` : ''}
+              Protocolo de Prompt — {PROMPT_SCHEMA_VERSION} {activeSection ? `(${activeSection})` : `(${promptScope})`}
             </DialogTitle>
             <DialogDescription>
-              Copie o prompt, use no chat externo e cole a resposta com as tags {`<snakepit_response>`}.
+              Copie o prompt, use no chat externo e cole a resposta com as tags {`<snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="${promptScope}">`}.
             </DialogDescription>
           </DialogHeader>
           {activePauta && (
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-xs flex-wrap">
                 <Badge variant="secondary">Tom: {tone.label}</Badge>
+                <Badge variant="secondary">Scope: {promptScope}</Badge>
                 {bannedTerms.length > 0 && <Badge variant="outline">{bannedTerms.length} termos banidos</Badge>}
-                <Badge variant="outline">{activeSection ? `Seção: ${activeSection}` : 'Pauta completa'}</Badge>
+                <Badge variant="outline">{activeSection ? `Seção: ${activeSection}` : promptScope === 'week' ? 'Semana completa' : 'Pauta completa'}</Badge>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">1. Prompt gerado</label>
+                <label className="text-sm font-medium">1. Prompt gerado ({promptScope})</label>
                 <div className="relative">
                   <pre className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[200px] overflow-y-auto">
-                    {activeSection ? generatePrompt(activePauta, activeSection) : generatePrompt(activePauta)}
+                    {promptScope === 'week' ? generateWeekPrompt() : generatePrompt(activePauta, activeSection || undefined)}
                   </pre>
                   <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"
-                    onClick={() => handleCopyPrompt(activeSection ? generatePrompt(activePauta, activeSection) : generatePrompt(activePauta))}>
+                    onClick={() => handleCopyPrompt(promptScope === 'week' ? generateWeekPrompt() : generatePrompt(activePauta, activeSection || undefined))}>
                     {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">2. Cole a resposta</label>
-                <Textarea rows={8} placeholder="Cole aqui a resposta com as tags <snakepit_response>..." value={promptResponse} onChange={e => setPromptResponse(e.target.value)} />
+                <label className="text-sm font-medium">2. Cole a resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
+                <Textarea rows={8} placeholder={`Cole aqui a resposta com <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="${promptScope}">...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
               </div>
-              {!activeSection && (
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">3. Escopo de aplicação</label>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant={applyScope === 'all' ? 'default' : 'outline'} onClick={() => setApplyScope('all')}>
-                      Todas as seções
-                    </Button>
-                    <Button size="sm" variant={applyScope === 'section' ? 'default' : 'outline'} onClick={() => setApplyScope('section')}>
-                      Seção específica
-                    </Button>
-                  </div>
-                  {applyScope === 'section' && (
-                    <Select value={applySection} onValueChange={setApplySection}>
-                      <SelectTrigger className="w-[200px]"><SelectValue placeholder="Selecione a seção" /></SelectTrigger>
-                      <SelectContent>
-                        {getSectionsForDay(getPautaSlot(activePauta)).map(s => (
-                          <SelectItem key={s.key} value={s.key}>{s.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  )}
+              {parseError && (
+                <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                  <p className="font-medium mb-1">❌ Validação falhou:</p>
+                  <p>{parseError}</p>
                 </div>
               )}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleApplyResponse} disabled={!promptResponse}>Aplicar Resposta</Button>
+            <Button onClick={handleApplyResponse} disabled={!promptResponse}>Validar e Aplicar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
