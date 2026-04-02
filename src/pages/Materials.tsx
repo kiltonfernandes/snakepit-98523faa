@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Palette, Sparkles, Image, ExternalLink } from 'lucide-react';
+import { Palette, Sparkles, Image, ExternalLink, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -62,7 +62,6 @@ export default function Materials() {
     const canvas = document.createElement('canvas');
     canvas.width = 1080; canvas.height = 1080;
     const ctx = canvas.getContext('2d')!;
-
     ctx.fillStyle = '#1a0e2e';
     ctx.fillRect(0, 0, 1080, 1080);
 
@@ -70,29 +69,19 @@ export default function Materials() {
     img.crossOrigin = 'anonymous';
     img.onload = () => {
       ctx.drawImage(img, 40, 40, 1000, 600);
-      ctx.fillStyle = '#3a3a3a';
-      ctx.fillRect(0, 650, 1080, 6);
-      ctx.fillStyle = '#C8A2C8';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('Heavynauta', 50, 710);
-      ctx.fillStyle = '#e8d5f5';
-      ctx.font = 'bold 42px sans-serif';
-      const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
-      ctx.fillText(title, 50, 800, 900);
-      ctx.fillStyle = '#8a7a9a';
-      ctx.font = '22px sans-serif';
+      ctx.fillStyle = '#3a3a3a'; ctx.fillRect(0, 650, 1080, 6);
+      ctx.fillStyle = '#C8A2C8'; ctx.font = 'bold 28px sans-serif'; ctx.fillText('Heavynauta', 50, 710);
+      ctx.fillStyle = '#e8d5f5'; ctx.font = 'bold 42px sans-serif';
+      ctx.fillText(getTitle(mat) || `Episódio ${coverDaySlot}`, 50, 800, 900);
+      ctx.fillStyle = '#8a7a9a'; ctx.font = '22px sans-serif';
       ctx.fillText('Papo Sério Sobre Música Pesada', 50, 860);
-
       const dataUrl = canvas.toDataURL('image/png');
       setCoverPreview(dataUrl);
       updateMaterial(mat.id, { cover_url: dataUrl });
     };
     img.onerror = () => {
-      ctx.fillStyle = '#C8A2C8';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('Heavynauta', 50, 710);
-      ctx.fillStyle = '#e8d5f5';
-      ctx.font = 'bold 42px sans-serif';
+      ctx.fillStyle = '#C8A2C8'; ctx.font = 'bold 28px sans-serif'; ctx.fillText('Heavynauta', 50, 710);
+      ctx.fillStyle = '#e8d5f5'; ctx.font = 'bold 42px sans-serif';
       ctx.fillText(getTitle(mat) || 'Episódio', 50, 800, 900);
       const dataUrl = canvas.toDataURL('image/png');
       setCoverPreview(dataUrl);
@@ -104,8 +93,32 @@ export default function Materials() {
   const searchQuery = (daySlot: DaySlot) => {
     const mat = weekMaterials.find(m => m.slot_key === daySlot);
     const title = mat ? getTitle(mat) : '';
-    const nouns = parseProperNouns(title);
-    return encodeURIComponent(nouns || 'metal band');
+    return encodeURIComponent(parseProperNouns(title) || 'metal band');
+  };
+
+  const handleBulkTitles = () => weekMaterials.forEach(m => generateTitles(m.id));
+
+  const handleExportMaterials = () => {
+    const content = weekMaterials.map(m => ({
+      slot: m.slot_key,
+      date: m.episode_date,
+      title: getTitle(m),
+      description: m.description_html,
+      cover: m.cover_url ? '(gerada)' : null,
+      spotify: m.spotify_link,
+    }));
+    const blob = new Blob([JSON.stringify(content, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `materiais_${selectedWeek?.start_date}.json`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Traffic light for material completeness
+  const matLight = (mat: { selected_title_index: number | null; description_html: string | null; cover_url: string | null; spotify_link: string | null }) => {
+    const count = [mat.selected_title_index != null, !!mat.description_html, !!mat.cover_url, !!mat.spotify_link].filter(Boolean).length;
+    if (count >= 3) return 'bg-emerald-500';
+    if (count >= 1) return 'bg-yellow-500';
+    return 'bg-red-500';
   };
 
   if (weeks.length === 0) {
@@ -128,19 +141,26 @@ export default function Materials() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Palette className="h-6 w-6 text-primary" />
-          Materiais
-        </h1>
-        <p className="text-muted-foreground mt-1">Títulos, descrições e capas dos episódios</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Palette className="h-6 w-6 text-primary" />
+            Materiais
+          </h1>
+          <p className="text-muted-foreground mt-1">Títulos, descrições e capas dos episódios</p>
+        </div>
+        {selectedWeek && (
+          <Button size="sm" variant="outline" className="gap-1" onClick={handleExportMaterials}>
+            <Download className="h-3.5 w-3.5" /> Exportar
+          </Button>
+        )}
       </div>
 
       {weeks.length > 1 && (
         <div className="flex gap-2 flex-wrap">
           {weeks.map(w => (
             <Button key={w.id} variant={selectedWeek?.id === w.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(w.id)}>
-              {new Date(w.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+              {new Date(w.start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             </Button>
           ))}
         </div>
@@ -157,7 +177,7 @@ export default function Materials() {
           <WorkspaceShell
             weekLabel="Títulos da Semana"
             actions={
-              <Button size="sm" onClick={() => weekMaterials.forEach(m => generateTitles(m.id))}>
+              <Button size="sm" onClick={handleBulkTitles}>
                 <Sparkles className="h-4 w-4 mr-1" /> Gerar Todos
               </Button>
             }
@@ -167,6 +187,10 @@ export default function Materials() {
               const opts = mat.title_options_json as TitleOption[];
               return (
                 <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`h-2 w-2 rounded-full ${matLight(mat)}`} />
+                    <span className="text-[10px] text-muted-foreground">{mat.episode_date}</span>
+                  </div>
                   {opts.length > 0 ? (
                     opts.map((opt, i) => (
                       <button
@@ -209,6 +233,10 @@ export default function Materials() {
               if (!mat) return null;
               return (
                 <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`h-2 w-2 rounded-full ${matLight(mat)}`} />
+                    <span className="text-[10px] text-muted-foreground">{mat.episode_date}</span>
+                  </div>
                   <Textarea
                     className="min-h-[120px] text-xs resize-none"
                     placeholder="Descrição HTML do episódio..."
@@ -230,6 +258,10 @@ export default function Materials() {
               if (!mat) return null;
               return (
                 <div className="space-y-2">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <span className={`h-2 w-2 rounded-full ${matLight(mat)}`} />
+                    <span className="text-[10px] text-muted-foreground">{mat.episode_date}</span>
+                  </div>
                   {mat.cover_url ? (
                     <div className="space-y-2">
                       <img src={mat.cover_url} alt="Capa" className="w-full aspect-square rounded-md object-cover" />
@@ -250,6 +282,7 @@ export default function Materials() {
         </TabsContent>
       </Tabs>
 
+      {/* Cover Creator Dialog */}
       <Dialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -269,11 +302,9 @@ export default function Materials() {
               <Input placeholder="Cole aqui a URL da imagem..." value={imageUrl} onChange={e => setImageUrl(e.target.value)} />
             </div>
             {imageUrl && (
-              <div className="flex gap-4">
-                <div className="flex-1 space-y-2">
-                  <Label>Preview da Imagem</Label>
-                  <img src={imageUrl} alt="Preview" className="w-full aspect-video rounded-md object-cover bg-muted" onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
-                </div>
+              <div className="flex-1 space-y-2">
+                <Label>Preview</Label>
+                <img src={imageUrl} alt="Preview" className="w-full aspect-video rounded-md object-cover bg-muted" onError={e => (e.target as HTMLImageElement).style.display = 'none'} />
               </div>
             )}
             <Button onClick={generateCover} disabled={!imageUrl} className="w-full gap-2">

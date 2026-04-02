@@ -1,31 +1,52 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Disc, Plus, Search, Download, Upload, Trash2, Star } from 'lucide-react';
+import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 
 const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '' };
 
+interface ImportSummary {
+  valid: number;
+  duplicates: number;
+  invalid: number;
+  errors: string[];
+}
+
 export default function Releases() {
   const { releases, addRelease, updateRelease, deleteRelease, importReleases } = useApp();
   const [search, setSearch] = useState('');
+  const [genreFilter, setGenreFilter] = useState<string | null>(null);
+  const [genreDialogOpen, setGenreDialogOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+
+  // Unique genres
+  const allGenres = useMemo(() => {
+    const set = new Set<string>();
+    releases.forEach(r => (r.genres || []).forEach(g => set.add(g)));
+    return Array.from(set).sort();
+  }, [releases]);
 
   const filtered = useMemo(() => {
     return releases.filter(r => {
       const q = search.toLowerCase();
-      return !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
+      const matchSearch = !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
+      const matchGenre = !genreFilter || (r.genres || []).includes(genreFilter);
+      return matchSearch && matchGenre;
     });
-  }, [releases, search]);
+  }, [releases, search, genreFilter]);
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (r: Release) => {
@@ -51,19 +72,50 @@ export default function Releases() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImport = () => {
+  const handleImport = useCallback(() => {
     const input = document.createElement('input'); input.type = 'file'; input.accept = '.json';
     input.onchange = (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = (ev) => {
-        try { importReleases(JSON.parse(ev.target?.result as string)); } catch { /* ignore */ }
+        try {
+          const data = JSON.parse(ev.target?.result as string) as any[];
+          let valid = 0, duplicates = 0, invalid = 0;
+          const errors: string[] = [];
+          const validReleases: Release[] = [];
+
+          data.forEach((item, idx) => {
+            if (!item.artist || !item.album || !item.release_date) {
+              invalid++;
+              errors.push(`Linha ${idx + 1}: campos obrigatórios faltando`);
+              return;
+            }
+            const isDupe = releases.some(r =>
+              r.artist.toLowerCase() === item.artist.toLowerCase() &&
+              r.album.toLowerCase() === item.album.toLowerCase() &&
+              r.release_date === item.release_date
+            );
+            if (isDupe) {
+              duplicates++;
+              return;
+            }
+            valid++;
+            validReleases.push(item);
+          });
+
+          if (validReleases.length > 0) importReleases(validReleases);
+          setImportSummary({ valid, duplicates, invalid, errors });
+          setImportDialogOpen(true);
+        } catch {
+          setImportSummary({ valid: 0, duplicates: 0, invalid: 1, errors: ['Arquivo JSON inválido'] });
+          setImportDialogOpen(true);
+        }
       };
       reader.readAsText(file);
     };
     input.click();
-  };
+  }, [releases, importReleases]);
 
   return (
     <div className="space-y-6">
@@ -72,7 +124,7 @@ export default function Releases() {
           <Disc className="h-6 w-6 text-primary" />
           Lançamentos
         </h1>
-        <p className="text-muted-foreground mt-1">Hub de lançamentos musicais para pauta</p>
+        <p className="text-muted-foreground mt-1">Hub de lançamentos musicais — {releases.length} registros</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -80,6 +132,13 @@ export default function Releases() {
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input placeholder="Buscar artista, álbum, gênero..." className="pl-9" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        <Button variant={genreFilter ? 'default' : 'outline'} size="sm" className="gap-2" onClick={() => setGenreDialogOpen(true)}>
+          <Filter className="h-4 w-4" />
+          {genreFilter || 'Gênero'}
+        </Button>
+        {genreFilter && (
+          <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar filtro</Button>
+        )}
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
           <Upload className="h-4 w-4" /> Import
         </Button>
@@ -87,7 +146,7 @@ export default function Releases() {
           <Download className="h-4 w-4" /> Export
         </Button>
         <Button size="sm" className="gap-2 ml-auto" onClick={openNew}>
-          <Plus className="h-4 w-4" /> Novo Lançamento
+          <Plus className="h-4 w-4" /> Novo
         </Button>
       </div>
 
@@ -101,7 +160,7 @@ export default function Releases() {
                 <TableHead>Data</TableHead>
                 <TableHead>Gêneros</TableHead>
                 <TableHead>Rating</TableHead>
-                <TableHead className="w-[80px]">Ações</TableHead>
+                <TableHead className="w-[60px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -111,7 +170,7 @@ export default function Releases() {
                     {releases.length === 0 ? 'Nenhum lançamento cadastrado.' : 'Nenhum resultado encontrado.'}
                   </TableCell>
                 </TableRow>
-              ) : filtered.map(r => (
+              ) : filtered.slice(0, 100).map(r => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openEdit(r)}>
                   <TableCell className="font-medium">{r.artist}</TableCell>
                   <TableCell>{r.album}</TableCell>
@@ -135,9 +194,73 @@ export default function Releases() {
               ))}
             </TableBody>
           </Table>
+          {filtered.length > 100 && (
+            <p className="text-xs text-muted-foreground text-center py-3">Mostrando 100 de {filtered.length} resultados</p>
+          )}
         </CardContent>
       </Card>
 
+      {/* Genre filter dialog */}
+      <Dialog open={genreDialogOpen} onOpenChange={setGenreDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Filtrar por Gênero</DialogTitle>
+            <DialogDescription>Selecione um gênero para filtrar os lançamentos.</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="h-[300px]">
+            <div className="flex flex-wrap gap-2">
+              {allGenres.map(g => (
+                <Button
+                  key={g}
+                  size="sm"
+                  variant={genreFilter === g ? 'default' : 'outline'}
+                  className="text-xs"
+                  onClick={() => { setGenreFilter(g); setGenreDialogOpen(false); }}
+                >
+                  {g}
+                </Button>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import summary dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Resumo da Importação</DialogTitle>
+          </DialogHeader>
+          {importSummary && (
+            <div className="space-y-3">
+              <div className="flex gap-4">
+                <div className="flex items-center gap-2 text-emerald-400">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="text-sm">{importSummary.valid} válidos</span>
+                </div>
+                <div className="flex items-center gap-2 text-yellow-400">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm">{importSummary.duplicates} duplicados</span>
+                </div>
+                <div className="flex items-center gap-2 text-destructive">
+                  <XCircle className="h-4 w-4" />
+                  <span className="text-sm">{importSummary.invalid} inválidos</span>
+                </div>
+              </div>
+              {importSummary.errors.length > 0 && (
+                <div className="text-xs text-muted-foreground space-y-1">
+                  {importSummary.errors.slice(0, 10).map((err, i) => <p key={i}>{err}</p>)}
+                </div>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setImportDialogOpen(false)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit/Create dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
