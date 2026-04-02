@@ -54,7 +54,7 @@ function getEligibleSaturdayReleases(releases: Release[], publicationDate: strin
 export default function Pautas() {
   const { weeks, addWeek, deleteWeek, pautas, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
-  const [newWeekDate, setNewWeekDate] = useState('');
+  const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
