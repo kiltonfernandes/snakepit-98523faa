@@ -68,24 +68,21 @@ export default function Pautas() {
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
-  const tonePreset = (() => {
-    const t = settings.brand_tone_temperature;
-    if (t <= 30) return 'Cirúrgico – tom extremamente preciso e direto';
-    if (t <= 50) return 'Sóbrio – tom informativo e equilibrado';
-    if (t <= 60) return 'Equilibrado – informativo com personalidade';
-    if (t <= 75) return 'Quente – empolgante e envolvente';
-    return 'Incendiário – máximo entusiasmo e energia';
-  })();
+  const tone = toneProfileForTemperature(settings.brand_tone_temperature);
+
+  const promptCtx: PromptBuildContext = useMemo(() => ({
+    settings,
+    releases,
+    bannedTerms,
+  }), [settings, releases, bannedTerms]);
 
   const handleCreateWeek = () => {
     if (!newWeekDate) return;
-    // Normalize to Monday
     const d = new Date(newWeekDate + 'T12:00:00');
     const dayOfWeek = d.getDay();
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     d.setDate(d.getDate() + diff);
     const monday = d.toISOString().slice(0, 10);
-    // Check if already exists
     if (weeks.some(w => w.start_date === monday)) {
       toast.error('Semana já existe');
       return;
@@ -104,7 +101,6 @@ export default function Pautas() {
     toast.success('Semana removida');
   };
 
-  // Raw inputs management
   const getRawInputs = (pauta: Pauta) => (pauta.raw_inputs_json || {}) as Record<string, any>;
 
   const updateRawInput = (pautaId: string, key: string, value: any) => {
@@ -121,61 +117,15 @@ export default function Pautas() {
     updatePauta(pautaId, { sections_json: { ...currentSections, [key]: value } });
   };
 
-  // Prompt generation
+  // ─── Prompt generation using PromptBuilderRegistry ───
   const generatePrompt = (pauta: Pauta, sectionKey?: string) => {
-    const slot = getPautaSlot(pauta);
-    const allSections = getSectionsForDay(slot);
-    const sections = sectionKey ? allSections.filter(s => s.key === sectionKey) : allSections;
-    const sectionList = sections.map(s => `- ${s.label} (tag: <${s.key}>)`).join('\n');
-    const bannedStr = bannedTerms.length > 0 ? `\n\nTERMOS PROIBIDOS (nunca use estas palavras/expressões):\n${bannedTerms.map(t => `- ${t}`).join('\n')}` : '';
-    const inputs = getRawInputs(pauta);
-
-    // Contextual info from raw inputs
-    let context = '';
-    if (inputs.anniversary) context += `\nAniversário do dia: ${inputs.anniversary}`;
-    if (inputs.review_rafa_id) {
-      const rel = releases.find(r => r.id === inputs.review_rafa_id);
-      if (rel) context += `\nReview Rafa: ${rel.artist} - ${rel.album} (${rel.release_date})`;
-    }
-    if (inputs.review_kilton_id) {
-      const rel = releases.find(r => r.id === inputs.review_kilton_id);
-      if (rel) context += `\nReview Kilton: ${rel.artist} - ${rel.album} (${rel.release_date})`;
-    }
-    if (inputs.news_link) context += `\nLink de notícia: ${inputs.news_link}`;
-    if (inputs.selected_release_ids?.length) {
-      const rels = releases.filter(r => inputs.selected_release_ids.includes(r.id));
-      context += `\nDestaques da semana:\n${rels.map(r => `  - ${r.artist} - ${r.album} (${r.release_date})`).join('\n')}`;
-    }
-    // Editorial comments per section
-    sections.forEach(s => {
-      const comment = inputs[`comment_${s.key}`];
-      if (comment) context += `\nDireção editorial (${s.label}): ${comment}`;
-    });
-
-    return `${EDITORIAL_IDENTITY}
-
-TOM: ${tonePreset} (temperatura: ${settings.brand_tone_temperature}/100)
-${bannedStr}
-${context ? `\n---\nCONTEXTO EDITORIAL:${context}\n---` : ''}
-
-Gere ${sectionKey ? `a seção "${sections[0]?.label}"` : 'a pauta completa'} do episódio do dia ${pauta.publication_date} (${slot}) ${sectionKey ? '' : `com as seguintes seções:\n${sectionList}`}
-
-Formato de resposta OBRIGATÓRIO (use exatamente estas tags):
-<snakepit_response>
-${sections.map(s => `<${s.key}>
-[conteúdo da seção ${s.label}]
-</${s.key}>`).join('\n')}
-</snakepit_response>
-
-IMPORTANTE: A intro e outro são geradas automaticamente pelo app. Foque APENAS nas seções listadas acima.`;
+    if (sectionKey) return buildSectionPrompt(pauta, sectionKey, promptCtx);
+    return buildDayPrompt(pauta, promptCtx);
   };
 
   const generateWeekPrompt = () => {
-    if (weekPautas.length === 0) return '';
-    return weekPautas.map(p => {
-      const slot = getPautaSlot(p);
-      return `=== ${slot.toUpperCase()} (${p.publication_date}) ===\n\n${generatePrompt(p)}`;
-    }).join('\n\n---\n\n');
+    if (!selectedWeek || weekPautas.length === 0) return '';
+    return buildWeekPrompt(selectedWeek.start_date, weekPautas, promptCtx);
   };
 
   const handleCopyPrompt = async (text: string) => {
@@ -185,119 +135,138 @@ IMPORTANTE: A intro e outro são geradas automaticamente pelo app. Foque APENAS 
     toast.success('Prompt copiado');
   };
 
+  const [promptScope, setPromptScope] = useState<'week' | 'day' | 'section'>('day');
+
   const openPromptDialog = (pauta: Pauta, sectionKey?: string) => {
     setActivePauta(pauta);
     setActiveSection(sectionKey || null);
-    setApplyScope(sectionKey ? 'section' : 'all');
-    setApplySection(sectionKey || '');
+    setPromptScope(sectionKey ? 'section' : 'day');
     setPromptResponse('');
     setPromptDialogOpen(true);
-    // Save prompt session
-    const sessionId = crypto.randomUUID();
+    const prompt = sectionKey ? buildSectionPrompt(pauta, sectionKey, promptCtx) : buildDayPrompt(pauta, promptCtx);
     savePromptSession({
-      id: sessionId,
+      id: crypto.randomUUID(),
       scope: sectionKey ? 'section' : 'day',
-      prompt_text: generatePrompt(pauta, sectionKey),
-      target_json: { pauta_id: pauta.id, section: sectionKey || null, week_id: pauta.week_id },
+      prompt_text: prompt,
+      target_json: { pauta_id: pauta.id, publication_date: pauta.publication_date, section: sectionKey || null, week_id: pauta.week_id },
     });
   };
 
   const openWeekPromptDialog = () => {
-    if (weekPautas.length === 0) return;
+    if (!selectedWeek || weekPautas.length === 0) return;
     setActivePauta(weekPautas[0]);
     setActiveSection(null);
-    setApplyScope('all');
+    setPromptScope('week');
     setPromptResponse('');
     setPromptDialogOpen(true);
-    const sessionId = crypto.randomUUID();
+    const prompt = buildWeekPrompt(selectedWeek.start_date, weekPautas, promptCtx);
     savePromptSession({
-      id: sessionId,
+      id: crypto.randomUUID(),
       scope: 'week',
-      prompt_text: generateWeekPrompt(),
-      target_json: { week_id: selectedWeek?.id },
+      prompt_text: prompt,
+      target_json: { week_id: selectedWeek.id, week_start: selectedWeek.start_date },
     });
   };
 
+  // ─── Apply response using ResponseParser ───
+  const [parseError, setParseError] = useState<string | null>(null);
+
   const handleApplyResponse = () => {
     if (!activePauta || !promptResponse) return;
-    const extract = (tag: string) => {
-      const match = promptResponse.match(new RegExp(`<${tag}>([\\s\\S]*?)</${tag}>`, 'i'));
-      return match?.[1]?.trim() || '';
-    };
+    setParseError(null);
 
-    // If week scope, apply to all pautas
-    if (!activeSection && weekPautas.length > 0) {
-      weekPautas.forEach(p => {
-        const slot = getPautaSlot(p);
-        const sections = getSectionsForDay(slot);
-        const currentSections = (p.sections_json || {}) as Record<string, string>;
-        const updated: Record<string, string> = { ...currentSections };
-        sections.forEach(s => {
-          const val = extract(s.key);
-          if (val) updated[s.key] = val;
-        });
-        const hasContent = sections.some(s => updated[s.key]?.trim());
-        // Detect warnings
-        const warnings: string[] = [];
-        const inputs = getRawInputs(p);
-        if (slot !== 'saturday' && slot !== 'sunday') {
-          if (!inputs.review_rafa_id && !inputs.review_kilton_id && !updated.review_rafa?.trim() && !updated.review_kilton?.trim()) {
-            warnings.push('Nenhuma resenha definida para este dia útil');
-          }
+    if (promptScope === 'week' && selectedWeek) {
+      // Week scope
+      const requiredSections = weekPautas
+        .filter(p => p.pauta_type !== 'sunday')
+        .flatMap(p => getSectionsForDay(getPautaSlot(p)).map(s => s.key));
+
+      const result = parsePautaResponse(promptResponse, 'week', { week_start: selectedWeek.start_date }, [...new Set(requiredSections)]);
+
+      if (!result.success) {
+        setParseError(result.error || 'Erro de parse desconhecido');
+        toast.error(`Validação falhou: ${result.error}`);
+        return;
+      }
+
+      if (result.days) {
+        for (const [pubDate, sectionMap] of Object.entries(result.days)) {
+          const pauta = weekPautas.find(p => p.publication_date === pubDate);
+          if (!pauta) continue;
+          const slot = getPautaSlot(pauta);
+          const sections = getSectionsForDay(slot);
+          const current = (pauta.sections_json || {}) as Record<string, string>;
+          const updated = { ...current, ...sectionMap };
+          const allContent = Object.values(updated).join('\n');
+          const linkMatches = allContent.match(/https?:\/\/[^\s<>"]+/g) || [];
+          updatePauta(pauta.id, {
+            sections_json: updated,
+            status: 'generated',
+            discovered_links_json: linkMatches,
+            rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+            rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+          });
         }
-        // Detect links in content
+      }
+    } else if (promptScope === 'section' && activeSection) {
+      // Section scope
+      const result = parsePautaResponse(promptResponse, 'section', {
+        publication_date: activePauta.publication_date,
+        section: activeSection,
+      }, [activeSection]);
+
+      if (!result.success) {
+        setParseError(result.error || 'Erro de parse desconhecido');
+        toast.error(`Validação falhou: ${result.error}`);
+        return;
+      }
+
+      if (result.sections) {
+        const slot = getPautaSlot(activePauta);
+        const sections = getSectionsForDay(slot);
+        const current = (activePauta.sections_json || {}) as Record<string, string>;
+        const updated = { ...current, ...result.sections };
+        updatePauta(activePauta.id, {
+          sections_json: updated,
+          status: 'generated',
+          rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+          rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+        });
+      }
+    } else {
+      // Day scope
+      const result = parsePautaResponse(promptResponse, 'day', {
+        publication_date: activePauta.publication_date,
+      });
+
+      if (!result.success) {
+        setParseError(result.error || 'Erro de parse desconhecido');
+        toast.error(`Validação falhou: ${result.error}`);
+        return;
+      }
+
+      if (result.sections) {
+        const slot = getPautaSlot(activePauta);
+        const sections = getSectionsForDay(slot);
+        const current = (activePauta.sections_json || {}) as Record<string, string>;
+        const updated = { ...current, ...result.sections };
         const allContent = Object.values(updated).join('\n');
         const linkMatches = allContent.match(/https?:\/\/[^\s<>"]+/g) || [];
-        updatePauta(p.id, {
+        updatePauta(activePauta.id, {
           sections_json: updated,
-          status: hasContent ? 'generated' : p.status,
-          warnings_json: warnings,
+          status: 'generated',
           discovered_links_json: linkMatches,
-          rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'Não Aplicável'}`).join('\n\n'),
-          rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'Não Aplicável'}`).join('\n\n'),
-        });
-      });
-    } else {
-      // Single pauta or section
-      const slot = getPautaSlot(activePauta);
-      const sections = getSectionsForDay(slot);
-      const currentSections = (activePauta.sections_json || {}) as Record<string, string>;
-      const updated: Record<string, string> = { ...currentSections };
-
-      if (activeSection) {
-        const val = extract(activeSection);
-        if (val) updated[activeSection] = val;
-      } else {
-        sections.forEach(s => {
-          const val = extract(s.key);
-          if (val) updated[s.key] = val;
+          rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+          rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
         });
       }
-
-      const warnings: string[] = [];
-      const inputs = getRawInputs(activePauta);
-      if (slot !== 'saturday' && slot !== 'sunday') {
-        if (!inputs.review_rafa_id && !inputs.review_kilton_id && !updated.review_rafa?.trim() && !updated.review_kilton?.trim()) {
-          warnings.push('Nenhuma resenha definida para este dia útil');
-        }
-      }
-      const allContent = Object.values(updated).join('\n');
-      const linkMatches = allContent.match(/https?:\/\/[^\s<>"]+/g) || [];
-
-      updatePauta(activePauta.id, {
-        sections_json: updated,
-        status: 'generated',
-        warnings_json: warnings,
-        discovered_links_json: linkMatches,
-        rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'Não Aplicável'}`).join('\n\n'),
-        rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'Não Aplicável'}`).join('\n\n'),
-      });
     }
+
     if (selectedWeek) recalcWeekStatus(selectedWeek.id);
     setPromptDialogOpen(false);
     setPromptResponse('');
-    toast.success('Resposta aplicada');
-    logActivity('Resposta aplicada', `Pauta: ${activePauta.publication_date}`);
+    toast.success('Resposta validada e aplicada');
+    logActivity('Resposta aplicada', `Pauta: ${activePauta.publication_date}, scope: ${promptScope}`);
   };
 
   const finalizePauta = (id: string) => {
