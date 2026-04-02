@@ -65,8 +65,8 @@ export default function Materials() {
   const generateTitles = (materialId: string) => {
     const options: TitleOption[] = [
       { text: 'Título estilo clickbait aqui', style: 'clickbait' },
-      { text: 'Título estilo curiosidade aqui', style: 'curiosity' },
-      { text: 'Título estilo impacto aqui', style: 'impact' },
+      { text: 'Título estilo curiosidade aqui', style: 'curiosidade' },
+      { text: 'Título estilo impacto aqui', style: 'impacto' },
     ];
     updateMaterial(materialId, { title_options_json: options as any });
   };
