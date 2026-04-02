@@ -2,6 +2,7 @@ import {
   LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
+import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { useLocation } from 'react-router-dom';
 import {
   Sidebar as SidebarRoot,
@@ -36,9 +37,7 @@ export function AppSidebar() {
     <SidebarRoot collapsible="icon">
       <SidebarHeader className="p-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground font-bold text-sm">
-            SP
-          </div>
+          <img src={heavynautaLogo} alt="Heavynauta" className="h-9 w-9 shrink-0 rounded-lg object-cover" />
           {!collapsed && (
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-tight text-gradient-lavender">
