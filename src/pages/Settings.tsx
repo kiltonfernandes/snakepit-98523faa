@@ -9,8 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
-
-const EDITORIAL_IDENTITY = `Você é o editor-chefe do Heavynauta, podcast diário de heavy metal que combina informação profunda com linguagem acessível. Mantenha a identidade: referências a subgêneros (death, black, doom, thrash, power), precisão factual, tom firme mas acolhedor para a comunidade metal brasileira.`;
+import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 
 const TONE_PRESETS = [
   { label: 'Cirúrgico', value: 30, desc: 'Extremamente preciso e direto. Mínimo de adjetivos, foco em dados.' },
