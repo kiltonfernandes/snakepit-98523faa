@@ -22,6 +22,8 @@ interface AppContextType {
   deleteRelease: (id: string) => void;
   addWeek: (startDate: string) => EditorialWeek;
   updateWeek: (id: string, w: Partial<EditorialWeek>) => void;
+  deleteWeek: (id: string) => void;
+  recalcWeekStatus: (weekId: string) => void;
   updatePauta: (id: string, p: Partial<Pauta>) => void;
   getPautasForWeek: (weekId: string) => Pauta[];
   updateMaterial: (id: string, m: Partial<EpisodeMaterial>) => void;
@@ -30,6 +32,7 @@ interface AppContextType {
   logActivity: (action: string, details: string) => void;
   importReleases: (data: Release[]) => void;
   loadReleases: () => Promise<void>;
+  savePromptSession: (session: { id: string; scope: string; prompt_text: string; target_json: any; status?: string }) => void;
 }
 
 const uid = () => crypto.randomUUID();
@@ -93,13 +96,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (data) setSettings(data as any);
   }, []);
 
+  const loadActivityLog = useCallback(async () => {
+    const { data } = await supabase.from('activity_logs' as any).select('*').order('created_at', { ascending: false }).limit(200);
+    if (data) {
+      setActivityLog((data as any[]).map((d: any) => ({
+        id: d.id, action: d.action_type, details: d.summary, timestamp: d.created_at,
+      })));
+    }
+  }, []);
+
   useEffect(() => {
     loadReleases();
     loadWeeks();
     loadPautas();
     loadMaterials();
     loadSettings();
-  }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings]);
+    loadActivityLog();
+  }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings, loadActivityLog]);
 
   const logActivity = useCallback((action: string, details: string) => {
     const entry = { id: uid(), action, details, timestamp: now() };
@@ -175,6 +188,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     supabase.from('editorial_weeks' as any).update({ ...w, updated_at: now() } as any).eq('id', id).then();
   }, []);
 
+  const deleteWeek = useCallback((id: string) => {
+    setWeeks(prev => prev.filter(x => x.id !== id));
+    setPautas(prev => prev.filter(x => x.week_id !== id));
+    setMaterials(prev => prev.filter(x => x.week_id !== id));
+    // DB cascade: delete pautas and materials first, then week
+    supabase.from('episode_materials' as any).delete().eq('week_id', id).then(() => {
+      supabase.from('pautas' as any).delete().eq('week_id', id).then(() => {
+        supabase.from('editorial_weeks' as any).delete().eq('id', id).then();
+      });
+    });
+    logActivity('Semana removida', id);
+  }, [logActivity]);
+
+  const recalcWeekStatus = useCallback((weekId: string) => {
+    setPautas(prev => {
+      const weekPautas = prev.filter(p => p.week_id === weekId);
+      if (weekPautas.length === 0) return prev;
+      const allFinalized = weekPautas.every(p => p.status === 'finalized');
+      const anyNeedsReview = weekPautas.some(p => p.status === 'needs_review');
+      const anyGenerated = weekPautas.some(p => p.status !== 'draft');
+      let status: string = 'draft';
+      if (allFinalized) status = 'finalized';
+      else if (anyNeedsReview) status = 'review';
+      else if (anyGenerated) status = 'in_progress';
+      setWeeks(w => w.map(x => x.id === weekId ? { ...x, status: status as any } : x));
+      supabase.from('editorial_weeks' as any).update({ status, updated_at: now() } as any).eq('id', weekId).then();
+      return prev;
+    });
+  }, []);
+
   const updatePauta = useCallback((id: string, p: Partial<Pauta>) => {
     setPautas(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
     supabase.from('pautas' as any).update({ ...p, updated_at: now() } as any).eq('id', id).then();
@@ -201,14 +244,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     logActivity('Import de lançamentos', `${data.length} registros`);
   }, [logActivity]);
 
+  const savePromptSession = useCallback((session: { id: string; scope: string; prompt_text: string; target_json: any; status?: string }) => {
+    supabase.from('prompt_sessions' as any).insert({
+      id: session.id,
+      scope: session.scope,
+      prompt_text: session.prompt_text,
+      target_json: session.target_json,
+      status: session.status || 'prepared',
+    } as any).then();
+    logActivity('Prompt gerado', `Escopo: ${session.scope}`);
+  }, [logActivity]);
+
   return (
     <AppContext.Provider value={{
       releases, weeks, pautas, materials, settings, activityLog,
       addRelease, updateRelease, deleteRelease,
-      addWeek, updateWeek,
+      addWeek, updateWeek, deleteWeek, recalcWeekStatus,
       updatePauta, getPautasForWeek,
       updateMaterial, getMaterialsForWeek,
       updateSettings, logActivity, importReleases, loadReleases,
+      savePromptSession,
     }}>
       {children}
     </AppContext.Provider>
