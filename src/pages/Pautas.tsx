@@ -1,16 +1,16 @@
 import { useState } from 'react';
-import { FileText, Plus, ChevronRight, Copy, Check } from 'lucide-react';
+import { FileText, Plus, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
-import { PAUTA_SECTIONS } from '@/lib/constants';
-import { Pauta, PautaSections, PautaStatus } from '@/lib/types';
+import { getSectionsForDay } from '@/lib/constants';
+import { Pauta, PautaSections, DaySlot } from '@/lib/types';
+import { DAY_SLOTS } from '@/lib/constants';
 
 export default function Pautas() {
   const { weeks, addWeek, pautas, updatePauta, getPautasForWeek } = useApp();
@@ -36,11 +36,27 @@ export default function Pautas() {
   const handleSectionChange = (pautaId: string, key: keyof PautaSections, value: string) => {
     const pauta = pautas.find(p => p.id === pautaId);
     if (!pauta) return;
-    updatePauta(pautaId, { sections: { ...pauta.sections, [key]: value } });
+    const currentSections = (pauta.sections_json || {}) as Partial<PautaSections>;
+    updatePauta(pautaId, { sections_json: { ...currentSections, [key]: value } });
+  };
+
+  const getPautaSlot = (pauta: Pauta): DaySlot | null => {
+    const dayIdx = DAY_SLOTS.findIndex(s => {
+      const mat = weekPautas.find(p => p.id === pauta.id);
+      return mat;
+    });
+    // Derive from publication_date weekday
+    const d = new Date(pauta.publication_date + 'T12:00:00');
+    const wd = d.getDay();
+    const slotMap: Record<number, DaySlot> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+    return slotMap[wd] || null;
   };
 
   const generatePrompt = (pauta: Pauta) => {
-    return `Gere a pauta do episódio de ${pauta.daySlot} com as seguintes seções:\n- Introdução\n- Pesquisa\n- Consolidação\n- Conteúdo\n- Descrição\n\nFormato de resposta:\n<intro>...</intro>\n<research>...</research>\n<consolidation>...</consolidation>\n<content>...</content>\n<description>...</description>`;
+    const slot = getPautaSlot(pauta);
+    const sections = getSectionsForDay(slot || 'monday');
+    const sectionList = sections.map(s => `- ${s.label}`).join('\n');
+    return `Gere a pauta do episódio de ${slot || pauta.publication_date} com as seguintes seções:\n${sectionList}\n\nFormato de resposta usando tags:\n${sections.map(s => `<${s.key}>...</${s.key}>`).join('\n')}`;
   };
 
   const handleCopyPrompt = async (pauta: Pauta) => {
@@ -55,21 +71,20 @@ export default function Pautas() {
       const match = promptResponse.match(new RegExp(`<${tag}>(.*?)</${tag}>`, 's'));
       return match?.[1]?.trim() || '';
     };
-    updatePauta(activePauta.id, {
-      sections: {
-        intro: extract('intro') || activePauta.sections.intro,
-        research: extract('research') || activePauta.sections.research,
-        consolidation: extract('consolidation') || activePauta.sections.consolidation,
-        content: extract('content') || activePauta.sections.content,
-        description: extract('description') || activePauta.sections.description,
-      },
-      status: 'generated',
+    const slot = getPautaSlot(activePauta);
+    const sections = getSectionsForDay(slot || 'monday');
+    const currentSections = (activePauta.sections_json || {}) as Record<string, string>;
+    const updated: Record<string, string> = { ...currentSections };
+    sections.forEach(s => {
+      const val = extract(s.key);
+      if (val) updated[s.key] = val;
     });
+    updatePauta(activePauta.id, { sections_json: updated, status: 'generated' });
     setPromptDialogOpen(false);
     setPromptResponse('');
   };
 
-  const finalizePauta = (id: string) => updatePauta(id, { status: 'finalized' });
+  const finalizePauta = (id: string) => updatePauta(id, { status: 'finalized', finalized_at: new Date().toISOString() });
 
   return (
     <div className="space-y-6">
@@ -90,7 +105,7 @@ export default function Pautas() {
         <div className="flex gap-2 flex-wrap">
           {weeks.map(w => (
             <Button key={w.id} variant={selectedWeek?.id === w.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(w.id)}>
-              {new Date(w.startDate).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+              {new Date(w.start_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
               <StatusBadge status={w.status} className="ml-2 text-[10px]" />
             </Button>
           ))}
@@ -99,7 +114,7 @@ export default function Pautas() {
 
       {selectedWeek ? (
         <WorkspaceShell
-          weekLabel={`Semana de ${new Date(selectedWeek.startDate).toLocaleDateString('pt-BR')}`}
+          weekLabel={`Semana de ${new Date(selectedWeek.start_date).toLocaleDateString('pt-BR')}`}
           actions={
             <Button size="sm" variant="outline" onClick={() => {
               const p = weekPautas.find(p => p.status === 'draft');
@@ -109,8 +124,13 @@ export default function Pautas() {
             </Button>
           }
           renderDay={(day) => {
-            const pauta = weekPautas.find(p => p.daySlot === day.key);
+            const pauta = weekPautas.find(p => {
+              const slot = getPautaSlot(p);
+              return slot === day.key;
+            });
             if (!pauta) return <p className="text-xs text-muted-foreground italic">Sem pauta</p>;
+            const sections = getSectionsForDay(day.key);
+            const sectionsData = (pauta.sections_json || {}) as Record<string, string>;
             return (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -126,13 +146,13 @@ export default function Pautas() {
                     )}
                   </div>
                 </div>
-                {PAUTA_SECTIONS.map(sec => (
+                {sections.map(sec => (
                   <div key={sec.key} className="space-y-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">{sec.label}</label>
                     <Textarea
                       className="min-h-[60px] text-xs resize-none"
                       placeholder={`${sec.label}...`}
-                      value={pauta.sections[sec.key as keyof PautaSections]}
+                      value={sectionsData[sec.key] || ''}
                       onChange={e => handleSectionChange(pauta.id, sec.key as keyof PautaSections, e.target.value)}
                     />
                   </div>
@@ -150,7 +170,6 @@ export default function Pautas() {
         </Card>
       )}
 
-      {/* Create Week Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -165,7 +184,6 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-      {/* Prompt Protocol Dialog */}
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -185,7 +203,7 @@ export default function Pautas() {
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">2. Cole a resposta com tags</label>
-                <Textarea rows={8} placeholder="Cole aqui a resposta do chat com as tags <intro>, <research>, etc." value={promptResponse} onChange={e => setPromptResponse(e.target.value)} />
+                <Textarea rows={8} placeholder="Cole aqui a resposta do chat com as tags..." value={promptResponse} onChange={e => setPromptResponse(e.target.value)} />
               </div>
             </div>
           )}
