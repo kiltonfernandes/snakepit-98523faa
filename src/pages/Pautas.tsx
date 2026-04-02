@@ -1,5 +1,10 @@
 import { useState, useMemo } from 'react';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -49,7 +54,7 @@ function getEligibleSaturdayReleases(releases: Release[], publicationDate: strin
 export default function Pautas() {
   const { weeks, addWeek, deleteWeek, pautas, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
-  const [newWeekDate, setNewWeekDate] = useState('');
+  const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
@@ -78,7 +83,7 @@ export default function Pautas() {
 
   const handleCreateWeek = () => {
     if (!newWeekDate) return;
-    const d = new Date(newWeekDate + 'T12:00:00');
+    const d = new Date(newWeekDate);
     const dayOfWeek = d.getDay();
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     d.setDate(d.getDate() + diff);
@@ -90,7 +95,7 @@ export default function Pautas() {
     const week = addWeek(monday);
     setSelectedWeekId(week.id);
     setCreateDialogOpen(false);
-    setNewWeekDate('');
+    setNewWeekDate(undefined);
   };
 
   const handleDeleteWeek = () => {
@@ -703,7 +708,29 @@ export default function Pautas() {
             <DialogTitle>Nova Semana Editorial</DialogTitle>
             <DialogDescription>Selecione qualquer data da semana. O app normaliza para a segunda-feira.</DialogDescription>
           </DialogHeader>
-          <Input type="date" value={newWeekDate} onChange={e => setNewWeekDate(e.target.value)} />
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "w-full justify-start text-left font-normal",
+                  !newWeekDate && "text-muted-foreground"
+                )}
+              >
+                <CalendarIcon className="mr-2 h-4 w-4" />
+                {newWeekDate ? format(newWeekDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione uma data"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={newWeekDate}
+                onSelect={setNewWeekDate}
+                locale={ptBR}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateWeek} disabled={!newWeekDate}>Criar Semana</Button>
