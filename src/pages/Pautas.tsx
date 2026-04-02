@@ -83,7 +83,7 @@ export default function Pautas() {
 
   const handleCreateWeek = () => {
     if (!newWeekDate) return;
-    const d = new Date(newWeekDate + 'T12:00:00');
+    const d = new Date(newWeekDate);
     const dayOfWeek = d.getDay();
     const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
     d.setDate(d.getDate() + diff);
@@ -95,7 +95,7 @@ export default function Pautas() {
     const week = addWeek(monday);
     setSelectedWeekId(week.id);
     setCreateDialogOpen(false);
-    setNewWeekDate('');
+    setNewWeekDate(undefined);
   };
 
   const handleDeleteWeek = () => {
