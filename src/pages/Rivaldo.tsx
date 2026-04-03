@@ -173,7 +173,22 @@ const Rivaldo = () => {
       <div className="px-6 py-4 flex items-center gap-4 border-b border-border">
         <HeavynautaBrand compact />
         <div className="flex-1 max-w-md ml-8">
-          <input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="Nome do arquivo final..." className="w-full bg-transparent border-b border-border focus:border-primary outline-none text-sm py-2 text-foreground placeholder:text-muted-foreground transition-colors font-mono" />
+          <Select value={filename} onValueChange={setFilename}>
+            <SelectTrigger className="w-full bg-transparent border-0 border-b border-border rounded-none focus:ring-0 text-sm font-mono h-auto py-2">
+              <SelectValue placeholder="Selecione o episódio..." />
+            </SelectTrigger>
+            <SelectContent>
+              {episodeOptions.length === 0 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma pauta finalizada</div>
+              )}
+              {episodeOptions.map((opt, i) => (
+                <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
+                  <span className="text-xs text-muted-foreground mr-2">{opt.date}</span>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="ml-auto flex items-center gap-1.5">
           <Layers className="w-4 h-4" /> Bulk 3.2
