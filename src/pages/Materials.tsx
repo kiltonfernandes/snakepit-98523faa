@@ -1068,7 +1068,7 @@ export default function Materials() {
       )}
 
       <Dialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Criar Capa</DialogTitle>
             <DialogDescription>A busca agora usa contexto real da pauta para sugerir imagens melhores.</DialogDescription>
