@@ -144,7 +144,7 @@ export default function Pautas() {
   const [applySection, setApplySection] = useState('');
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
-  const [activeTab, setActiveTab] = useState('inputs');
+  const [activeTab, setActiveTab] = useState('content');
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
