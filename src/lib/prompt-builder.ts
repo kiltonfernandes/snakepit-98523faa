@@ -8,7 +8,14 @@ import { getSectionsForDay, WEEKDAY_SECTIONS, SATURDAY_SECTIONS } from './consta
 import { getPromptText, type PromptOverrides } from './prompt-defaults';
 
 export const PROMPT_SCHEMA_VERSION = 'snakepit.manual.v1';
-export const MIN_LONGFORM_SECTION_WORDS = 500;
+export const MIN_LONGFORM_SECTION_WORDS = 500; // legacy default
+export const SECTION_WORD_TARGETS: Record<string, number> = {
+  anniversary: 200,
+  review_rafa: 300,
+  review_kilton: 300,
+  news: 500,
+  next_week_releases: 500,
+};
 export const DEFAULT_BRAND_TONE_TEMPERATURE = 55;
 
 // ─── Tone profiles ──────────────────────────────────────────────────────────
