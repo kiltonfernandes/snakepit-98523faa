@@ -331,6 +331,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getMaterialsForWeek = useCallback((weekId: string) => materials.filter(m => m.week_id === weekId), [materials]);
 
+  const loadMaterialCover = useCallback(async (id: string): Promise<string | null> => {
+    // Check local state first
+    const local = materials.find(m => m.id === id);
+    if (local?.cover_url) return local.cover_url;
+    // Fetch from DB
+    const { data } = await supabase
+      .from('episode_materials' as any)
+      .select('cover_url')
+      .eq('id', id)
+      .single();
+    const coverUrl = (data as any)?.cover_url || null;
+    if (coverUrl) {
+      setMaterials(prev => prev.map(m => m.id === id ? { ...m, cover_url: coverUrl } : m));
+    }
+    return coverUrl;
+  }, [materials]);
+
   const updateSettings = useCallback((s: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...s }));
     supabase.from('app_settings' as any).update(s as any).eq('singleton_id', 1).then();
