@@ -138,10 +138,10 @@ export default function Materials() {
   };
 
   useEffect(() => {
-    if (selectedWeek && weekPautas.length > 0 && weekMaterials.length === 0) {
+    if (selectedWeek && weekPautas.length > 0 && weekMaterials.length === 0 && !repairing) {
       repairMaterials();
     }
-  }, [selectedWeek?.id, weekPautas.length, weekMaterials.length]);
+  }, [selectedWeek?.id, weekPautas.length, weekMaterials.length, repairing]);
 
   const getTitleOptions = (mat: EpisodeMaterial) => (Array.isArray(mat.title_options_json) ? (mat.title_options_json as TitleOption[]) : []);
 
