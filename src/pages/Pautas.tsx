@@ -53,6 +53,39 @@ function getISOWeekLabel(dateStr: string): string {
   return `${format(monday, 'dd/MM')} – ${format(sunday, 'dd/MM')}`;
 }
 
+const NORMALIZED_GENRES = [
+  'Heavy Metal', 'Thrash Metal', 'Death Metal', 'Black Metal', 'Power Metal',
+  'Doom Metal', 'Progressive Metal', 'Groove Metal', 'Metalcore', 'Melodic Death Metal', 'Symphonic Metal',
+] as const;
+
+function normalizeGenre(genre: string): string {
+  const lower = genre.toLowerCase().trim();
+  for (const ng of NORMALIZED_GENRES) {
+    if (lower === ng.toLowerCase()) return ng;
+    // partial matching: "melodic death" -> "Melodic Death Metal", "prog metal" -> "Progressive Metal"
+    const ngLower = ng.toLowerCase();
+    if (lower.includes(ngLower.replace(' metal', '')) && ngLower.includes('metal')) return ng;
+  }
+  // Fuzzy: check if genre contains key words
+  if (lower.includes('thrash')) return 'Thrash Metal';
+  if (lower.includes('death') && lower.includes('melod')) return 'Melodic Death Metal';
+  if (lower.includes('death')) return 'Death Metal';
+  if (lower.includes('black')) return 'Black Metal';
+  if (lower.includes('power')) return 'Power Metal';
+  if (lower.includes('doom') || lower.includes('stoner') || lower.includes('sludge')) return 'Doom Metal';
+  if (lower.includes('prog')) return 'Progressive Metal';
+  if (lower.includes('groove')) return 'Groove Metal';
+  if (lower.includes('core') || lower.includes('deathcore') || lower.includes('metalcore')) return 'Metalcore';
+  if (lower.includes('symphonic')) return 'Symphonic Metal';
+  if (lower.includes('heavy') || lower.includes('nwobhm') || lower.includes('traditional')) return 'Heavy Metal';
+  return 'Heavy Metal'; // default fallback
+}
+
+function getFirstNormalizedGenre(release: Release): string {
+  if (!release.genres || release.genres.length === 0) return 'Heavy Metal';
+  return normalizeGenre(release.genres[0]);
+}
+
 function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; genres: { genre: string; releases: Release[] }[] }[] {
   const weekMap = new Map<string, Release[]>();
   for (const r of releases) {
@@ -64,11 +97,9 @@ function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; 
   for (const [weekLabel, rels] of weekMap) {
     const genreMap = new Map<string, Release[]>();
     for (const r of rels) {
-      const genres = r.genres && r.genres.length > 0 ? r.genres : ['Sem gênero'];
-      for (const g of genres) {
-        if (!genreMap.has(g)) genreMap.set(g, []);
-        genreMap.get(g)!.push(r);
-      }
+      const genre = getFirstNormalizedGenre(r);
+      if (!genreMap.has(genre)) genreMap.set(genre, []);
+      genreMap.get(genre)!.push(r);
     }
     const genres = Array.from(genreMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
