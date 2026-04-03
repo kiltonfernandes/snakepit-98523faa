@@ -344,33 +344,51 @@ export type Database = {
       releases: {
         Row: {
           album: string
+          apple_music_url: string | null
           artist: string
+          bandcamp_url: string | null
           comments: string | null
           created_at: string
+          deezer_url: string | null
           id: string
+          metal_archives_url: string | null
           rating: number | null
           release_date: string
+          spotify_url: string | null
           updated_at: string
+          youtube_url: string | null
         }
         Insert: {
           album: string
+          apple_music_url?: string | null
           artist: string
+          bandcamp_url?: string | null
           comments?: string | null
           created_at?: string
+          deezer_url?: string | null
           id: string
+          metal_archives_url?: string | null
           rating?: number | null
           release_date: string
+          spotify_url?: string | null
           updated_at?: string
+          youtube_url?: string | null
         }
         Update: {
           album?: string
+          apple_music_url?: string | null
           artist?: string
+          bandcamp_url?: string | null
           comments?: string | null
           created_at?: string
+          deezer_url?: string | null
           id?: string
+          metal_archives_url?: string | null
           rating?: number | null
           release_date?: string
+          spotify_url?: string | null
           updated_at?: string
+          youtube_url?: string | null
         }
         Relationships: []
       }
