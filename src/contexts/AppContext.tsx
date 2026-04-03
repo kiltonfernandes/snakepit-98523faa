@@ -102,7 +102,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadMaterials = useCallback(async () => {
-    const { data } = await supabase.from('episode_materials' as any).select('*');
+    const { data, error } = await supabase.from('episode_materials' as any).select('*');
+    if (error) console.error('[loadMaterials] error:', error.message);
     if (data) setMaterials(data as any[]);
   }, []);
 
