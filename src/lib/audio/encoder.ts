@@ -10,10 +10,7 @@ interface LameModule {
 }
 
 export async function encodeBufferToMp3Blob(
-  buffer: AudioBuffer,
-  log: LogCallback,
-  kbps: number = 192,
-  onSubProgress?: SubProgressCallback
+  buffer: AudioBuffer, log: LogCallback, kbps: number = 192, onSubProgress?: SubProgressCallback
 ): Promise<Blob> {
   const lamejs = await import('@breezystack/lamejs') as unknown as LameModule;
   const Mp3Encoder = lamejs.Mp3Encoder;
@@ -21,7 +18,7 @@ export async function encodeBufferToMp3Blob(
   const numChannels = Math.min(buffer.numberOfChannels, 2);
   const encoder = new Mp3Encoder(numChannels, sampleRate, kbps);
   const blockSize = 1152;
-  const mp3Data: Uint8Array[] = [];
+  const mp3Data: (Uint8Array | Int8Array | number[])[] = [];
   const leftFloat = buffer.getChannelData(0);
   const rightFloat = numChannels > 1 ? buffer.getChannelData(1) : leftFloat;
   const totalSamples = leftFloat.length;
@@ -40,7 +37,7 @@ export async function encodeBufferToMp3Blob(
     const lSlice = len < blockSize ? leftChunk.subarray(0, len) : leftChunk;
     const rSlice = len < blockSize ? rightChunk.subarray(0, len) : rightChunk;
     const mp3buf = numChannels === 1 ? encoder.encodeBuffer(lSlice) : encoder.encodeBuffer(lSlice, rSlice);
-    if (mp3buf.length > 0) mp3Data.push(new Uint8Array(mp3buf));
+    if (mp3buf.length > 0) mp3Data.push(mp3buf);
     if (i % (blockSize * 200) === 0 && i > 0) {
       onSubProgress?.(i / totalSamples);
       await new Promise(r => setTimeout(r, 0));
@@ -48,9 +45,9 @@ export async function encodeBufferToMp3Blob(
   }
 
   const endBuf = encoder.flush();
-  if (endBuf.length > 0) mp3Data.push(new Uint8Array(endBuf));
+  if (endBuf.length > 0) mp3Data.push(endBuf);
   onSubProgress?.(1);
-  return new Blob(mp3Data, { type: 'audio/mp3' });
+  return new Blob(mp3Data as BlobPart[], { type: 'audio/mp3' });
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -65,11 +62,7 @@ function downloadBlob(blob: Blob, filename: string) {
 }
 
 export async function encodeToMp3(
-  buffer: AudioBuffer,
-  filename: string,
-  log: LogCallback,
-  kbps: number = 192,
-  onSubProgress?: SubProgressCallback
+  buffer: AudioBuffer, filename: string, log: LogCallback, kbps: number = 192, onSubProgress?: SubProgressCallback
 ): Promise<void> {
   log(`Codificando para MP3 (${kbps}kbps)...`, 'step');
   const blob = await encodeBufferToMp3Blob(buffer, log, kbps, onSubProgress);
