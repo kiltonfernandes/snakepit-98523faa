@@ -944,8 +944,13 @@ export default function Pautas() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">2. Cole a resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
-                <Textarea rows={8} placeholder={`Cole aqui a resposta com <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="${promptScope}">...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">2. Resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
+                  <Button size="sm" variant="secondary" onClick={handleGenerateAI} disabled={generating}>
+                    {generating ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Gerando...</> : <><Zap className="h-3.5 w-3.5 mr-1.5" /> Gerar com IA</>}
+                  </Button>
+                </div>
+                <Textarea rows={8} placeholder={`Cole aqui a resposta ou clique "Gerar com IA"...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
               </div>
               {parseError && (
                 <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-xs text-destructive">
@@ -957,7 +962,7 @@ export default function Pautas() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleApplyResponse} disabled={!promptResponse}>Validar e Aplicar</Button>
+            <Button onClick={handleApplyResponse} disabled={!promptResponse || generating}>Validar e Aplicar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
