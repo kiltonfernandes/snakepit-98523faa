@@ -726,9 +726,16 @@ export default function Pautas() {
   };
 
   const SaturdayReleasePicker = ({ pauta }: { pauta: Pauta }) => {
+    const [search, setSearch] = useState('');
     const inputs = getRawInputs(pauta);
     const eligible = getEligibleSaturdayReleases(releases, pauta.publication_date);
     const selectedIds: string[] = inputs.selected_release_ids || [];
+
+    const filtered = search.trim()
+      ? eligible.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
+      : eligible;
+
+    const grouped = groupReleasesByWeekAndGenre(filtered);
 
     const toggle = (id: string) => {
       const next = selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id];
@@ -738,21 +745,44 @@ export default function Pautas() {
     return (
       <div className="space-y-1">
         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Destaques da Semana (D+2 a D+10)</Label>
-        {eligible.length > 0 ? (
-          <div className="space-y-1 max-h-[120px] overflow-y-auto">
-            {eligible.map(r => (
-              <button
-                key={r.id}
-                className={`w-full text-left p-1.5 rounded text-xs border transition-colors ${selectedIds.includes(r.id) ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30'}`}
-                onClick={() => toggle(r.id)}
-              >
-                {r.artist} – {r.album}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[10px] text-muted-foreground italic">Nenhum release na janela D+2/D+10</p>
-        )}
+        <Input
+          placeholder="Buscar artista ou álbum..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="h-7 text-xs mb-1"
+        />
+        <ScrollArea className="h-[200px]">
+          {grouped.length > 0 ? (
+            <div className="space-y-1">
+              {grouped.map(week => (
+                <div key={week.weekLabel} className="mb-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground px-1 py-0.5 uppercase tracking-wider">
+                    Semana {week.weekLabel}
+                  </p>
+                  {week.genres.map(g => (
+                    <div key={g.genre}>
+                      <p className="text-[10px] text-primary/70 px-2 py-0.5 font-medium">{g.genre}</p>
+                      {g.releases.map(r => (
+                        <button
+                          key={r.id}
+                          className={`w-full text-left p-1.5 rounded text-xs border transition-colors ${selectedIds.includes(r.id) ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30'}`}
+                          onClick={() => toggle(r.id)}
+                        >
+                          {r.artist} – {r.album}
+                          <span className="text-muted-foreground ml-1">({r.release_date})</span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground italic p-2">
+              {eligible.length === 0 ? 'Nenhum release na janela D+2/D+10' : 'Nenhum resultado'}
+            </p>
+          )}
+        </ScrollArea>
       </div>
     );
   };

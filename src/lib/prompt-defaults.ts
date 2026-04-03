@@ -118,7 +118,7 @@ REGRAS DE SAÍDA:
 - Seja objetivo, equilibrado e neutro no tom.
 - Estrutura: título, subtítulo, o que aconteceu, quem está envolvido, contexto, impacto.
 - Uma matéria por dia.
-- Mínimo 500 palavras.`;
+- Aproximadamente 500 palavras.`;
 
 const PLAYBOOK_REVIEW_KILTON = `Você é um especialista em pesquisa e síntese de conteúdo.
 
