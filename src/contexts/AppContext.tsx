@@ -123,12 +123,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    loadReleases();
-    loadWeeks();
-    loadPautas();
-    loadMaterials();
-    loadSettings();
-    loadActivityLog();
+    Promise.all([loadReleases(), loadWeeks(), loadPautas(), loadMaterials(), loadSettings(), loadActivityLog()])
+      .finally(() => setDataReady(true));
   }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings, loadActivityLog]);
 
   // Auto-recalc week statuses after initial load
