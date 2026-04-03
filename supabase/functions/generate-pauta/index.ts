@@ -45,7 +45,7 @@ serve(async (req) => {
             {
               role: "system",
               content:
-                "Você é um redator especialista em música pesada (heavy metal, rock, punk, etc). Siga rigorosamente o contrato de resposta descrito no prompt do usuário. Responda sempre em português brasileiro.",
+                "Você é um redator especialista em música pesada (heavy metal, rock, punk, etc). Siga rigorosamente o contrato de resposta descrito no prompt do usuário. Responda sempre em português brasileiro." + bannedInstruction,
             },
             { role: "user", content: prompt },
           ],
