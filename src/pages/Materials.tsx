@@ -500,24 +500,93 @@ export default function Materials() {
     img.src = imageUrl;
   };
 
-  const generateSundayContent = (mat: EpisodeMaterial) => {
-    const finalized = weekPautas.filter((p) => p.week_id === mat.week_id && p.pauta_type !== 'sunday' && (p.status === 'finalized' || p.status === 'generated' || p.status === 'needs_review'));
-    if (finalized.length === 0) {
-      toast.warning('Nenhuma pauta pronta para compilação');
+  const generateSundayContent = async (mat: EpisodeMaterial) => {
+    const otherMats = weekMaterials.filter((m) => m.week_id === mat.week_id && m.slot_key !== 'sunday');
+    const readyMats = otherMats.filter((m) => getTitle(m) || m.description_html);
+
+    if (readyMats.length === 0) {
+      toast.warning('Nenhum episódio com título ou descrição para compilar');
       return;
     }
 
-    const summary = finalized
-      .map((p) => {
-        const sections = (p.sections_json || {}) as Record<string, string>;
-        const mainContent = Object.values(sections).filter(Boolean).map((value) => toPlainText(value)).join(' ').slice(0, 220);
-        return `<li><strong>${new Date(`${p.publication_date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })}:</strong> ${mainContent}...</li>`;
+    // Build context from other episodes' titles and descriptions
+    const episodesSummary = readyMats
+      .map((m) => {
+        const dayLabel = DAY_SLOTS.find((d) => d.key === m.slot_key)?.label || m.slot_key;
+        const title = getTitle(m) || 'Sem título';
+        const desc = m.description_html ? toPlainText(m.description_html).slice(0, 300) : '';
+        return `${dayLabel} (${m.episode_date}): ${title}${desc ? ' — ' + desc : ''}`;
       })
-      .join('');
+      .join('\n');
 
-    const html = `<h3>Compilação Semanal</h3><p>Resumo editorial da semana com os principais assuntos publicados no Snakepit.</p><ul>${summary}</ul>`;
-    updateMaterial(mat.id, { description_html: html });
-    toast.success('Compilação semanal gerada');
+    setGeneratingDescriptions((prev) => new Set(prev).add(mat.id));
+
+    try {
+      const prompt = [
+        'Você vai escrever o título e a descrição HTML do episódio COMPILAÇÃO SEMANAL do podcast Heavynauta.',
+        'Este é o episódio de DOMINGO — um podcast longo que junta todos os 6 episódios da semana.',
+        '',
+        'EPISÓDIOS DA SEMANA (títulos e resumos):',
+        episodesSummary,
+        '',
+        'REGRAS:',
+        '- Responda APENAS com HTML válido',
+        '- Nunca usar markdown nem code block',
+        '- O título deve refletir os destaques da semana de forma compilada',
+        '- A descrição deve resumir todos os episódios com destaque para os temas principais',
+        '- Inclua uma lista dos episódios com seus títulos',
+        '- Tom editorial Heavynauta',
+        '',
+        'FORMATO DE RESPOSTA:',
+        'TITULO_COMPILACAO: [texto do título]',
+        '',
+        '[HTML da descrição em seguida]',
+      ].join('\n');
+
+      const aiText = await runAIPrompt(prompt);
+      const cleaned = cleanAiResponse(aiText);
+
+      // Parse title
+      const titleMatch = cleaned.match(/TITULO_COMPILACAO:\s*(.+?)(?:\n|$)/i);
+      if (titleMatch?.[1]) {
+        const sundayTitle: TitleOption[] = [
+          { text: titleMatch[1].trim(), style: 'impacto' },
+        ];
+        updateMaterial(mat.id, { title_options_json: sundayTitle as any, selected_title_index: 0 });
+      }
+
+      // Parse description (everything after the title line)
+      let html = cleaned.replace(/TITULO_COMPILACAO:\s*.+?\n/i, '').trim();
+      if (!html.startsWith('<')) {
+        html = `<p>${html.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br />')}</p>`;
+      }
+
+      // Apply fixed template if available
+      const template = settings.description_template_html || '';
+      if (template) {
+        const selectedTitle = titleMatch?.[1]?.trim() || getTitle(mat) || 'Compilação Semanal';
+        html = template
+          .replace(/<<<title>>>/g, selectedTitle)
+          .replace(/<<<generated content>>>/g, html);
+      }
+
+      const brandBlock = getPromptText('material_brand_block', promptOverrides);
+      if (!html.includes('Heavynauta')) {
+        html = `${html}\n${brandBlock}`;
+      }
+
+      updateMaterial(mat.id, { description_html: html });
+      toast.success('Compilação semanal gerada com IA');
+    } catch (err: any) {
+      console.error('Sunday generation error:', err);
+      toast.error(err.message || 'Erro ao gerar compilação');
+    } finally {
+      setGeneratingDescriptions((prev) => {
+        const next = new Set(prev);
+        next.delete(mat.id);
+        return next;
+      });
+    }
   };
 
   const handleBulkTitles = async () => {
