@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -104,6 +104,7 @@ export default function Pautas() {
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('inputs');
+  const [generating, setGenerating] = useState(false);
 
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
@@ -208,6 +209,77 @@ export default function Pautas() {
       target_json: { week_id: selectedWeek.id, week_start: selectedWeek.start_date },
     });
   };
+
+  // ─── Generate with AI (streaming) ───
+  const handleGenerateAI = useCallback(async () => {
+    if (!activePauta) return;
+    const prompt = promptScope === 'week'
+      ? generateWeekPrompt()
+      : generatePrompt(activePauta, activeSection || undefined);
+    if (!prompt) return;
+
+    setGenerating(true);
+    setPromptResponse('');
+    setParseError(null);
+
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Erro desconhecido' }));
+        toast.error(err.error || `Erro ${resp.status}`);
+        setGenerating(false);
+        return;
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) { setGenerating(false); return; }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let full = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let nlIdx: number;
+        while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, nlIdx);
+          buffer = buffer.slice(nlIdx + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              full += content;
+              setPromptResponse(full);
+            }
+          } catch { /* partial json, skip */ }
+        }
+      }
+
+      setGenerating(false);
+      toast.success('Resposta gerada com IA');
+      logActivity('IA gerou resposta', `scope: ${promptScope}, pauta: ${activePauta.publication_date}`);
+    } catch (e) {
+      console.error('AI generation error:', e);
+      toast.error('Erro ao gerar com IA');
+      setGenerating(false);
+    }
+  }, [activePauta, activeSection, promptScope]);
 
   // ─── Apply response using ResponseParser ───
   const [parseError, setParseError] = useState<string | null>(null);
@@ -872,8 +944,13 @@ export default function Pautas() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">2. Cole a resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
-                <Textarea rows={8} placeholder={`Cole aqui a resposta com <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="${promptScope}">...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">2. Resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
+                  <Button size="sm" variant="secondary" onClick={handleGenerateAI} disabled={generating}>
+                    {generating ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Gerando...</> : <><Zap className="h-3.5 w-3.5 mr-1.5" /> Gerar com IA</>}
+                  </Button>
+                </div>
+                <Textarea rows={8} placeholder={`Cole aqui a resposta ou clique "Gerar com IA"...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
               </div>
               {parseError && (
                 <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-xs text-destructive">
@@ -885,7 +962,7 @@ export default function Pautas() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleApplyResponse} disabled={!promptResponse}>Validar e Aplicar</Button>
+            <Button onClick={handleApplyResponse} disabled={!promptResponse || generating}>Validar e Aplicar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
