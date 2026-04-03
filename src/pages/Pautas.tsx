@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -115,6 +116,7 @@ export default function Pautas() {
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
+  const [flowProgress, setFlowProgress] = useState<Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>>>({});
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
@@ -512,7 +514,7 @@ export default function Pautas() {
     logActivity('Salvar todos inputs', `Semana: ${selectedWeek?.start_date}`);
   };
 
-  // ─── Flow: auto-generate all prompts ───
+  // ─── Flow: auto-generate all prompts with granular progress ───
   const handleFlowAutoGenerate = useCallback(async () => {
     if (!selectedWeek || weekPautas.length === 0) return;
     setFlowGenerating(true);
@@ -522,14 +524,35 @@ export default function Pautas() {
       return slot !== 'sunday';
     });
 
+    // Initialize progress map
+    const initialProgress: Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>> = {};
     for (const pauta of weekdayPautas) {
+      const slot = getPautaSlot(pauta);
+      const sections = getSectionsForDay(slot);
+      initialProgress[slot] = {};
+      for (const sec of sections) {
+        initialProgress[slot][sec.key] = 'pending';
+      }
+    }
+    setFlowProgress(initialProgress);
+
+    for (const pauta of weekdayPautas) {
+      const slot = getPautaSlot(pauta);
+      const sections = getSectionsForDay(slot);
+
+      // Mark all sections of this day as generating
+      setFlowProgress(prev => {
+        const next = { ...prev };
+        next[slot] = { ...next[slot] };
+        for (const sec of sections) next[slot][sec.key] = 'generating';
+        return next;
+      });
+
       const prompt = buildDayPrompt(pauta, promptCtx);
       if (!prompt) continue;
 
       try {
         const responseText = await streamAI(prompt, () => {});
-        const slot = getPautaSlot(pauta);
-        const sections = getSectionsForDay(slot);
         const result = parsePautaResponse(responseText, 'day', { publication_date: pauta.publication_date });
 
         if (result.success && result.sections) {
@@ -544,12 +567,30 @@ export default function Pautas() {
             rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
             rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
           });
-          toast.success(`Gerado: ${slot}`);
+          // Mark sections as done
+          setFlowProgress(prev => {
+            const next = { ...prev };
+            next[slot] = { ...next[slot] };
+            for (const sec of sections) next[slot][sec.key] = 'done';
+            return next;
+          });
         } else {
-          toast.error(`Falha ao gerar: ${slot} — ${result.error}`);
+          setFlowProgress(prev => {
+            const next = { ...prev };
+            next[slot] = { ...next[slot] };
+            for (const sec of sections) next[slot][sec.key] = 'error';
+            return next;
+          });
+          toast.error(`Falha: ${slot} — ${result.error}`);
         }
       } catch (e: any) {
-        toast.error(`Erro na geração: ${e.message}`);
+        setFlowProgress(prev => {
+          const next = { ...prev };
+          next[slot] = { ...next[slot] };
+          for (const sec of sections) next[slot][sec.key] = 'error';
+          return next;
+        });
+        toast.error(`Erro: ${e.message}`);
       }
     }
 
@@ -691,21 +732,68 @@ export default function Pautas() {
   // ─── Flow step renderer ───
   const renderFlowStep = () => {
     if (flowStep >= FLOW_STEPS.length) {
-      // Final step: action buttons
+      // Final step: action buttons + progress tracker
+      const hasProgress = Object.keys(flowProgress).length > 0;
+      const totalSections = Object.values(flowProgress).reduce((acc, day) => acc + Object.keys(day).length, 0);
+      const doneSections = Object.values(flowProgress).reduce((acc, day) => acc + Object.values(day).filter(s => s === 'done').length, 0);
+      const progressPct = totalSections > 0 ? Math.round((doneSections / totalSections) * 100) : 0;
+
       return (
-        <div className="flex flex-col items-center justify-center py-16 space-y-6">
+        <div className="flex flex-col items-center justify-center py-8 space-y-6">
           <div className="text-center space-y-2">
-            <h3 className="text-xl font-bold">Insumos Completos</h3>
-            <p className="text-muted-foreground">Todos os campos de insumo da semana foram preenchidos. Como deseja prosseguir?</p>
+            <h3 className="text-xl font-bold">{flowGenerating ? 'Gerando Pautas...' : hasProgress && progressPct === 100 ? '✅ Geração Concluída' : 'Insumos Completos'}</h3>
+            <p className="text-muted-foreground">
+              {flowGenerating ? `${doneSections}/${totalSections} seções processadas (${progressPct}%)` : 'Todos os campos de insumo da semana foram preenchidos. Como deseja prosseguir?'}
+            </p>
           </div>
-          <div className="flex gap-4">
-            <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate} disabled={flowGenerating}>
-              {flowGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</> : <><Zap className="h-4 w-4" /> Gerar Automaticamente</>}
-            </Button>
-            <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual} disabled={flowGenerating}>
-              <FileText className="h-4 w-4" /> Gerar Manualmente
-            </Button>
-          </div>
+
+          {/* Progress tracker */}
+          {hasProgress && (
+            <div className="w-full max-w-2xl space-y-3">
+              <Progress value={progressPct} className="h-2.5" />
+              <div className="grid gap-2">
+                {DAY_SLOTS.filter(d => d.key !== 'sunday' && flowProgress[d.key]).map(day => {
+                  const sections = flowProgress[day.key];
+                  if (!sections) return null;
+                  const dayDone = Object.values(sections).filter(s => s === 'done').length;
+                  const dayTotal = Object.keys(sections).length;
+                  const dayPct = dayTotal > 0 ? Math.round((dayDone / dayTotal) * 100) : 0;
+
+                  return (
+                    <div key={day.key} className="flex items-center gap-3 p-2 rounded-md border border-border/50 bg-card/50">
+                      <span className="text-xs font-medium w-16">{day.short}</span>
+                      <div className="flex gap-1.5 flex-1">
+                        {Object.entries(sections).map(([secKey, status]) => {
+                          const secLabel = getSectionsForDay(day.key as DaySlot).find(s => s.key === secKey);
+                          return (
+                            <div key={secKey} className="flex items-center gap-1" title={secLabel?.label || secKey}>
+                              {status === 'done' && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                              {status === 'generating' && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />}
+                              {status === 'error' && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+                              {status === 'pending' && <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />}
+                              <span className="text-[10px] text-muted-foreground">{secLabel?.label || secKey}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground">{dayPct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!flowGenerating && (
+            <div className="flex gap-4">
+              <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate}>
+                <Zap className="h-4 w-4" /> Gerar Automaticamente
+              </Button>
+              <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual}>
+                <FileText className="h-4 w-4" /> Gerar Manualmente
+              </Button>
+            </div>
+          )}
         </div>
       );
     }
@@ -1252,16 +1340,10 @@ export default function Pautas() {
 
       {/* Pauta Preview Dialog */}
       <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
+          <DialogHeader className="sr-only">
             <DialogTitle>Visualização da Pauta</DialogTitle>
-            <DialogDescription>
-              {previewPauta && (() => {
-                const slot = getPautaSlot(previewPauta);
-                const dayInfo = DAY_SLOTS.find(d => d.key === slot);
-                return `${dayInfo?.label} — ${previewPauta.publication_date}`;
-              })()}
-            </DialogDescription>
+            <DialogDescription>Preview da pauta para gravação</DialogDescription>
           </DialogHeader>
           {previewPauta && (() => {
             const slot = getPautaSlot(previewPauta);
@@ -1270,15 +1352,26 @@ export default function Pautas() {
             const inputs = getRawInputs(previewPauta);
             const dayInfo = DAY_SLOTS.find(d => d.key === slot);
 
+            const INTRO_SEGWAY = `Saudações, heavynautas!\n\nNossa nave está aterrissando em mais um episódio do nosso podcast diário com os melhores lançamentos do heavy metal. O meu nome é Kilton Fernandes e hoje eu estou com meu copiloto Rafa Ferreira. Seja muito bem-vindo!`;
+            const OUTRO_SEGWAY = `Kilton: Nossa nave espacial está se preparando para levantar voo e partir por hoje. Muito obrigado por nos acompanhar nessa jornada pelo universo do heavy metal.\n\nRafa: E não se esqueçam, heavynautas! Estamos de volta amanhã com mais novidades do mundo do metal. O Snakepit vai ao ar todos os dias, de segunda a sexta as 6 da manhã. Desejo a todos uma ótima noite e até a nossa próxima viagem!`;
+
             return (
-              <div className="prose prose-sm dark:prose-invert max-w-none space-y-6">
-                <div className="text-center border-b border-border pb-4 mb-6">
-                  <h2 className="text-xl font-bold tracking-tight m-0">🐍 SNAKEPIT</h2>
-                  <p className="text-muted-foreground text-sm m-0 mt-1">
+              <div className="space-y-8 p-4">
+                {/* Header */}
+                <div className="text-center border-b border-white/20 pb-6">
+                  <h2 className="text-2xl font-bold tracking-tight text-white m-0">🐍 SNAKEPIT</h2>
+                  <p className="text-white/60 text-base m-0 mt-2">
                     {dayInfo?.label} — {new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
 
+                {/* Intro Segway */}
+                <div className="border-l-4 border-primary pl-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">ABERTURA</p>
+                  <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{INTRO_SEGWAY}</p>
+                </div>
+
+                {/* Sections */}
                 {sections.map((sec, idx) => {
                   const content = data[sec.key]?.trim();
                   let contextNote = '';
@@ -1294,24 +1387,30 @@ export default function Pautas() {
                   if (sec.key === 'news') contextNote = inputs.news_link ? `🔗 ${inputs.news_link}` : '';
 
                   return (
-                    <div key={sec.key} className={idx > 0 ? 'border-t border-border/50 pt-4' : ''}>
-                      <h3 className="text-base font-bold uppercase tracking-wider text-primary m-0 mb-2">
+                    <div key={sec.key} className={idx > 0 ? 'border-t border-white/10 pt-6' : ''}>
+                      <h3 className="text-lg font-bold uppercase tracking-wider text-primary m-0 mb-3">
                         {sec.label}
                       </h3>
                       {contextNote && (
-                        <p className="text-xs text-muted-foreground italic m-0 mb-2">{contextNote}</p>
+                        <p className="text-sm text-white/50 italic m-0 mb-3">{contextNote}</p>
                       )}
                       {content ? (
-                        <div className="text-sm leading-relaxed whitespace-pre-wrap">{content}</div>
+                        <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
                       ) : (
-                        <p className="text-sm text-muted-foreground/50 italic">Seção não preenchida</p>
+                        <p className="text-base text-white/30 italic">Seção não preenchida</p>
                       )}
                     </div>
                   );
                 })}
 
-                <div className="border-t border-border pt-4 mt-6 text-center">
-                  <p className="text-xs text-muted-foreground m-0">Status: {previewPauta.status}</p>
+                {/* Outro Segway */}
+                <div className="border-l-4 border-primary pl-4 border-t border-white/10 pt-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">ENCERRAMENTO</p>
+                  <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{OUTRO_SEGWAY}</p>
+                </div>
+
+                <div className="border-t border-white/10 pt-4 text-center">
+                  <p className="text-xs text-white/40 m-0">Status: {previewPauta.status}</p>
                 </div>
               </div>
             );
