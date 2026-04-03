@@ -255,6 +255,31 @@ export default function Materials() {
     const mat = weekMaterials.find((material) => material.id === materialId);
     if (!mat) return;
 
+    // Sunday: use other episodes as context instead of pauta
+    if (mat.slot_key === 'sunday') {
+      const otherMats = weekMaterials.filter((m) => m.slot_key !== 'sunday');
+      const otherTitles = otherMats.map((m) => getTitle(m)).filter(Boolean);
+      if (otherTitles.length === 0) {
+        toast.warning('Gere os títulos dos outros episódios primeiro');
+        return;
+      }
+      setGeneratingTitles((prev) => new Set(prev).add(materialId));
+      try {
+        const prompt = `🔥 Títulos otimizados para YOUTUBE/PODCAST — COMPILAÇÃO SEMANAL\n\nEste é o episódio de DOMINGO do Heavynauta, um podcast longo que compila todos os 6 episódios da semana.\n\nTÍTULOS DOS EPISÓDIOS DA SEMANA:\n${otherTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nGere EXATAMENTE 3 títulos que capturem os destaques da semana de forma compilada.\n\nFORMATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
+        const aiText = await runAIPrompt(prompt);
+        const options = parseTitleResponse(aiText);
+        if (options.length) {
+          updateMaterial(materialId, { title_options_json: options as any, selected_title_index: 0 });
+          toast.success(`${options.length} títulos gerados para domingo`);
+        }
+      } catch (err: any) {
+        toast.error(err.message || 'Erro ao gerar títulos');
+      } finally {
+        setGeneratingTitles((prev) => { const next = new Set(prev); next.delete(materialId); return next; });
+      }
+      return;
+    }
+
     const pauta = getPautaForMaterial(mat);
     if (!pauta) {
       toast.error('Pauta não encontrada para este episódio');
