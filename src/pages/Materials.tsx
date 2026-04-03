@@ -425,6 +425,7 @@ export default function Materials() {
           />
         </TabsContent>
       </Tabs>
+      )}
 
       {/* Cover Creator Dialog */}
       <Dialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
