@@ -12,6 +12,7 @@ interface ActivityEntry {
 
 interface AppContextType {
   dataReady: boolean;
+  loadMaterialCover: (id: string) => Promise<string | null>;
   releases: Release[];
   weeks: EditorialWeek[];
   pautas: Pauta[];
