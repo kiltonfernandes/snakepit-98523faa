@@ -1026,18 +1026,14 @@ export default function Pautas() {
 
       {weeks.length > 0 && (() => {
         const sortedWeeks = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const currentIdx = sortedWeeks.findIndex(w => w.start_date >= todayStr);
-        const startFrom = currentIdx >= 0 ? currentIdx : Math.max(0, sortedWeeks.length - 1);
-        const [carouselStart, setCarouselStart] = useState(Math.max(0, startFrom));
         const visible = 4;
-        const visibleWeeks = sortedWeeks.slice(carouselStart, carouselStart + visible);
-        const canPrev = carouselStart > 0;
-        const canNext = carouselStart + visible < sortedWeeks.length;
+        const visibleWeeks = sortedWeeks.slice(weekCarouselStart, weekCarouselStart + visible);
+        const canPrev = weekCarouselStart > 0;
+        const canNext = weekCarouselStart + visible < sortedWeeks.length;
 
         return (
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={!canPrev} onClick={() => setCarouselStart(s => Math.max(0, s - 1))}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={!canPrev} onClick={() => setWeekCarouselStart(s => Math.max(0, s - 1))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <div className="flex gap-2 overflow-hidden">
@@ -1052,7 +1048,7 @@ export default function Pautas() {
                 </Button>
               ))}
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={!canNext} onClick={() => setCarouselStart(s => Math.min(sortedWeeks.length - visible, s + 1))}>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={!canNext} onClick={() => setWeekCarouselStart(s => Math.min(sortedWeeks.length - visible, s + 1))}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
