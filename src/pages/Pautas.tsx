@@ -1014,6 +1014,9 @@ export default function Pautas() {
                 weekLabel={`Conteúdo – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                 actions={
                   <div className="flex gap-2">
+                    <Button size="sm" variant="default" className="gap-1.5" onClick={handleFlowAutoGenerate} disabled={flowGenerating}>
+                      {flowGenerating ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando Semana...</> : <><Zap className="h-3.5 w-3.5" /> Gerar Tudo</>}
+                    </Button>
                     <Button size="sm" variant="outline" onClick={openWeekPromptDialog}>
                       <Sparkles className="h-3.5 w-3.5 mr-1" /> Prompt Semana
                     </Button>
