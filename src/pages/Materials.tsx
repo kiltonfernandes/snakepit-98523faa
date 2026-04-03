@@ -37,9 +37,21 @@ export default function Materials() {
   };
 
   const getPautaForMaterial = (mat: EpisodeMaterial) => {
-    if (mat.source_pauta_id) return pautas.find(p => p.id === mat.source_pauta_id);
-    // Fallback: find pauta matching same week and slot date
-    return weekPautas.find(p => p.publication_date === mat.episode_date);
+    // Try by source_pauta_id first
+    if (mat.source_pauta_id) {
+      const byId = pautas.find(p => p.id === mat.source_pauta_id);
+      if (byId) return byId;
+    }
+    // Fallback: find pauta matching same week and episode date
+    const byDate = weekPautas.find(p => p.publication_date === mat.episode_date);
+    if (byDate) return byDate;
+    // Last resort: match by slot_key (day of week)
+    return weekPautas.find(p => {
+      const d = new Date(p.publication_date + 'T12:00:00');
+      const wd = d.getDay();
+      const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+      return slotMap[wd] === mat.slot_key;
+    });
   };
 
   const isPautaReady = (mat: EpisodeMaterial) => {
