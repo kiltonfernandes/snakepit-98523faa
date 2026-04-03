@@ -547,7 +547,7 @@ export default function Pautas() {
   };
 
   // ─── Flow: auto-generate all prompts with granular progress ───
-  const handleFlowAutoGenerate = useCallback(async () => {
+  const handleFlowAutoGenerateInner = useCallback(async (regenerateAll: boolean) => {
     if (!selectedWeek || weekPautas.length === 0) return;
     setFlowGenerating(true);
 
@@ -571,6 +571,19 @@ export default function Pautas() {
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
       const sections = getSectionsForDay(slot);
+      const existingSections = (pauta.sections_json || {}) as Record<string, string>;
+
+      // In non-regenerate mode, skip days where all sections are filled
+      const allFilled = sections.every(s => existingSections[s.key]?.trim());
+      if (!regenerateAll && allFilled) {
+        setFlowProgress(prev => {
+          const next = { ...prev };
+          next[slot] = { ...next[slot] };
+          for (const sec of sections) next[slot][sec.key] = 'done';
+          return next;
+        });
+        continue;
+      }
 
       // Mark all sections of this day as generating
       setFlowProgress(prev => {
@@ -631,6 +644,9 @@ export default function Pautas() {
     toast.success('Flow automático concluído');
     logActivity('Flow automático', `Semana: ${selectedWeek.start_date}`);
   }, [selectedWeek, weekPautas, promptCtx, streamAI]);
+
+  const handleFlowAutoGenerate = useCallback(() => handleFlowAutoGenerateInner(false), [handleFlowAutoGenerateInner]);
+  const handleFlowRegenerate = useCallback(() => handleFlowAutoGenerateInner(true), [handleFlowAutoGenerateInner]);
 
   const handleFlowManual = () => {
     setActiveTab('inputs');
@@ -849,7 +865,10 @@ export default function Pautas() {
           {!flowGenerating && (
             <div className="flex gap-4">
               <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate}>
-                <Zap className="h-4 w-4" /> Gerar Automaticamente
+                <Zap className="h-4 w-4" /> Gerar Todos
+              </Button>
+              <Button size="lg" variant="secondary" className="gap-2" onClick={handleFlowRegenerate}>
+                <Sparkles className="h-4 w-4" /> Regenerar Todos
               </Button>
               <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual}>
                 <FileText className="h-4 w-4" /> Gerar Manualmente
@@ -1167,7 +1186,10 @@ export default function Pautas() {
                 actions={
                   <div className="flex gap-2">
                     <Button size="sm" variant="default" className="gap-1.5" onClick={handleFlowAutoGenerate} disabled={flowGenerating}>
-                      {flowGenerating ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando Semana...</> : <><Zap className="h-3.5 w-3.5" /> Gerar Tudo</>}
+                      {flowGenerating ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Gerando...</> : <><Zap className="h-3.5 w-3.5" /> Gerar Tudo</>}
+                    </Button>
+                    <Button size="sm" variant="secondary" className="gap-1.5" onClick={handleFlowRegenerate} disabled={flowGenerating}>
+                      <Sparkles className="h-3.5 w-3.5" /> Regenerar Tudo
                     </Button>
                     <Button size="sm" variant="outline" onClick={openWeekPromptDialog}>
                       <Sparkles className="h-3.5 w-3.5 mr-1" /> Prompt Semana
@@ -1437,7 +1459,12 @@ export default function Pautas() {
                 <section className="space-y-6">
                   <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Blocos do episódio</h2>
                   {sections.map((sec, idx) => {
-                    const content = data[sec.key]?.trim();
+                    const rawContent = data[sec.key]?.trim() || '';
+                    const content = rawContent
+                      .replace(/<title>[\s\S]*?<\/title>\s*/gi, '')
+                      .replace(/<\/?content>\s*/gi, '')
+                      .replace(/<\/?section[^>]*>\s*/gi, '')
+                      .trim() || null;
                     let contextNote = '';
                     let quickLinks: { youtube: string; spotify: string; deezer: string; metal_archives: string } | null = null;
 
