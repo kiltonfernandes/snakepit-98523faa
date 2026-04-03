@@ -570,15 +570,16 @@ export default function Releases() {
                 <div className="h-px flex-1 bg-border" />
               </div>
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {rels.map(r => (
-                  <Card key={r.id} className="cursor-pointer hover:border-primary/30 transition-colors group" onClick={() => openEdit(r)}>
-                    <CardContent className="p-4 space-y-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-semibold text-sm truncate">{r.artist}</p>
-                          <p className="text-xs text-muted-foreground truncate">{r.album}</p>
-                        </div>
-                        <div className="flex items-center gap-1 shrink-0">
+                {rels.map(r => {
+                  const links = resolveAllLinks(r);
+                  return (
+                    <Card key={r.id} className="cursor-pointer hover:border-primary/30 transition-all group overflow-hidden" onClick={() => openEdit(r)}>
+                      <CardContent className="p-0">
+                        {/* Top bar: date + type badge */}
+                        <div className="flex items-center gap-2 px-4 pt-3 pb-1">
+                          <span className="text-xs text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
+                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary/70">Studio</Badge>
+                          <div className="flex-1" />
                           <input
                             type="checkbox"
                             checked={selectedIds.has(r.id)}
@@ -586,35 +587,48 @@ export default function Releases() {
                             className="rounded opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           />
-                          <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                            onClick={(e) => { e.stopPropagation(); deleteRelease(r.id); }}>
-                            <Trash2 className="h-3 w-3 text-destructive" />
-                          </Button>
                         </div>
-                      </div>
-                      <div className="flex gap-1 flex-wrap">
-                        {(r.genres || []).slice(0, 3).map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <div className="flex gap-0.5">
-                          {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
+
+                        {/* Main content */}
+                        <div className="px-4 pb-2">
+                          <h3 className="font-bold text-sm leading-tight">{r.artist}</h3>
+                          <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{r.album}</p>
                         </div>
-                        <div className="flex items-center gap-1">
-                          {(['youtube', 'spotify', 'metal_archives'] as const).map(p => {
-                            const link = resolveAllLinks(r)[p];
-                            return (
-                              <a key={p} href={link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                                className="text-[9px] text-muted-foreground hover:text-primary transition-colors" title={PLATFORM_CONFIG[p].label}>
-                                <ExternalLink className="h-3 w-3" />
-                              </a>
-                            );
-                          })}
-                          {r.comments && <Badge variant="outline" className="text-[9px]">{r.comments}</Badge>}
+
+                        {/* Genres */}
+                        <div className="flex gap-1.5 flex-wrap px-4 pb-3">
+                          {(r.genres || []).slice(0, 3).map(g => (
+                            <Badge key={g} variant="secondary" className="text-[10px] h-5 rounded-full px-2 gap-1">
+                              <span className="text-primary">●</span> {g}
+                            </Badge>
+                          ))}
                         </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+
+                        {/* Platform buttons */}
+                        <div className="flex items-center gap-1 px-4 pb-3 flex-wrap">
+                          {([
+                            { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300 border-red-400/30' },
+                            { key: 'spotify' as const, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300 border-emerald-400/30' },
+                            { key: 'deezer' as const, label: 'Deezer', color: 'text-purple-400 hover:text-purple-300 border-purple-400/30' },
+                            { key: 'metal_archives' as const, label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300 border-orange-400/30' },
+                          ]).map(p => (
+                            <a
+                              key={p.key}
+                              href={links[p.key]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={e => e.stopPropagation()}
+                              className={`inline-flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5 transition-colors ${p.color}`}
+                            >
+                              <ExternalLink className="h-2.5 w-2.5" />
+                              {p.label}
+                            </a>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           ))}
