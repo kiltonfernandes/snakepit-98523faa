@@ -63,7 +63,7 @@ export async function toDesktopFileRefResult(file: File | null, options: { field
   const acc = getAccessibleDesktopPath(tagged);
   if (acc.path || resolved) return ok({ path: acc.path, assetUrl: resolved, name: file.name, size: file.size, mtimeMs: acc.mtimeMs ?? Date.now() });
   const pr = await ensureDesktopPath(tagged);
-  if (!pr.ok) return fail({ ...pr.error, field: options.field });
+  if (!pr.ok) { const e = pr.error; return fail({ ...e, field: options.field }); }
   return ok({ path: pr.value.path, name: file.name, size: file.size, mtimeMs: pr.value.mtimeMs ?? Date.now() });
 }
 
