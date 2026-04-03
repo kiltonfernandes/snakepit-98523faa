@@ -33,12 +33,48 @@ function getPautaSlot(pauta: Pauta): DaySlot {
 
 function getEligibleReviews(releases: Release[], publicationDate: string): Release[] {
   const pub = new Date(publicationDate + 'T12:00:00');
-  const dMinus30 = new Date(pub); dMinus30.setDate(pub.getDate() - 30);
-  const dMinus1 = new Date(pub); dMinus1.setDate(pub.getDate() - 1);
+  const dPlus1 = new Date(pub); dPlus1.setDate(pub.getDate() + 1);
   return releases.filter(r => {
     const rd = new Date(r.release_date + 'T12:00:00');
-    return rd >= dMinus30 && rd <= dMinus1;
+    return rd >= dPlus1;
   });
+}
+
+function getISOWeekLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dayOfWeek = d.getDay();
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return `${format(monday, 'dd/MM')} – ${format(sunday, 'dd/MM')}`;
+}
+
+function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; genres: { genre: string; releases: Release[] }[] }[] {
+  const weekMap = new Map<string, Release[]>();
+  for (const r of releases) {
+    const label = getISOWeekLabel(r.release_date);
+    if (!weekMap.has(label)) weekMap.set(label, []);
+    weekMap.get(label)!.push(r);
+  }
+  const result: { weekLabel: string; genres: { genre: string; releases: Release[] }[] }[] = [];
+  for (const [weekLabel, rels] of weekMap) {
+    const genreMap = new Map<string, Release[]>();
+    for (const r of rels) {
+      const genres = r.genres && r.genres.length > 0 ? r.genres : ['Sem gênero'];
+      for (const g of genres) {
+        if (!genreMap.has(g)) genreMap.set(g, []);
+        genreMap.get(g)!.push(r);
+      }
+    }
+    const genres = Array.from(genreMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => a.artist.localeCompare(b.artist)) }));
+    result.push({ weekLabel, genres });
+  }
+  result.sort((a, b) => a.weekLabel.localeCompare(b.weekLabel));
+  return result;
 }
 
 function getEligibleSaturdayReleases(releases: Release[], publicationDate: string): Release[] {
@@ -395,32 +431,80 @@ export default function Pautas() {
     input.click();
   };
 
-  // Release picker for inputs
+  // Release picker for inputs — searchable, grouped by week > genre, filtered D+1
   const ReleasePicker = ({ pauta, inputKey, label }: { pauta: Pauta; inputKey: string; label: string }) => {
+    const [search, setSearch] = useState('');
+    const [open, setOpen] = useState(false);
     const inputs = getRawInputs(pauta);
     const eligible = getEligibleReviews(releases, pauta.publication_date);
     const selectedId = inputs[inputKey];
     const selected = releases.find(r => r.id === selectedId);
 
+    const filtered = search.trim()
+      ? eligible.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
+      : eligible;
+
+    const grouped = groupReleasesByWeekAndGenre(filtered);
+
     return (
       <div className="space-y-1">
         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
-        {eligible.length > 0 ? (
-          <Select value={selectedId || ''} onValueChange={v => updateRawInput(pauta.id, inputKey, v)}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Selecionar release..." />
-            </SelectTrigger>
-            <SelectContent>
-              {eligible.map(r => (
-                <SelectItem key={r.id} value={r.id} className="text-xs">
-                  {r.artist} – {r.album}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <p className="text-[10px] text-muted-foreground italic">Nenhum release na janela D-30/D-1</p>
-        )}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="w-full justify-start text-xs h-8 font-normal">
+              {selected ? `${selected.artist} – ${selected.album}` : 'Selecionar release...'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-0" align="start">
+            <div className="p-2 border-b border-border">
+              <Input
+                placeholder="Buscar artista ou álbum..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+            <ScrollArea className="max-h-[300px]">
+              {grouped.length > 0 ? (
+                <div className="p-1">
+                  {grouped.map(week => (
+                    <div key={week.weekLabel} className="mb-2">
+                      <p className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
+                        Semana {week.weekLabel}
+                      </p>
+                      {week.genres.map(g => (
+                        <div key={g.genre}>
+                          <p className="text-[10px] text-primary/70 px-3 py-0.5 font-medium">{g.genre}</p>
+                          {g.releases.map(r => (
+                            <button
+                              key={r.id}
+                              className={cn(
+                                'w-full text-left px-3 py-1.5 text-xs rounded hover:bg-accent transition-colors',
+                                r.id === selectedId && 'bg-accent font-medium'
+                              )}
+                              onClick={() => {
+                                updateRawInput(pauta.id, inputKey, r.id);
+                                setOpen(false);
+                                setSearch('');
+                              }}
+                            >
+                              {r.artist} – {r.album}
+                              <span className="text-muted-foreground ml-1">({r.release_date})</span>
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground p-3 text-center italic">
+                  {eligible.length === 0 ? 'Nenhum release a partir de D+1' : 'Nenhum resultado'}
+                </p>
+              )}
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
         {selected && (
           <p className="text-[10px] text-muted-foreground">{selected.artist} – {selected.album} ({selected.release_date})</p>
         )}
@@ -537,7 +621,7 @@ export default function Pautas() {
                         <div className="flex items-center gap-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Aniversário do Dia</Label>
                           <Button variant="ghost" size="icon" className="h-4 w-4" title="Buscar aniversários"
-                            onClick={() => window.open('https://en.wikipedia.org/wiki/List_of_heavy_metal_festivals', '_blank')}>
+                            onClick={() => window.open('https://en.wikipedia.org/wiki/2026_in_heavy_metal_music', '_blank')}>
                             <ExternalLink className="h-2.5 w-2.5" />
                           </Button>
                         </div>
