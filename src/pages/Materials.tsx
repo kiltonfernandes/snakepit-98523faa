@@ -1109,8 +1109,9 @@ export default function Materials() {
             </Button>
             {coverPreview && (
               <div className="space-y-2">
-                <Label>Capa Gerada</Label>
-                <img src={coverPreview} alt="Capa final" className="mx-auto aspect-square w-full max-w-[300px] rounded-md" />
+                <Label>Preview da Capa</Label>
+                <img src={coverPreview} alt="Capa final" className="mx-auto aspect-square w-full rounded-lg border border-border shadow-md" />
+                <p className="text-center text-xs text-muted-foreground">3000 × 3000 px • PNG</p>
               </div>
             )}
           </div>
