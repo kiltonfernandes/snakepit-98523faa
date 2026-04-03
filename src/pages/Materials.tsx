@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Palette, Sparkles, Image, ExternalLink, Download, Copy, RefreshCw } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Palette, Sparkles, Image, ExternalLink, Download, Copy, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { useApp } from '@/contexts/AppContext';
-import { TitleOption, DaySlot, EpisodeMaterial } from '@/lib/types';
+import { TitleOption, DaySlot, EpisodeMaterial, Pauta } from '@/lib/types';
 import { DAY_SLOTS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -20,13 +20,15 @@ function parseProperNouns(title: string): string {
 }
 
 export default function Materials() {
-  const { weeks, materials, pautas, getMaterialsForWeek, getPautasForWeek, updateMaterial } = useApp();
+  const { weeks, materials, pautas, getMaterialsForWeek, getPautasForWeek, updateMaterial, loadReleases } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [repairing, setRepairing] = useState(false);
+  const [generatingTitles, setGeneratingTitles] = useState<Set<string>>(new Set());
+  const [generatingAllTitles, setGeneratingAllTitles] = useState(false);
 
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekMaterials = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
@@ -34,7 +36,7 @@ export default function Materials() {
 
   // Auto-repair: create missing materials for the selected week
   const repairMaterials = async () => {
-    if (!selectedWeek || weekMaterials.length >= 7) return;
+    if (!selectedWeek) return;
     setRepairing(true);
     const existing = new Set(weekMaterials.map(m => m.slot_key));
     const weekPautasList = getPautasForWeek(selectedWeek.id);
@@ -48,8 +50,15 @@ export default function Materials() {
       epDate.setDate(epDate.getDate() + i);
       const dateStr = epDate.toISOString().slice(0, 10);
 
-      // Find matching pauta
-      const pauta = weekPautasList.find(p => p.publication_date === dateStr) || null;
+      // Find matching pauta by date or slot
+      const pauta = weekPautasList.find(p => p.publication_date === dateStr) 
+        || weekPautasList.find(p => {
+          const d = new Date(p.publication_date + 'T12:00:00');
+          const wd = d.getDay();
+          const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+          return slotMap[wd] === slot.key;
+        })
+        || null;
 
       const mat: EpisodeMaterial = {
         id: crypto.randomUUID(),
@@ -70,7 +79,6 @@ export default function Materials() {
 
     if (newMaterials.length > 0) {
       await supabase.from('episode_materials' as any).insert(newMaterials as any);
-      // Reload page to pick up new materials
       window.location.reload();
     }
     setRepairing(false);
@@ -91,15 +99,12 @@ export default function Materials() {
   };
 
   const getPautaForMaterial = (mat: EpisodeMaterial) => {
-    // Try by source_pauta_id first
     if (mat.source_pauta_id) {
       const byId = pautas.find(p => p.id === mat.source_pauta_id);
       if (byId) return byId;
     }
-    // Fallback: find pauta matching same week and episode date
     const byDate = weekPautas.find(p => p.publication_date === mat.episode_date);
     if (byDate) return byDate;
-    // Last resort: match by slot_key (day of week)
     return weekPautas.find(p => {
       const d = new Date(p.publication_date + 'T12:00:00');
       const wd = d.getDay();
@@ -113,23 +118,148 @@ export default function Materials() {
     return pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review');
   };
 
-  // Sunday compilation: generate summary from week's pautas
-  const generateSundayContent = (mat: EpisodeMaterial) => {
-    const finalized = weekPautas.filter(p => p.week_id === mat.week_id && p.pauta_type !== 'sunday' && (p.status === 'finalized' || p.status === 'generated'));
-    if (finalized.length === 0) {
-      toast.warning('Nenhuma pauta pronta para compilação');
-      return;
-    }
-    const summary = finalized.map(p => {
-      const sections = (p.sections_json || {}) as Record<string, string>;
-      const mainContent = Object.values(sections).filter(Boolean).join(' ').slice(0, 200);
-      return `${p.publication_date}: ${mainContent}...`;
-    }).join('\n\n');
-    updateMaterial(mat.id, { description_html: `<h3>Compilação Semanal</h3>\n${summary}` });
-    toast.success('Compilação semanal gerada');
+  // Build prompt for AI title generation based on pauta content
+  const buildTitlePrompt = (mat: EpisodeMaterial, pauta: Pauta): string => {
+    const sections = (pauta.sections_json || {}) as Record<string, string>;
+    const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
+    
+    // Extract key content from the pauta
+    const newsContent = sections.news || inputs.news_urls || '';
+    const anniversaryContent = sections.anniversary || inputs.anniversary || '';
+    const reviewRafa = sections.review_rafa || '';
+    const reviewKilton = sections.review_kilton || '';
+    
+    const dayLabel = DAY_SLOTS.find(d => d.key === mat.slot_key)?.label || mat.slot_key;
+    
+    // Build context summary
+    let context = `📅 ${dayLabel.toUpperCase()} (${mat.episode_date})\n\n`;
+    
+    if (newsContent) context += `📰 Notícia principal:\n${typeof newsContent === 'string' ? newsContent.slice(0, 500) : JSON.stringify(newsContent).slice(0, 500)}\n\n`;
+    if (anniversaryContent) context += `🎸 Aniversário:\n${typeof anniversaryContent === 'string' ? anniversaryContent.slice(0, 300) : ''}\n\n`;
+    if (reviewRafa) context += `🎤 Review Rafa (trecho):\n${reviewRafa.slice(0, 300)}\n\n`;
+    if (reviewKilton) context += `🎧 Review Kilton (trecho):\n${reviewKilton.slice(0, 300)}\n\n`;
+    
+    return `🔥 Títulos otimizados para YOUTUBE/PODCAST
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 REGRAS E RESTRIÇÕES:
+• máximo 60-70 caracteres por título
+• usar CAPS LOCK apenas em 1-2 palavras-chave por título
+• incluir nome da banda sempre que possível
+• opção 1: foco em CLICKBAIT emocional
+• opção 2: foco em despertar CURIOSIDADE
+• opção 3: foco em criar IMPACTO/urgência
+• evitar clickbait enganoso
+• usar emojis estrategicamente (máx 2 por título)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 Contexto do episódio:
+
+${context}
+
+Gere EXATAMENTE 3 títulos para este episódio.
+
+FORMATO DE RESPOSTA (siga EXATAMENTE):
+TITULO_1_CLICKBAIT: [seu título aqui]
+TITULO_2_CURIOSIDADE: [seu título aqui]  
+TITULO_3_IMPACTO: [seu título aqui]
+
+Responda APENAS com os 3 títulos no formato acima, sem explicações extras.`;
   };
 
-  const generateTitles = (materialId: string) => {
+  // Call AI to generate titles for a single material
+  const generateTitlesAI = useCallback(async (materialId: string) => {
+    const mat = weekMaterials.find(m => m.id === materialId);
+    if (!mat) return;
+    
+    const pauta = getPautaForMaterial(mat);
+    if (!pauta) {
+      toast.error('Pauta não encontrada para este episódio');
+      return;
+    }
+    
+    setGeneratingTitles(prev => new Set(prev).add(materialId));
+    
+    try {
+      const prompt = buildTitlePrompt(mat, pauta);
+      
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('generate-pauta', {
+        body: { prompt },
+      });
+      
+      if (fnError) throw fnError;
+      
+      // Parse the response - it comes as SSE stream text
+      let fullText = '';
+      if (typeof fnData === 'string') {
+        fullText = fnData;
+      } else if (fnData && typeof fnData === 'object') {
+        // Handle SSE response
+        const text = await new Response(fnData as any).text();
+        const lines = text.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+            try {
+              const json = JSON.parse(line.slice(6));
+              const delta = json.choices?.[0]?.delta?.content || '';
+              fullText += delta;
+            } catch {}
+          }
+        }
+      }
+      
+      if (!fullText.trim()) {
+        // Fallback: generate placeholder titles
+        fullText = 'TITULO_1_CLICKBAIT: Título clickbait pendente\nTITULO_2_CURIOSIDADE: Título curiosidade pendente\nTITULO_3_IMPACTO: Título impacto pendente';
+      }
+      
+      // Parse titles from response
+      const options: TitleOption[] = [];
+      const styles = [
+        { pattern: /TITULO_1_CLICKBAIT:\s*(.+)/i, style: 'clickbait' },
+        { pattern: /TITULO_2_CURIOSIDADE:\s*(.+)/i, style: 'curiosidade' },
+        { pattern: /TITULO_3_IMPACTO:\s*(.+)/i, style: 'impacto' },
+      ];
+      
+      for (const { pattern, style } of styles) {
+        const match = fullText.match(pattern);
+        if (match) {
+          options.push({ text: match[1].trim(), style });
+        }
+      }
+      
+      // If parsing failed, try line-by-line
+      if (options.length === 0) {
+        const lines = fullText.split('\n').filter(l => l.trim());
+        const styleNames = ['clickbait', 'curiosidade', 'impacto'];
+        lines.slice(0, 3).forEach((line, i) => {
+          const cleanLine = line.replace(/^[\d\.\-\*\•]+\s*/, '').replace(/^\[.*?\]\s*/, '').trim();
+          if (cleanLine) {
+            options.push({ text: cleanLine, style: styleNames[i] || 'geral' });
+          }
+        });
+      }
+      
+      if (options.length > 0) {
+        updateMaterial(materialId, { title_options_json: options as any });
+        toast.success(`${options.length} títulos gerados`);
+      } else {
+        toast.warning('Não foi possível extrair títulos da resposta');
+      }
+    } catch (err: any) {
+      console.error('Title generation error:', err);
+      toast.error(err.message || 'Erro ao gerar títulos');
+    } finally {
+      setGeneratingTitles(prev => {
+        const next = new Set(prev);
+        next.delete(materialId);
+        return next;
+      });
+    }
+  }, [weekMaterials, weekPautas, pautas, updateMaterial]);
+
+  // Fallback: generate placeholder titles (no AI)
+  const generateTitlesPlaceholder = (materialId: string) => {
     const options: TitleOption[] = [
       { text: 'Título estilo clickbait aqui', style: 'clickbait' },
       { text: 'Título estilo curiosidade aqui', style: 'curiosidade' },
@@ -191,16 +321,41 @@ export default function Materials() {
     return encodeURIComponent(parseProperNouns(title) || 'metal band');
   };
 
-  const handleBulkTitles = () => weekMaterials.forEach(m => {
-    if (isPautaReady(m)) generateTitles(m.id);
-  });
+  // Sunday compilation: generate summary from week's pautas
+  const generateSundayContent = (mat: EpisodeMaterial) => {
+    const finalized = weekPautas.filter(p => p.week_id === mat.week_id && p.pauta_type !== 'sunday' && (p.status === 'finalized' || p.status === 'generated'));
+    if (finalized.length === 0) {
+      toast.warning('Nenhuma pauta pronta para compilação');
+      return;
+    }
+    const summary = finalized.map(p => {
+      const sections = (p.sections_json || {}) as Record<string, string>;
+      const mainContent = Object.values(sections).filter(Boolean).join(' ').slice(0, 200);
+      return `${p.publication_date}: ${mainContent}...`;
+    }).join('\n\n');
+    updateMaterial(mat.id, { description_html: `<h3>Compilação Semanal</h3>\n${summary}` });
+    toast.success('Compilação semanal gerada');
+  };
+
+  const handleBulkTitles = async () => {
+    const readyMaterials = weekMaterials.filter(m => isPautaReady(m) && m.slot_key !== 'sunday');
+    if (readyMaterials.length === 0) {
+      toast.warning('Nenhuma pauta pronta para gerar títulos');
+      return;
+    }
+    setGeneratingAllTitles(true);
+    for (const mat of readyMaterials) {
+      await generateTitlesAI(mat.id);
+    }
+    setGeneratingAllTitles(false);
+    toast.success('Geração de títulos concluída');
+  };
 
   const handleBulkDescriptions = () => {
     weekMaterials.forEach(m => {
       if (m.slot_key === 'sunday') {
         generateSundayContent(m);
       }
-      // Placeholder for non-Sunday - in a real implementation, this would use AI
     });
     toast.info('Descrições em lote: use o prompt para gerar conteúdo personalizado');
   };
@@ -317,8 +472,9 @@ export default function Materials() {
           <WorkspaceShell
             weekLabel="Títulos da Semana"
             actions={
-              <Button size="sm" onClick={handleBulkTitles}>
-                <Sparkles className="h-4 w-4 mr-1" /> Gerar Todos
+              <Button size="sm" onClick={handleBulkTitles} disabled={generatingAllTitles}>
+                {generatingAllTitles ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Sparkles className="h-4 w-4 mr-1" />}
+                {generatingAllTitles ? 'Gerando...' : 'Gerar Todos (IA)'}
               </Button>
             }
             renderDay={(day) => {
@@ -326,14 +482,21 @@ export default function Materials() {
               if (!mat) return null;
               const opts = mat.title_options_json as TitleOption[];
               const ready = isPautaReady(mat);
+              const isGenerating = generatingTitles.has(mat.id);
               return (
                 <div className="space-y-2">
                   <div className="flex items-center gap-1.5 mb-1">
                     <span className={`h-2 w-2 rounded-full ${matLight(mat)}`} />
                     <span className="text-[10px] text-muted-foreground">{mat.episode_date}</span>
+                    {ready && <Badge variant="outline" className="text-[8px] text-emerald-400 border-emerald-400/30">Pauta OK</Badge>}
                     {!ready && <Badge variant="outline" className="text-[8px] text-orange-400 border-orange-400/30">Pauta não pronta</Badge>}
                   </div>
-                  {opts.length > 0 ? (
+                  {isGenerating ? (
+                    <div className="flex items-center justify-center py-6">
+                      <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                      <span className="text-xs text-muted-foreground ml-2">Gerando títulos...</span>
+                    </div>
+                  ) : opts.length > 0 ? (
                     opts.map((opt, i) => (
                       <button key={i} className={`w-full text-left p-2 rounded-md text-xs border transition-colors ${
                         mat.selected_title_index === i ? 'border-primary bg-primary/10 text-foreground' : 'border-border hover:border-primary/30 text-muted-foreground'
@@ -345,10 +508,15 @@ export default function Materials() {
                   ) : (
                     <div className="space-y-2">
                       <p className="text-xs text-muted-foreground">Sem títulos gerados</p>
-                      <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => generateTitles(mat.id)} disabled={!ready}>
-                        <Sparkles className="h-3 w-3 mr-1" /> Gerar
+                      <Button size="sm" variant="outline" className="w-full text-xs gap-1" onClick={() => generateTitlesAI(mat.id)} disabled={!ready}>
+                        <Sparkles className="h-3 w-3" /> Gerar via IA
                       </Button>
                     </div>
+                  )}
+                  {opts.length > 0 && (
+                    <Button size="sm" variant="ghost" className="w-full text-[10px] gap-1" onClick={() => generateTitlesAI(mat.id)} disabled={!ready || isGenerating}>
+                      <RefreshCw className="h-3 w-3" /> Regenerar
+                    </Button>
                   )}
                   {mat.selected_title_index != null && (
                     <div className="mt-2 p-2 rounded bg-primary/5 border border-primary/20">
