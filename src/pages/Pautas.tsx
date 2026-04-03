@@ -104,6 +104,7 @@ export default function Pautas() {
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('inputs');
+  const [generating, setGenerating] = useState(false);
 
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
