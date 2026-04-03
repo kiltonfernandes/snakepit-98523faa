@@ -51,11 +51,32 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
+  const { materials, pautas } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
   const [masterTracks, setMasterTracks] = useState<File[]>([]);
   const [filename, setFilename] = useState('');
+
+  // Episode titles from finalized pautas
+  const episodeOptions = useMemo(() => {
+    const finalizedPautaIds = new Set(
+      pautas.filter(p => p.status === 'finalized').map(p => p.id)
+    );
+    return materials
+      .filter(m => {
+        if (!m.source_pauta_id) return false;
+        return finalizedPautaIds.has(m.source_pauta_id);
+      })
+      .map(m => {
+        const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
+        const title = (m.selected_title_index != null && opts[m.selected_title_index]?.text)
+          ? opts[m.selected_title_index].text
+          : opts[0]?.text || `Episódio ${m.slot_key}`;
+        return { value: title, label: title, date: m.episode_date };
+      })
+      .filter(o => o.value);
+  }, [materials, pautas]);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
