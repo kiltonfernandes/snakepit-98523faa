@@ -1,14 +1,20 @@
 import { DAY_SLOTS } from '@/lib/constants';
 import { DayColumn } from './DayColumn';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { DaySlot } from '@/lib/types';
 
 interface WorkspaceShellProps {
   weekLabel: string;
   renderDay: (daySlot: typeof DAY_SLOTS[number]) => React.ReactNode;
   actions?: React.ReactNode;
+  excludeDays?: DaySlot[];
 }
 
-export function WorkspaceShell({ weekLabel, renderDay, actions }: WorkspaceShellProps) {
+export function WorkspaceShell({ weekLabel, renderDay, actions, excludeDays }: WorkspaceShellProps) {
+  const visibleDays = excludeDays
+    ? DAY_SLOTS.filter(d => !excludeDays.includes(d.key))
+    : DAY_SLOTS;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -21,7 +27,7 @@ export function WorkspaceShell({ weekLabel, renderDay, actions }: WorkspaceShell
 
       <ScrollArea className="w-full">
         <div className="flex gap-4 pb-4">
-          {DAY_SLOTS.map((day) => (
+          {visibleDays.map((day) => (
             <DayColumn key={day.key} label={day.label} shortLabel={day.short}>
               {renderDay(day)}
             </DayColumn>
