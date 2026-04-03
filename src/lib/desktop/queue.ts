@@ -106,7 +106,7 @@ export async function prepareDesktopBulkPayload(args: PrepareDesktopBulkArgs): P
   for (const [i, row] of args.rows.entries()) {
     const fn = validateFilename(row.filename, `items[${i}].filename`); if (!fn.ok) return fn as unknown as Result<DesktopBulkJobPayload>;
     const mr = await toMasterRefs(row.masterMode, row.masterFile, row.masterTracks);
-    if (!mr.ok) return fail({ ...mr.error, field: mr.error.field ? `items[${i}].${mr.error.field}` : `items[${i}]` }) as unknown as Result<DesktopBulkJobPayload>;
+    if (!mr.ok) { const e = mr.error; return fail({ ...e, field: e.field ? `items[${i}].${e.field}` : `items[${i}]` }) as unknown as Result<DesktopBulkJobPayload>; }
     const bgm = await toDesktopFileRefResult(row.bgmFile, { field: `items[${i}].bgm`, label: `BGM ${i + 1}`, fallbackAssetUrl: row.bgmPreset }); if (!bgm.ok) return bgm as unknown as Result<DesktopBulkJobPayload>;
     items.push({ masterMode: row.masterMode, master: mr.value.master, masterTracks: mr.value.masterTracks, bgm: bgm.value, filename: fn.value });
   }
