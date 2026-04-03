@@ -439,46 +439,63 @@ export default function Materials() {
     const mat = weekMaterials.find((material) => material.slot_key === coverDaySlot);
     if (!mat) return;
 
+    const SIZE = 3000;
     const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1080;
+    canvas.width = SIZE;
+    canvas.height = SIZE;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
     ctx.fillStyle = '#1a0e2e';
-    ctx.fillRect(0, 0, 1080, 1080);
+    ctx.fillRect(0, 0, SIZE, SIZE);
+
+    const drawOverlay = () => {
+      // Gray bar
+      ctx.fillStyle = '#3a3a3a';
+      ctx.fillRect(0, 1810, SIZE, 16);
+      // Heavynauta label
+      ctx.fillStyle = '#C8A2C8';
+      ctx.font = 'bold 78px sans-serif';
+      ctx.fillText('Heavynauta', 140, 1980);
+      // Title
+      ctx.fillStyle = '#e8d5f5';
+      ctx.font = 'bold 116px sans-serif';
+      ctx.fillText(getTitle(mat) || `Episódio ${coverDaySlot}`, 140, 2220, 2500);
+      // Tagline
+      ctx.fillStyle = '#8a7a9a';
+      ctx.font = '62px sans-serif';
+      ctx.fillText('Papo Sério Sobre Música Pesada', 140, 2400);
+      // Purple decorative line
+      ctx.fillStyle = '#7c3aed';
+      ctx.fillRect(80, 1900, 8, 580);
+
+      // Logo bottom-right
+      const logo = new window.Image();
+      logo.crossOrigin = 'anonymous';
+      logo.onload = () => {
+        const logoSize = 400;
+        ctx.drawImage(logo, SIZE - logoSize - 100, SIZE - logoSize - 100, logoSize, logoSize);
+        finalize();
+      };
+      logo.onerror = () => finalize();
+      logo.src = heavynautaLogo;
+    };
+
+    const finalize = () => {
+      const dataUrl = canvas.toDataURL('image/png');
+      setCoverPreview(dataUrl);
+      updateMaterial(mat.id, { cover_url: dataUrl });
+      toast.success('Capa gerada (3000×3000)');
+    };
 
     const img = new window.Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      ctx.drawImage(img, 40, 40, 1000, 600);
-      ctx.fillStyle = '#3a3a3a';
-      ctx.fillRect(0, 650, 1080, 6);
-      ctx.fillStyle = '#C8A2C8';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('Heavynauta', 50, 710);
-      ctx.fillStyle = '#e8d5f5';
-      ctx.font = 'bold 42px sans-serif';
-      ctx.fillText(getTitle(mat) || `Episódio ${coverDaySlot}`, 50, 800, 900);
-      ctx.fillStyle = '#8a7a9a';
-      ctx.font = '22px sans-serif';
-      ctx.fillText('Papo Sério Sobre Música Pesada', 50, 860);
-      const dataUrl = canvas.toDataURL('image/png');
-      setCoverPreview(dataUrl);
-      updateMaterial(mat.id, { cover_url: dataUrl });
-      toast.success('Capa gerada');
+      ctx.drawImage(img, 110, 110, 2780, 1660);
+      drawOverlay();
     };
     img.onerror = () => {
-      ctx.fillStyle = '#C8A2C8';
-      ctx.font = 'bold 28px sans-serif';
-      ctx.fillText('Heavynauta', 50, 710);
-      ctx.fillStyle = '#e8d5f5';
-      ctx.font = 'bold 42px sans-serif';
-      ctx.fillText(getTitle(mat) || 'Episódio', 50, 800, 900);
-      const dataUrl = canvas.toDataURL('image/png');
-      setCoverPreview(dataUrl);
-      updateMaterial(mat.id, { cover_url: dataUrl });
-      toast.success('Capa gerada com fallback');
+      drawOverlay();
     };
     img.src = imageUrl;
   };
