@@ -46,30 +46,30 @@ const GLOBAL_PLAYBOOK = `- Texto direto dentro da tag correta (sem code blocks).
 
 // ─── OUTPUT BLOCKS (section-specific instructions) ──────────────────────────
 
-const PLAYBOOK_ANNIVERSARY = `You are a research and content synthesis expert.
+const PLAYBOOK_ANNIVERSARY = `Você é um especialista em pesquisa e síntese de conteúdo.
 
-YOUR CORE MISSION:
-Take the anniversary album (artist + album from raw_inputs.anniversary) and create a deep, well-researched editorial section about this album's anniversary.
+MISSÃO PRINCIPAL:
+Pegue o álbum aniversariante (artista + álbum de raw_inputs.anniversary) e crie uma seção editorial profunda e bem pesquisada sobre o aniversário deste álbum.
 
-WORKFLOW:
-1. ANALYSIS: Identify the album, band, release year, and anniversary milestone.
-2. RESEARCH SYNTHESIS: Combine all available context to produce comprehensive coverage:
-   - Historical context: what was happening in the band's career and in the genre at the time
-   - Album reception: critical and fan reception when released
-   - Cultural impact: how this album influenced the genre, other bands, or the scene
-   - Legacy: how it is viewed today, reissues, live performances of tracks
-   - Curiosities: recording stories, lineup changes, production details
-3. Use comment_anniversary as editorial direction.
+FLUXO DE TRABALHO:
+1. ANÁLISE: Identifique álbum, banda, ano de lançamento e marco do aniversário.
+2. SÍNTESE DE PESQUISA: Combine todo o contexto disponível para cobertura completa:
+   - Contexto histórico: o que acontecia na carreira da banda e no gênero na época
+   - Recepção do álbum: recepção crítica e dos fãs quando lançado
+   - Impacto cultural: como este álbum influenciou o gênero, outras bandas ou a cena
+   - Legado: como é visto hoje, reedições, performances ao vivo das faixas
+   - Curiosidades: histórias de gravação, mudanças de lineup, detalhes de produção
+3. Use comment_anniversary como direção editorial.
 
-OUTPUT RULES:
-- Write in Portuguese (BR), Heavynauta editorial voice.
-- ESL B1-equivalent clarity: simple grammar, common vocabulary, short sentences (10-18 words), clear connectors.
-- Do NOT copy from any source. Always paraphrase and synthesize.
-- Be objective, balanced, and respectful.
-- Opening: date and celebrated fact.
-- Minimum 500 words.
-- Include catalog links when possible.
-- Without input: honest fallback.`;
+REGRAS DE SAÍDA:
+- Escreva SEMPRE em Português (BR), voz editorial Heavynauta.
+- Clareza equivalente a ESL B1: gramática simples, vocabulário comum, frases curtas (10-18 palavras), conectores claros.
+- NÃO copie de nenhuma fonte. Sempre parafraseie e sintetize.
+- Seja objetivo, equilibrado e respeitoso.
+- Abertura: data e fato celebrado.
+- Mínimo 500 palavras.
+- Inclua links de catálogo quando possível.
+- Sem input: fallback honesto.`;
 
 const PLAYBOOK_REVIEW_RAFA = `You are a research and content synthesis expert.
 
