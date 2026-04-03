@@ -547,7 +547,7 @@ export default function Pautas() {
   };
 
   // ─── Flow: auto-generate all prompts with granular progress ───
-  const handleFlowAutoGenerate = useCallback(async () => {
+  const handleFlowAutoGenerateInner = useCallback(async (regenerateAll: boolean) => {
     if (!selectedWeek || weekPautas.length === 0) return;
     setFlowGenerating(true);
 
@@ -571,6 +571,19 @@ export default function Pautas() {
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
       const sections = getSectionsForDay(slot);
+      const existingSections = (pauta.sections_json || {}) as Record<string, string>;
+
+      // In non-regenerate mode, skip days where all sections are filled
+      const allFilled = sections.every(s => existingSections[s.key]?.trim());
+      if (!regenerateAll && allFilled) {
+        setFlowProgress(prev => {
+          const next = { ...prev };
+          next[slot] = { ...next[slot] };
+          for (const sec of sections) next[slot][sec.key] = 'done';
+          return next;
+        });
+        continue;
+      }
 
       // Mark all sections of this day as generating
       setFlowProgress(prev => {

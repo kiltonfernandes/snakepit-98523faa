@@ -231,7 +231,11 @@ export default function CalendarView() {
                     : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
               }`}
               onClick={() => {
-                if (item.type === 'pauta') goToWorkspace();
+                if (item.type === 'pauta') {
+                  const mat = materials.find(m => m.episode_date === item.data.publication_date);
+                  if (mat) openMaterialModal(mat);
+                  else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
+                }
                 else if (item.type === 'material') openMaterialModal(item.data);
                 else openReleaseModal(item.data);
               }}
