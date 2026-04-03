@@ -384,6 +384,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
+      dataReady,
       releases, weeks, pautas, materials, settings, activityLog,
       addRelease, updateRelease, deleteRelease,
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
