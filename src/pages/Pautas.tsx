@@ -115,6 +115,7 @@ export default function Pautas() {
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
+  const [flowProgress, setFlowProgress] = useState<Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>>>({});
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
