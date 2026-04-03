@@ -654,8 +654,8 @@ export default function Materials() {
       // Logo in bottom-right
       const logo = new window.Image();
       logo.onload = () => {
-        const logoSize = 420;
-        ctx.drawImage(logo, SIZE - logoSize - 100, SIZE - logoSize - 80, logoSize, logoSize);
+        const logoSize = 580;
+        ctx.drawImage(logo, SIZE - logoSize - 80, SIZE - logoSize - 60, logoSize, logoSize);
         exportCover();
       };
       logo.onerror = () => exportCover();
