@@ -141,7 +141,7 @@ REGRAS DE SAÍDA:
 - Clareza equivalente a ESL B1: linguagem acessível mas informada.
 - NÃO copie texto. Sempre parafraseie e sintetize.
 - Estrutura: contextualização, expectativas, análise musical, citações relevantes, relevância no cenário.
-- Mínimo 500 palavras.
+- Aproximadamente 300 palavras.
 - Requer links de catálogo.
 - Sem release: fallback honesto.`;
 
