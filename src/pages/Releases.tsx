@@ -171,7 +171,7 @@ export default function Releases() {
   const [sortField, setSortField] = useState<SortField>('release_date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [viewMode, setViewMode] = useState<ViewMode>('cards');
 
   // Bulk paste state
   const [pasteText, setPasteText] = useState('');

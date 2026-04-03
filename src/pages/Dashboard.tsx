@@ -23,13 +23,15 @@ export default function Dashboard() {
   const { releases, weeks, pautas, materials } = useApp();
   const [expandedWeek, setExpandedWeek] = useState<string | null>(weeks[0]?.id || null);
 
+  // Exclude sunday from dashboard indicators
+  const DASHBOARD_SLOTS = DAY_SLOTS.filter(d => d.key !== 'sunday');
+
   function getWeekIndicators(week: EditorialWeek) {
     const weekPautas = pautas.filter(p => p.week_id === week.id);
     const weekMaterials = materials.filter(m => m.week_id === week.id);
 
-    return DAY_SLOTS.map(day => {
+    return DASHBOARD_SLOTS.map(day => {
       const mat = weekMaterials.find(m => m.slot_key === day.key);
-      // Find pauta: try source_pauta_id, then by date, then by slot
       let pauta = mat?.source_pauta_id ? weekPautas.find(p => p.id === mat.source_pauta_id) : null;
       if (!pauta && mat) {
         pauta = weekPautas.find(p => p.publication_date === mat.episode_date) || null;

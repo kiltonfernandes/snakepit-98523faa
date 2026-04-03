@@ -5,11 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useApp } from '@/contexts/AppContext';
 import { EpisodeMaterial, DaySlot, Release } from '@/lib/types';
-import { StatusBadge } from '@/components/StatusBadge';
 import { useNavigate } from 'react-router-dom';
 
 const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -41,7 +39,7 @@ export default function CalendarView() {
   const [modalOpen, setModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [spotifyInput, setSpotifyInput] = useState('');
-  const [showReleases, setShowReleases] = useState(true);
+  const [showReleases, setShowReleases] = useState(false);
   const [showPautas, setShowPautas] = useState(true);
   const [editForm, setEditForm] = useState({ artist: '', album: '', release_date: '', comments: '' });
 
@@ -62,10 +60,19 @@ export default function CalendarView() {
 
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
+  // Get pautas for a date
+  const getPautasForDate = (dateStr: string) => {
+    return pautas.filter(p => p.publication_date === dateStr);
+  };
+
   const getItemsForDate = (dateStr: string) => {
-    const items: { type: 'material' | 'release'; data: any }[] = [];
+    const items: { type: 'pauta' | 'material' | 'release'; data: any }[] = [];
     if (showPautas) {
-      materials.filter(m => m.episode_date === dateStr).forEach(m => items.push({ type: 'material', data: m }));
+      // Show pautas directly, not materials
+      const dayPautas = getPautasForDate(dateStr);
+      dayPautas.forEach(p => items.push({ type: 'pauta', data: p }));
+      // Also show materials without pautas
+      materials.filter(m => m.episode_date === dateStr && !dayPautas.some(p => p.publication_date === m.episode_date)).forEach(m => items.push({ type: 'material', data: m }));
     }
     if (showReleases) {
       releases.filter(r => r.release_date === dateStr).forEach(r => items.push({ type: 'release', data: r }));
@@ -114,14 +121,22 @@ export default function CalendarView() {
     URL.revokeObjectURL(url);
   };
 
-  const statusColor = (mat: EpisodeMaterial) => {
-    if (mat.spotify_link) return 'bg-emerald-500';
-    if (mat.description_html && mat.cover_url) return 'bg-primary';
-    if (mat.selected_title_index != null) return 'bg-yellow-500';
-    return 'bg-muted-foreground/30';
+  const pautaStatusColor = (status: string) => {
+    if (status === 'finalized') return 'bg-emerald-500';
+    if (status === 'generated' || status === 'needs_review') return 'bg-yellow-500';
+    if (status === 'in_progress') return 'bg-blue-500';
+    return 'bg-muted-foreground/40';
   };
 
-  const goToWorkspace = (mat: EpisodeMaterial) => {
+  const pautaStatusLabel = (status: string) => {
+    if (status === 'finalized') return 'Finalizada';
+    if (status === 'generated') return 'Gerada';
+    if (status === 'needs_review') return 'Revisão';
+    if (status === 'in_progress') return 'Em Progresso';
+    return 'Rascunho';
+  };
+
+  const goToWorkspace = () => {
     navigate('/pautas');
   };
 
@@ -138,25 +153,37 @@ export default function CalendarView() {
     const dateStr = fmt(dateObj);
     const items = getItemsForDate(dateStr);
     return (
-      <div className={`min-h-[80px] rounded-md border p-1.5 text-xs transition-colors ${
-        isToday ? 'border-primary/50 bg-primary/5'
-        : items.length > 0 ? 'border-primary/20 bg-primary/5'
-        : 'border-border hover:border-primary/30'
+      <div className={`min-h-[80px] rounded-lg border p-2 text-xs transition-all ${
+        isToday ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+        : items.length > 0 ? 'border-primary/30 bg-card'
+        : 'border-border/50 bg-card/50 hover:border-primary/20'
       } ${className}`}>
-        <span className={`font-medium ${isToday ? 'text-primary' : 'text-muted-foreground'}`}>{dateObj.getDate()}</span>
-        <div className="mt-1 space-y-0.5">
+        <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
+        <div className="mt-1.5 space-y-1">
           {items.map((item, i) => (
-            <button key={i} className="w-full text-left flex items-center gap-1 p-0.5 rounded hover:bg-primary/10"
-              onClick={() => item.type === 'material' ? openMaterialModal(item.data) : openReleaseModal(item.data)}>
-              {item.type === 'material' ? (
+            <button key={i} className={`w-full text-left flex items-center gap-1.5 p-1 rounded-md transition-colors ${
+              item.type === 'pauta' ? 'hover:bg-primary/10' : item.type === 'release' ? 'hover:bg-accent' : 'hover:bg-muted'
+            }`}
+              onClick={() => {
+                if (item.type === 'pauta') goToWorkspace();
+                else if (item.type === 'material') openMaterialModal(item.data);
+                else openReleaseModal(item.data);
+              }}>
+              {item.type === 'pauta' ? (
                 <>
-                  <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${statusColor(item.data)}`} />
-                  <span className="truncate text-[10px]">{getSelectedTitle(item.data)}</span>
+                  <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(item.data.status)}`} />
+                  <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(item.data.status)}</span>
+                  <FileText className="h-2.5 w-2.5 text-muted-foreground ml-auto shrink-0" />
+                </>
+              ) : item.type === 'release' ? (
+                <>
+                  <Disc className="h-2.5 w-2.5 shrink-0 text-primary/60" />
+                  <span className="truncate text-[10px] text-foreground">{item.data.artist}</span>
                 </>
               ) : (
                 <>
-                  <Disc className="h-2.5 w-2.5 shrink-0 text-muted-foreground" />
-                  <span className="truncate text-[10px] text-muted-foreground">{item.data.artist}</span>
+                  <span className="h-2 w-2 rounded-full shrink-0 bg-muted-foreground/30" />
+                  <span className="truncate text-[10px] text-muted-foreground">{getSelectedTitle(item.data)}</span>
                 </>
               )}
             </button>
@@ -186,15 +213,15 @@ export default function CalendarView() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-border/50">
+        <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="icon" onClick={prev}><ChevronLeft className="h-4 w-4" /></Button>
             <div className="flex items-center gap-3">
-              <CardTitle className="text-base">{headerLabel()}</CardTitle>
+              <CardTitle className="text-base font-bold">{headerLabel()}</CardTitle>
               <div className="flex gap-1">
                 {(['month', 'week', 'day'] as const).map(m => (
-                  <Button key={m} variant={viewMode === m ? 'default' : 'outline'} size="sm" className="text-xs h-7 px-2"
+                  <Button key={m} variant={viewMode === m ? 'default' : 'ghost'} size="sm" className="text-xs h-7 px-2.5"
                     onClick={() => setViewMode(m)}>
                     {m === 'month' ? 'Mês' : m === 'week' ? 'Semana' : 'Dia'}
                   </Button>
@@ -206,9 +233,9 @@ export default function CalendarView() {
         </CardHeader>
         <CardContent>
           {viewMode === 'month' && (
-            <div className="grid grid-cols-7 gap-1">
+            <div className="grid grid-cols-7 gap-1.5">
               {DAYS_OF_WEEK.map(d => (
-                <div key={d} className="text-center text-xs font-medium text-muted-foreground py-2">{d}</div>
+                <div key={d} className="text-center text-[11px] font-semibold text-muted-foreground py-2 uppercase tracking-wider">{d}</div>
               ))}
               {getDaysInMonth(year, month).map((day, i) => {
                 if (day === null) return <div key={i} className="min-h-[80px]" />;
@@ -225,7 +252,7 @@ export default function CalendarView() {
                 const isToday = fmt(wd) === fmt(today);
                 return (
                   <div key={i}>
-                    <div className="text-center text-xs font-medium text-muted-foreground py-1 mb-1">
+                    <div className={`text-center text-[11px] font-semibold py-1.5 mb-1.5 rounded-md ${isToday ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
                       {DAYS_OF_WEEK[wd.getDay()]} {wd.getDate()}
                     </div>
                     <DayCell dateObj={wd} isToday={isToday} className="min-h-[200px]" />
@@ -243,6 +270,14 @@ export default function CalendarView() {
         </CardContent>
       </Card>
 
+      {/* Legend */}
+      <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-500" /> Finalizada</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-yellow-500" /> Gerada</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-blue-500" /> Em Progresso</span>
+        <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Rascunho</span>
+      </div>
+
       {/* Material Modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-lg">
@@ -257,9 +292,6 @@ export default function CalendarView() {
                 <Badge variant="outline" className="text-xs">{selectedMaterial.episode_date}</Badge>
                 {selectedMaterial.spotify_link && <Badge className="text-xs bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Agendado</Badge>}
               </div>
-              {selectedMaterial.cover_url && (
-                <img src={selectedMaterial.cover_url} alt="Capa" className="w-full max-w-[200px] aspect-square rounded-md" />
-              )}
               {selectedMaterial.description_html && (
                 <div className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[150px] overflow-y-auto">{selectedMaterial.description_html}</div>
               )}
@@ -269,12 +301,11 @@ export default function CalendarView() {
                   <Input placeholder="https://open.spotify.com/episode/..." value={spotifyInput} onChange={e => setSpotifyInput(e.target.value)} className="text-xs" />
                   <Button size="sm" onClick={handleSaveSpotify}>Salvar</Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">Preencher este campo marca o episódio como agendado.</p>
               </div>
             </div>
           )}
           <DialogFooter className="flex-col sm:flex-row gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => selectedMaterial && goToWorkspace(selectedMaterial)}>
+            <Button variant="outline" className="gap-2" onClick={goToWorkspace}>
               <FileText className="h-4 w-4" /> Abrir Workspace
             </Button>
             <Button variant="outline" className="gap-2" onClick={handleDownloadPackage}>
