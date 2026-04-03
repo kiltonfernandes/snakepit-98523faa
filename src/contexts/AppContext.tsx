@@ -11,6 +11,7 @@ interface ActivityEntry {
 }
 
 interface AppContextType {
+  dataReady: boolean;
   releases: Release[];
   weeks: EditorialWeek[];
   pautas: Pauta[];
