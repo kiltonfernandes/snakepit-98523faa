@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -87,6 +87,14 @@ function getEligibleSaturdayReleases(releases: Release[], publicationDate: strin
   });
 }
 
+// Flow step definitions matching section order
+const FLOW_STEPS = [
+  { key: 'anniversary', label: 'Aniversários', inputKey: 'anniversary' },
+  { key: 'review_rafa', label: 'Review Rafa', inputKey: 'review_rafa_id', isReview: true },
+  { key: 'news', label: 'Notícias', inputKey: 'news_link' },
+  { key: 'review_kilton', label: 'Review Kilton', inputKey: 'review_kilton_id', isReview: true },
+] as const;
+
 export default function Pautas() {
   const { weeks, addWeek, deleteWeek, pautas, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
@@ -105,6 +113,8 @@ export default function Pautas() {
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('inputs');
   const [generating, setGenerating] = useState(false);
+  const [flowStep, setFlowStep] = useState(0);
+  const [flowGenerating, setFlowGenerating] = useState(false);
 
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
@@ -159,7 +169,6 @@ export default function Pautas() {
     updatePauta(pautaId, { sections_json: { ...currentSections, [key]: value } });
   };
 
-  // ─── Prompt generation using PromptBuilderRegistry ───
   const generatePrompt = (pauta: Pauta, sectionKey?: string) => {
     if (sectionKey) return buildSectionPrompt(pauta, sectionKey, promptCtx);
     return buildDayPrompt(pauta, promptCtx);
@@ -211,6 +220,55 @@ export default function Pautas() {
   };
 
   // ─── Generate with AI (streaming) ───
+  const streamAI = useCallback(async (prompt: string, onChunk: (full: string) => void): Promise<string> => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ prompt }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ error: 'Erro desconhecido' }));
+      throw new Error(err.error || `Erro ${resp.status}`);
+    }
+
+    const reader = resp.body?.getReader();
+    if (!reader) throw new Error('No reader');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let full = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      let nlIdx: number;
+      while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+        let line = buffer.slice(0, nlIdx);
+        buffer = buffer.slice(nlIdx + 1);
+        if (line.endsWith('\r')) line = line.slice(0, -1);
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (jsonStr === '[DONE]') break;
+        try {
+          const parsed = JSON.parse(jsonStr);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            full += content;
+            onChunk(full);
+          }
+        } catch { /* partial json, skip */ }
+      }
+    }
+    return full;
+  }, []);
+
   const handleGenerateAI = useCallback(async () => {
     if (!activePauta) return;
     const prompt = promptScope === 'week'
@@ -222,64 +280,17 @@ export default function Pautas() {
     setPromptResponse('');
     setParseError(null);
 
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
     try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: 'Erro desconhecido' }));
-        toast.error(err.error || `Erro ${resp.status}`);
-        setGenerating(false);
-        return;
-      }
-
-      const reader = resp.body?.getReader();
-      if (!reader) { setGenerating(false); return; }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let full = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        let nlIdx: number;
-        while ((nlIdx = buffer.indexOf('\n')) !== -1) {
-          let line = buffer.slice(0, nlIdx);
-          buffer = buffer.slice(nlIdx + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              full += content;
-              setPromptResponse(full);
-            }
-          } catch { /* partial json, skip */ }
-        }
-      }
-
-      setGenerating(false);
+      await streamAI(prompt, (full) => setPromptResponse(full));
       toast.success('Resposta gerada com IA');
       logActivity('IA gerou resposta', `scope: ${promptScope}, pauta: ${activePauta.publication_date}`);
-    } catch (e) {
+    } catch (e: any) {
       console.error('AI generation error:', e);
-      toast.error('Erro ao gerar com IA');
+      toast.error(e.message || 'Erro ao gerar com IA');
+    } finally {
       setGenerating(false);
     }
-  }, [activePauta, activeSection, promptScope]);
+  }, [activePauta, activeSection, promptScope, streamAI]);
 
   // ─── Apply response using ResponseParser ───
   const [parseError, setParseError] = useState<string | null>(null);
@@ -289,7 +300,6 @@ export default function Pautas() {
     setParseError(null);
 
     if (promptScope === 'week' && selectedWeek) {
-      // Week scope
       const requiredSections = weekPautas
         .filter(p => p.pauta_type !== 'sunday')
         .flatMap(p => getSectionsForDay(getPautaSlot(p)).map(s => s.key));
@@ -322,7 +332,6 @@ export default function Pautas() {
         }
       }
     } else if (promptScope === 'section' && activeSection) {
-      // Section scope
       const result = parsePautaResponse(promptResponse, 'section', {
         publication_date: activePauta.publication_date,
         section: activeSection,
@@ -347,7 +356,6 @@ export default function Pautas() {
         });
       }
     } else {
-      // Day scope
       const result = parsePautaResponse(promptResponse, 'day', {
         publication_date: activePauta.publication_date,
       });
@@ -391,13 +399,11 @@ export default function Pautas() {
     const warnings: string[] = [];
     const inputs = getRawInputs(pauta);
 
-    // Weekday: require at least one review
     if (slot !== 'saturday' && slot !== 'sunday') {
       if (!inputs.review_rafa_id && !inputs.review_kilton_id && !data.review_rafa?.trim() && !data.review_kilton?.trim()) {
         warnings.push('Nenhuma resenha definida para este dia útil');
       }
     }
-    // Check empty sections
     const empty = sections.filter(s => !data[s.key]?.trim());
     if (empty.length > 0) {
       warnings.push(`Seções vazias: ${empty.map(s => s.label).join(', ')}`);
@@ -431,7 +437,6 @@ export default function Pautas() {
   };
 
   const handleExport = () => {
-    // Check if all pautas are finalized for week export
     const notFinalized = weekPautas.filter(p => p.status !== 'finalized');
     if (notFinalized.length > 0 && exportFormat !== 'clipboard') {
       toast.warning(`${notFinalized.length} pauta(s) não finalizada(s). Finalize antes de exportar.`);
@@ -488,7 +493,6 @@ export default function Pautas() {
               if (activePauta) updatePauta(activePauta.id, { sections_json: data.sections_json, status: 'generated' });
             }
           } else {
-            // MD or TXT - apply to active pauta if available
             if (activePauta) {
               updatePauta(activePauta.id, { rendered_markdown: text, status: 'generated' });
             }
@@ -503,7 +507,71 @@ export default function Pautas() {
     input.click();
   };
 
-  // Release picker for inputs — searchable, grouped by week > genre, filtered D+1
+  const handleSaveAll = () => {
+    toast.success('Todos os inputs foram salvos');
+    logActivity('Salvar todos inputs', `Semana: ${selectedWeek?.start_date}`);
+  };
+
+  // ─── Flow: auto-generate all prompts ───
+  const handleFlowAutoGenerate = useCallback(async () => {
+    if (!selectedWeek || weekPautas.length === 0) return;
+    setFlowGenerating(true);
+
+    const weekdayPautas = weekPautas.filter(p => {
+      const slot = getPautaSlot(p);
+      return slot !== 'sunday';
+    });
+
+    for (const pauta of weekdayPautas) {
+      const prompt = buildDayPrompt(pauta, promptCtx);
+      if (!prompt) continue;
+
+      try {
+        const responseText = await streamAI(prompt, () => {});
+        const slot = getPautaSlot(pauta);
+        const sections = getSectionsForDay(slot);
+        const result = parsePautaResponse(responseText, 'day', { publication_date: pauta.publication_date });
+
+        if (result.success && result.sections) {
+          const current = (pauta.sections_json || {}) as Record<string, string>;
+          const updated = { ...current, ...result.sections };
+          const allContent = Object.values(updated).join('\n');
+          const linkMatches = allContent.match(/https?:\/\/[^\s<>"]+/g) || [];
+          updatePauta(pauta.id, {
+            sections_json: updated,
+            status: 'generated',
+            discovered_links_json: linkMatches,
+            rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+            rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
+          });
+          toast.success(`Gerado: ${slot}`);
+        } else {
+          toast.error(`Falha ao gerar: ${slot} — ${result.error}`);
+        }
+      } catch (e: any) {
+        toast.error(`Erro na geração: ${e.message}`);
+      }
+    }
+
+    if (selectedWeek) recalcWeekStatus(selectedWeek.id);
+    setFlowGenerating(false);
+    toast.success('Flow automático concluído');
+    logActivity('Flow automático', `Semana: ${selectedWeek.start_date}`);
+  }, [selectedWeek, weekPautas, promptCtx, streamAI]);
+
+  const handleFlowManual = () => {
+    setActiveTab('inputs');
+    setFlowStep(0);
+  };
+
+  // Flow steps: each section across all weekday pautas
+  const flowWeekdayPautas = weekPautas.filter(p => {
+    const slot = getPautaSlot(p);
+    return slot !== 'sunday' && slot !== 'saturday';
+  }).sort((a, b) => a.publication_date.localeCompare(b.publication_date));
+
+  const flowTotalSteps = FLOW_STEPS.length + 1; // +1 for final action screen
+
   const ReleasePicker = ({ pauta, inputKey, label }: { pauta: Pauta; inputKey: string; label: string }) => {
     const [search, setSearch] = useState('');
     const [open, setOpen] = useState(false);
@@ -620,6 +688,140 @@ export default function Pautas() {
     ? (activeSection ? generatePrompt(activePauta, activeSection) : (activeSection === null && !activePauta ? generateWeekPrompt() : generatePrompt(activePauta)))
     : '';
 
+  // ─── Flow step renderer ───
+  const renderFlowStep = () => {
+    if (flowStep >= FLOW_STEPS.length) {
+      // Final step: action buttons
+      return (
+        <div className="flex flex-col items-center justify-center py-16 space-y-6">
+          <div className="text-center space-y-2">
+            <h3 className="text-xl font-bold">Insumos Completos</h3>
+            <p className="text-muted-foreground">Todos os campos de insumo da semana foram preenchidos. Como deseja prosseguir?</p>
+          </div>
+          <div className="flex gap-4">
+            <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate} disabled={flowGenerating}>
+              {flowGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</> : <><Zap className="h-4 w-4" /> Gerar Automaticamente</>}
+            </Button>
+            <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual} disabled={flowGenerating}>
+              <FileText className="h-4 w-4" /> Gerar Manualmente
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    const step = FLOW_STEPS[flowStep];
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center space-y-1">
+          <h3 className="text-lg font-bold">{step.label}</h3>
+          <p className="text-sm text-muted-foreground">Preencha os dados de {step.label.toLowerCase()} para todos os dias da semana</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {flowWeekdayPautas.map(pauta => {
+            const slot = getPautaSlot(pauta);
+            const dayInfo = DAY_SLOTS.find(d => d.key === slot);
+            const inputs = getRawInputs(pauta);
+
+            return (
+              <Card key={pauta.id} className="border-border/50">
+                <CardContent className="p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="text-xs">{dayInfo?.short}</Badge>
+                    <span className="font-medium text-sm">{dayInfo?.label}</span>
+                    <span className="text-xs text-muted-foreground">{pauta.publication_date}</span>
+                  </div>
+
+                  {step.key === 'anniversary' && (
+                    <>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Aniversário do Dia</Label>
+                          <Button variant="ghost" size="icon" className="h-4 w-4" title="Buscar aniversários"
+                            onClick={() => window.open('https://en.wikipedia.org/wiki/2026_in_heavy_metal_music', '_blank')}>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="Ex: Aniversário de 40 anos do Powerslave"
+                          value={inputs.anniversary || ''}
+                          onChange={e => updateRawInput(pauta.id, 'anniversary', e.target.value)}
+                        />
+                      </div>
+                      <Input
+                        className="h-7 text-[10px]"
+                        placeholder="Direção: Aniversário"
+                        value={inputs.comment_anniversary || ''}
+                        onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
+                      />
+                    </>
+                  )}
+
+                  {step.key === 'review_rafa' && (
+                    <>
+                      <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
+                      <Input
+                        className="h-7 text-[10px]"
+                        placeholder="Direção: Review Rafa"
+                        value={inputs.comment_review_rafa || ''}
+                        onChange={e => updateRawInput(pauta.id, 'comment_review_rafa', e.target.value)}
+                      />
+                    </>
+                  )}
+
+                  {step.key === 'news' && (
+                    <>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Link Notícia</Label>
+                          <Button variant="ghost" size="icon" className="h-4 w-4" title="Blabbermouth"
+                            onClick={() => window.open('https://www.blabbermouth.net/', '_blank')}>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </Button>
+                          <Button variant="ghost" size="icon" className="h-4 w-4" title="Whiplash"
+                            onClick={() => window.open('https://whiplash.net/', '_blank')}>
+                            <ExternalLink className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
+                        <Input
+                          className="h-8 text-xs"
+                          placeholder="https://..."
+                          value={inputs.news_link || ''}
+                          onChange={e => updateRawInput(pauta.id, 'news_link', e.target.value)}
+                        />
+                      </div>
+                      <Input
+                        className="h-7 text-[10px]"
+                        placeholder="Direção: Notícias"
+                        value={inputs.comment_news || ''}
+                        onChange={e => updateRawInput(pauta.id, 'comment_news', e.target.value)}
+                      />
+                    </>
+                  )}
+
+                  {step.key === 'review_kilton' && (
+                    <>
+                      <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
+                      <Input
+                        className="h-7 text-[10px]"
+                        placeholder="Direção: Review Kilton"
+                        value={inputs.comment_review_kilton || ''}
+                        onChange={e => updateRawInput(pauta.id, 'comment_review_kilton', e.target.value)}
+                      />
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
@@ -669,11 +871,19 @@ export default function Pautas() {
 
       {selectedWeek ? (
         <>
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList>
-              <TabsTrigger value="inputs">Insumos</TabsTrigger>
-              <TabsTrigger value="content">Conteúdo</TabsTrigger>
-            </TabsList>
+          <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
+            <div className="flex items-center justify-between">
+              <TabsList>
+                <TabsTrigger value="inputs">Insumos</TabsTrigger>
+                <TabsTrigger value="content">Conteúdo</TabsTrigger>
+                <TabsTrigger value="flow">Flow</TabsTrigger>
+              </TabsList>
+              {activeTab === 'inputs' && (
+                <Button size="sm" className="gap-2" onClick={handleSaveAll}>
+                  <Save className="h-3.5 w-3.5" /> Salvar Todos
+                </Button>
+              )}
+            </div>
 
             <TabsContent value="inputs">
               <WorkspaceShell
@@ -692,7 +902,7 @@ export default function Pautas() {
                         <StatusBadge status={pauta.status} />
                       </div>
 
-                      {/* Anniversary - all days */}
+                      {/* Anniversary + direction */}
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Aniversário do Dia</Label>
@@ -708,12 +918,24 @@ export default function Pautas() {
                           onChange={e => updateRawInput(pauta.id, 'anniversary', e.target.value)}
                         />
                       </div>
+                      <Input
+                        className="h-7 text-[10px]"
+                        placeholder="Direção: Aniversário"
+                        value={inputs.comment_anniversary || ''}
+                        onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
+                      />
 
-                      {/* Weekday-specific: review pickers + news */}
+                      {/* Weekday-specific: interleaved review/news + directions */}
                       {slot !== 'saturday' && slot !== 'sunday' && (
                         <>
                           <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
-                          <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
+                          <Input
+                            className="h-7 text-[10px]"
+                            placeholder="Direção: Review Rafa"
+                            value={inputs.comment_review_rafa || ''}
+                            onChange={e => updateRawInput(pauta.id, 'comment_review_rafa', e.target.value)}
+                          />
+
                           <div className="space-y-1">
                             <div className="flex items-center gap-1">
                               <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Link Notícia</Label>
@@ -733,11 +955,35 @@ export default function Pautas() {
                               onChange={e => updateRawInput(pauta.id, 'news_link', e.target.value)}
                             />
                           </div>
+                          <Input
+                            className="h-7 text-[10px]"
+                            placeholder="Direção: Notícias"
+                            value={inputs.comment_news || ''}
+                            onChange={e => updateRawInput(pauta.id, 'comment_news', e.target.value)}
+                          />
+
+                          <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
+                          <Input
+                            className="h-7 text-[10px]"
+                            placeholder="Direção: Review Kilton"
+                            value={inputs.comment_review_kilton || ''}
+                            onChange={e => updateRawInput(pauta.id, 'comment_review_kilton', e.target.value)}
+                          />
                         </>
                       )}
 
                       {/* Saturday: release picker */}
-                      {slot === 'saturday' && <SaturdayReleasePicker pauta={pauta} />}
+                      {slot === 'saturday' && (
+                        <>
+                          <SaturdayReleasePicker pauta={pauta} />
+                          <Input
+                            className="h-7 text-[10px]"
+                            placeholder="Direção: Lançamentos da Semana"
+                            value={inputs.comment_next_week_releases || ''}
+                            onChange={e => updateRawInput(pauta.id, 'comment_next_week_releases', e.target.value)}
+                          />
+                        </>
+                      )}
 
                       {/* Sunday: compilation summary */}
                       {slot === 'sunday' && (
@@ -753,20 +999,6 @@ export default function Pautas() {
                           )}
                         </div>
                       )}
-
-                      {/* Editorial comments per section */}
-                      <div className="space-y-1.5">
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Direção Editorial</Label>
-                        {sections.map(s => (
-                          <Input
-                            key={s.key}
-                            className="h-7 text-[10px]"
-                            placeholder={`Direção: ${s.label}`}
-                            value={inputs[`comment_${s.key}`] || ''}
-                            onChange={e => updateRawInput(pauta.id, `comment_${s.key}`, e.target.value)}
-                          />
-                        ))}
-                      </div>
 
                       <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => toast.success('Inputs salvos')}>
                         Salvar Inputs
@@ -849,6 +1081,49 @@ export default function Pautas() {
                   );
                 }}
               />
+            </TabsContent>
+
+            <TabsContent value="flow">
+              <div className="space-y-6">
+                {/* Flow navigation bar */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {FLOW_STEPS.map((step, i) => (
+                      <button
+                        key={step.key}
+                        onClick={() => setFlowStep(i)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                          i === flowStep ? 'bg-primary text-primary-foreground' :
+                          i < flowStep ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                        )}
+                      >
+                        {step.label}
+                      </button>
+                    ))}
+                    <button
+                      onClick={() => setFlowStep(FLOW_STEPS.length)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-xs font-medium transition-colors',
+                        flowStep === FLOW_STEPS.length ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      )}
+                    >
+                      Gerar
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" disabled={flowStep === 0} onClick={() => setFlowStep(s => s - 1)}>
+                      <ChevronLeft className="h-4 w-4" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">{flowStep + 1} / {flowTotalSteps}</span>
+                    <Button size="sm" variant="outline" disabled={flowStep >= flowTotalSteps - 1} onClick={() => setFlowStep(s => s + 1)}>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                {renderFlowStep()}
+              </div>
             </TabsContent>
           </Tabs>
         </>
