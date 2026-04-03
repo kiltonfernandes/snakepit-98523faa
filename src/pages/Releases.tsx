@@ -688,32 +688,65 @@ export default function Releases() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit/Create dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             <DialogDescription>Preencha os dados do lançamento musical.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Artista</Label><Input value={form.artist} onChange={e => setForm(p => ({ ...p, artist: e.target.value }))} /></div>
-              <div className="space-y-1.5"><Label>Álbum</Label><Input value={form.album} onChange={e => setForm(p => ({ ...p, album: e.target.value }))} /></div>
-            </div>
-            <div className="space-y-1.5"><Label>Data de Lançamento</Label><Input type="date" value={form.release_date} onChange={e => setForm(p => ({ ...p, release_date: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Gêneros (separados por vírgula)</Label><Input value={form.genres} onChange={e => setForm(p => ({ ...p, genres: e.target.value }))} placeholder="Death Metal, Black Metal, Thrash" /></div>
-            <div className="space-y-1.5">
-              <Label>Rating ({form.rating}/5)</Label>
-              <div className="flex gap-1">
-                {[1,2,3,4,5].map(i => (
-                  <button key={i} type="button" onClick={() => setForm(p => ({ ...p, rating: i }))}>
-                    <Star className={`h-5 w-5 transition-colors ${i <= form.rating ? 'text-primary fill-primary' : 'text-muted-foreground/30 hover:text-primary/50'}`} />
-                  </button>
-                ))}
+          <Tabs defaultValue="info">
+            <TabsList className="w-full">
+              <TabsTrigger value="info" className="flex-1">Informações</TabsTrigger>
+              <TabsTrigger value="links" className="flex-1 gap-1"><Link2 className="h-3 w-3" /> Links</TabsTrigger>
+            </TabsList>
+            <TabsContent value="info" className="space-y-4 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>Artista</Label><Input value={form.artist} onChange={e => setForm(p => ({ ...p, artist: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Álbum</Label><Input value={form.album} onChange={e => setForm(p => ({ ...p, album: e.target.value }))} /></div>
               </div>
-            </div>
-            <div className="space-y-1.5"><Label>Comentários</Label><Textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))} rows={3} /></div>
-          </div>
+              <div className="space-y-1.5"><Label>Data de Lançamento</Label><Input type="date" value={form.release_date} onChange={e => setForm(p => ({ ...p, release_date: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Gêneros (separados por vírgula)</Label><Input value={form.genres} onChange={e => setForm(p => ({ ...p, genres: e.target.value }))} placeholder="Death Metal, Black Metal, Thrash" /></div>
+              <div className="space-y-1.5">
+                <Label>Rating ({form.rating}/5)</Label>
+                <div className="flex gap-1">
+                  {[1,2,3,4,5].map(i => (
+                    <button key={i} type="button" onClick={() => setForm(p => ({ ...p, rating: i }))}>
+                      <Star className={`h-5 w-5 transition-colors ${i <= form.rating ? 'text-primary fill-primary' : 'text-muted-foreground/30 hover:text-primary/50'}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5"><Label>Comentários</Label><Textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))} rows={3} /></div>
+            </TabsContent>
+            <TabsContent value="links" className="space-y-4 pt-2">
+              <p className="text-xs text-muted-foreground">Links oficiais (override). Se vazio, será gerado automaticamente a partir de artista + álbum.</p>
+              {(Object.entries(PLATFORM_CONFIG) as [keyof PlatformLinks, typeof PLATFORM_CONFIG[keyof PlatformLinks]][]).map(([key, cfg]) => {
+                const fieldKey = `${key}_url` as keyof typeof form;
+                const dynamicLink = form.artist && form.album ? resolveAllLinks({ artist: form.artist, album: form.album })[key] : '';
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium">{cfg.label}</Label>
+                      {dynamicLink && !form[fieldKey] && (
+                        <a href={dynamicLink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1">
+                          <ExternalLink className="h-3 w-3" /> Link dinâmico
+                        </a>
+                      )}
+                      {form[fieldKey] && (
+                        <Badge variant="secondary" className="text-[9px]">Override</Badge>
+                      )}
+                    </div>
+                    <Input
+                      value={form[fieldKey]}
+                      onChange={e => setForm(p => ({ ...p, [fieldKey]: e.target.value }))}
+                      placeholder={dynamicLink || `https://...`}
+                      className="text-xs h-8"
+                    />
+                  </div>
+                );
+              })}
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!form.artist || !form.album}>{editingId ? 'Salvar' : 'Criar'}</Button>
