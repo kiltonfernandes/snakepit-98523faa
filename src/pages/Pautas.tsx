@@ -887,6 +887,7 @@ export default function Pautas() {
 
             <TabsContent value="inputs">
               <WorkspaceShell
+                excludeDays={['sunday']}
                 weekLabel={`Insumos – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                 renderDay={(day) => {
                   const pauta = weekPautas.find(p => getPautaSlot(p) === day.key);
