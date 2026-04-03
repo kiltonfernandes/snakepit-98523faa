@@ -78,6 +78,19 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const persistReleaseGenres = useCallback(async (releaseId: string, genres?: string[]) => {
+    const cleanedGenres = (genres || []).map((genre) => genre.trim()).filter(Boolean);
+
+    const { error: deleteGenresError } = await supabase.from('release_genres' as any).delete().eq('release_id', releaseId);
+    if (deleteGenresError) throw deleteGenresError;
+
+    if (cleanedGenres.length === 0) return;
+
+    const genreRows = cleanedGenres.map((genre) => ({ release_id: releaseId, genre }));
+    const { error: insertGenresError } = await supabase.from('release_genres' as any).insert(genreRows as any);
+    if (insertGenresError) throw insertGenresError;
+  }, []);
+
   const loadWeeks = useCallback(async () => {
     const { data } = await supabase.from('editorial_weeks' as any).select('*').order('start_date', { ascending: false });
     if (data) setWeeks(data as any[]);
@@ -148,28 +161,79 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addRelease = useCallback((r: Omit<Release, 'id' | 'created_at' | 'updated_at'>) => {
     const release: Release = { ...r, id: uid(), created_at: now(), updated_at: now() };
     setReleases(prev => [release, ...prev]);
-    supabase.from('releases' as any).insert({
-      id: release.id, artist: release.artist, album: release.album, release_date: release.release_date,
-      rating: release.rating, comments: release.comments, created_at: release.created_at, updated_at: release.updated_at,
-    } as any).then();
-    if (release.genres?.length) {
-      const genreRows = release.genres.map(g => ({ release_id: release.id, genre: g }));
-      supabase.from('release_genres' as any).insert(genreRows as any).then();
-    }
-    logActivity('Lançamento criado', `${r.artist} - ${r.album}`);
-  }, [logActivity]);
+
+    void (async () => {
+      try {
+        const { error: releaseError } = await supabase.from('releases' as any).insert({
+          id: release.id,
+          artist: release.artist,
+          album: release.album,
+          release_date: release.release_date,
+          rating: release.rating,
+          comments: release.comments,
+          youtube_url: release.youtube_url || null,
+          spotify_url: release.spotify_url || null,
+          deezer_url: release.deezer_url || null,
+          apple_music_url: release.apple_music_url || null,
+          bandcamp_url: release.bandcamp_url || null,
+          metal_archives_url: release.metal_archives_url || null,
+          created_at: release.created_at,
+          updated_at: release.updated_at,
+        } as any);
+        if (releaseError) throw releaseError;
+
+        await persistReleaseGenres(release.id, release.genres);
+        await loadReleases();
+        logActivity('Lançamento criado', `${r.artist} - ${r.album}`);
+      } catch (error) {
+        console.error('Erro ao salvar lançamento:', error);
+        await loadReleases();
+      }
+    })();
+  }, [loadReleases, logActivity, persistReleaseGenres]);
 
   const updateRelease = useCallback((id: string, r: Partial<Release>) => {
     setReleases(prev => prev.map(x => x.id === id ? { ...x, ...r } : x));
-    const { genres, ...dbFields } = r as any;
-    supabase.from('releases' as any).update({ ...dbFields, updated_at: now() } as any).eq('id', id).then();
-  }, []);
+
+    void (async () => {
+      try {
+        const { genres, ...dbFields } = r as any;
+        const { error: updateError } = await supabase.from('releases' as any).update({
+          ...dbFields,
+          updated_at: now(),
+        } as any).eq('id', id);
+        if (updateError) throw updateError;
+
+        if (genres) {
+          await persistReleaseGenres(id, genres);
+        }
+
+        await loadReleases();
+      } catch (error) {
+        console.error('Erro ao atualizar lançamento:', error);
+        await loadReleases();
+      }
+    })();
+  }, [loadReleases, persistReleaseGenres]);
 
   const deleteRelease = useCallback((id: string) => {
     setReleases(prev => prev.filter(x => x.id !== id));
-    supabase.from('releases' as any).delete().eq('id', id).then();
-    logActivity('Lançamento removido', id);
-  }, [logActivity]);
+
+    void (async () => {
+      try {
+        const { error: deleteGenresError } = await supabase.from('release_genres' as any).delete().eq('release_id', id);
+        if (deleteGenresError) throw deleteGenresError;
+
+        const { error: deleteReleaseError } = await supabase.from('releases' as any).delete().eq('id', id);
+        if (deleteReleaseError) throw deleteReleaseError;
+
+        logActivity('Lançamento removido', id);
+      } catch (error) {
+        console.error('Erro ao remover lançamento:', error);
+        await loadReleases();
+      }
+    })();
+  }, [loadReleases, logActivity]);
 
   const addWeek = useCallback((startDate: string) => {
     const week: EditorialWeek = { id: uid(), start_date: startDate, status: 'draft', created_at: now(), updated_at: now() };
@@ -264,8 +328,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const importReleases = useCallback((data: Release[]) => {
     const mapped = data.map(r => ({ ...r, id: r.id || uid(), created_at: r.created_at || now(), updated_at: r.updated_at || now() }));
     setReleases(prev => [...mapped, ...prev]);
-    logActivity('Import de lançamentos', `${data.length} registros`);
-  }, [logActivity]);
+
+    void (async () => {
+      try {
+        const releaseRows = mapped.map((release) => ({
+          id: release.id,
+          artist: release.artist,
+          album: release.album,
+          release_date: release.release_date,
+          rating: release.rating,
+          comments: release.comments,
+          youtube_url: release.youtube_url || null,
+          spotify_url: release.spotify_url || null,
+          deezer_url: release.deezer_url || null,
+          apple_music_url: release.apple_music_url || null,
+          bandcamp_url: release.bandcamp_url || null,
+          metal_archives_url: release.metal_archives_url || null,
+          created_at: release.created_at,
+          updated_at: release.updated_at,
+        }));
+
+        const { error: insertReleasesError } = await supabase.from('releases' as any).insert(releaseRows as any);
+        if (insertReleasesError) throw insertReleasesError;
+
+        const genreRows = mapped.flatMap((release) =>
+          (release.genres || []).map((genre) => ({ release_id: release.id, genre: genre.trim() })).filter((row) => row.genre)
+        );
+
+        if (genreRows.length > 0) {
+          const { error: insertGenresError } = await supabase.from('release_genres' as any).insert(genreRows as any);
+          if (insertGenresError) throw insertGenresError;
+        }
+
+        await loadReleases();
+        logActivity('Import de lançamentos', `${data.length} registros`);
+      } catch (error) {
+        console.error('Erro ao importar lançamentos:', error);
+        await loadReleases();
+      }
+    })();
+  }, [loadReleases, logActivity]);
 
   const savePromptSession = useCallback((session: { id: string; scope: string; prompt_text: string; target_json: any; status?: string }) => {
     supabase.from('prompt_sessions' as any).insert({
