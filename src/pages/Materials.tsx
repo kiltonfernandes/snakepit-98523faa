@@ -36,13 +36,14 @@ export default function Materials() {
     return '';
   };
 
-  const getPautaStatus = (mat: EpisodeMaterial) => {
-    if (!mat.source_pauta_id) return null;
-    return pautas.find(p => p.id === mat.source_pauta_id);
+  const getPautaForMaterial = (mat: EpisodeMaterial) => {
+    if (mat.source_pauta_id) return pautas.find(p => p.id === mat.source_pauta_id);
+    // Fallback: find pauta matching same week and slot date
+    return weekPautas.find(p => p.publication_date === mat.episode_date);
   };
 
   const isPautaReady = (mat: EpisodeMaterial) => {
-    const pauta = getPautaStatus(mat);
+    const pauta = getPautaForMaterial(mat);
     return pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review');
   };
 
