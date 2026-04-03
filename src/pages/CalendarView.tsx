@@ -49,7 +49,7 @@ function getWeekDays(date: Date): Date[] {
 }
 
 export default function CalendarView() {
-  const { materials, pautas, releases, updateMaterial, updateRelease } = useApp();
+  const { materials, pautas, releases, updateMaterial, updateRelease, dataReady } = useApp();
   const navigate = useNavigate();
   const [date, setDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
