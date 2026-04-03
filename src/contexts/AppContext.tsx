@@ -416,7 +416,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addRelease, updateRelease, deleteRelease,
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
       updatePauta, getPautasForWeek,
-      updateMaterial, getMaterialsForWeek,
+      updateMaterial, getMaterialsForWeek, loadMaterialCover,
       updateSettings, logActivity, importReleases, loadReleases,
       savePromptSession,
     }}>
