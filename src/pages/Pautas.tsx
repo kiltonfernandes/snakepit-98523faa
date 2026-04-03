@@ -731,21 +731,68 @@ export default function Pautas() {
   // ─── Flow step renderer ───
   const renderFlowStep = () => {
     if (flowStep >= FLOW_STEPS.length) {
-      // Final step: action buttons
+      // Final step: action buttons + progress tracker
+      const hasProgress = Object.keys(flowProgress).length > 0;
+      const totalSections = Object.values(flowProgress).reduce((acc, day) => acc + Object.keys(day).length, 0);
+      const doneSections = Object.values(flowProgress).reduce((acc, day) => acc + Object.values(day).filter(s => s === 'done').length, 0);
+      const progressPct = totalSections > 0 ? Math.round((doneSections / totalSections) * 100) : 0;
+
       return (
-        <div className="flex flex-col items-center justify-center py-16 space-y-6">
+        <div className="flex flex-col items-center justify-center py-8 space-y-6">
           <div className="text-center space-y-2">
-            <h3 className="text-xl font-bold">Insumos Completos</h3>
-            <p className="text-muted-foreground">Todos os campos de insumo da semana foram preenchidos. Como deseja prosseguir?</p>
+            <h3 className="text-xl font-bold">{flowGenerating ? 'Gerando Pautas...' : hasProgress && progressPct === 100 ? '✅ Geração Concluída' : 'Insumos Completos'}</h3>
+            <p className="text-muted-foreground">
+              {flowGenerating ? `${doneSections}/${totalSections} seções processadas (${progressPct}%)` : 'Todos os campos de insumo da semana foram preenchidos. Como deseja prosseguir?'}
+            </p>
           </div>
-          <div className="flex gap-4">
-            <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate} disabled={flowGenerating}>
-              {flowGenerating ? <><Loader2 className="h-4 w-4 animate-spin" /> Gerando...</> : <><Zap className="h-4 w-4" /> Gerar Automaticamente</>}
-            </Button>
-            <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual} disabled={flowGenerating}>
-              <FileText className="h-4 w-4" /> Gerar Manualmente
-            </Button>
-          </div>
+
+          {/* Progress tracker */}
+          {hasProgress && (
+            <div className="w-full max-w-2xl space-y-3">
+              <Progress value={progressPct} className="h-2.5" />
+              <div className="grid gap-2">
+                {DAY_SLOTS.filter(d => d.key !== 'sunday' && flowProgress[d.key]).map(day => {
+                  const sections = flowProgress[day.key];
+                  if (!sections) return null;
+                  const dayDone = Object.values(sections).filter(s => s === 'done').length;
+                  const dayTotal = Object.keys(sections).length;
+                  const dayPct = dayTotal > 0 ? Math.round((dayDone / dayTotal) * 100) : 0;
+
+                  return (
+                    <div key={day.key} className="flex items-center gap-3 p-2 rounded-md border border-border/50 bg-card/50">
+                      <span className="text-xs font-medium w-16">{day.short}</span>
+                      <div className="flex gap-1.5 flex-1">
+                        {Object.entries(sections).map(([secKey, status]) => {
+                          const secLabel = getSectionsForDay(day.key as DaySlot).find(s => s.key === secKey);
+                          return (
+                            <div key={secKey} className="flex items-center gap-1" title={secLabel?.label || secKey}>
+                              {status === 'done' && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                              {status === 'generating' && <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />}
+                              {status === 'error' && <AlertTriangle className="h-3.5 w-3.5 text-destructive" />}
+                              {status === 'pending' && <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />}
+                              <span className="text-[10px] text-muted-foreground">{secLabel?.label || secKey}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <span className="text-[10px] font-mono text-muted-foreground">{dayPct}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {!flowGenerating && (
+            <div className="flex gap-4">
+              <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate}>
+                <Zap className="h-4 w-4" /> Gerar Automaticamente
+              </Button>
+              <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual}>
+                <FileText className="h-4 w-4" /> Gerar Manualmente
+              </Button>
+            </div>
+          )}
         </div>
       );
     }
