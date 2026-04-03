@@ -443,8 +443,8 @@ export default function Materials() {
     const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
     const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
 
-    if (anniversary) return `${anniversary} album cover band`;
-    if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} album cover`;
+    if (anniversary) return `${anniversary} band promo`;
+    if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} band promo`;
 
     const textPool = [
       selectedTitle,
