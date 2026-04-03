@@ -92,7 +92,7 @@ REGRAS DE SAÍDA:
 - NÃO copie texto. Sempre parafraseie e sintetize.
 - Seja objetivo, equilibrado e neutro no tom.
 - Estrutura: contexto do gênero, análise musical, recepção, curiosidades, profundidade temática.
-- Mínimo 500 palavras.
+- Aproximadamente 300 palavras.
 - Requer links de catálogo do release.
 - Sem release: fallback honesto.`;
 
