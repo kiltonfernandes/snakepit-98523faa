@@ -1471,6 +1471,8 @@ export default function Pautas() {
               const sections = getSectionsForDay(slot);
               const data = (previewPauta.sections_json || {}) as Record<string, string>;
               const inputs = getRawInputs(previewPauta);
+              const INTRO_SEGWAY = `Saudações, heavynautas!\n\nNossa nave está aterrissando em mais um episódio do nosso podcast diário com os melhores lançamentos do heavy metal. O meu nome é Kilton Fernandes e hoje eu estou com meu copiloto Rafa Ferreira. Seja muito bem-vindo!`;
+              const OUTRO_SEGWAY = `Kilton: Nossa nave espacial está se preparando para levantar voo e partir por hoje. Muito obrigado por nos acompanhar nessa jornada pelo universo do heavy metal.\n\nRafa: E não se esqueçam, heavynautas! Estamos de volta amanhã com mais novidades do mundo do metal. O Snakepit vai ao ar todos os dias, de segunda a sexta as 6 da manhã. Desejo a todos uma ótima noite e até a nossa próxima viagem!`;
               const text = [
                 '# SNAKEPIT',
                 `## ${new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}`,
@@ -1480,9 +1482,13 @@ export default function Pautas() {
                 '',
                 '## Blocos do episódio',
                 ...sections.flatMap((section) => {
-                  const lines = [`### ${section.label}`, data[section.key]?.trim() || 'N/A'];
-                  if (section.key === 'anniversary' && inputs.anniversary) lines.splice(1, 0, `#### Contexto\n${inputs.anniversary}`);
-                  return [...lines, ''];
+                  const lines = [`### ${section.label}`];
+                  if (section.key === 'anniversary' && inputs.anniversary) {
+                    lines.push(`#### Contexto\n${inputs.anniversary}`);
+                  }
+                  lines.push(data[section.key]?.trim() || 'N/A');
+                  lines.push('');
+                  return lines;
                 }),
                 '## Encerramento',
                 OUTRO_SEGWAY,
