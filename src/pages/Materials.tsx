@@ -294,7 +294,39 @@ export default function Materials() {
     const descriptionInstructions = getPromptText('material_descriptions_instructions', promptOverrides);
     const brandBlock = getPromptText('material_brand_block', promptOverrides);
 
-    return `Você vai escrever a descrição HTML de um episódio do podcast Heavynauta.\n\nREGRAS:\n${descriptionInstructions}\n- responder APENAS com HTML válido\n- nunca usar markdown nem code block\n- manter um tom editorial, direto e legível\n- usar o título selecionado como gancho da abertura\n- se houver Spotify agendado, incluir um link em HTML com o URL informado\n\nTÍTULO SELECIONADO:\n${selectedTitle}\n\nSPOTIFY AGENDADO:\n${mat.spotify_link || 'ainda não informado'}\n\nCONTEXTO DO EPISÓDIO:\nDia: ${context.dayLabel}\nData: ${mat.episode_date}\n${context.summary}\n\nBLOCO INSTITUCIONAL PARA INCLUIR NO FINAL EXATAMENTE UMA VEZ:\n${brandBlock}\n\nFORMATO ESPERADO:\n- 1 parágrafo de abertura\n- 1 ou 2 parágrafos resumindo os destaques\n- 1 lista curta com highlights do episódio\n- bloco institucional\n- CTA final em HTML`;\n  };
+    return [
+      'Você vai escrever a descrição HTML de um episódio do podcast Heavynauta.',
+      '',
+      'REGRAS:',
+      descriptionInstructions,
+      '- responder APENAS com HTML válido',
+      '- nunca usar markdown nem code block',
+      '- manter um tom editorial, direto e legível',
+      '- usar o título selecionado como gancho da abertura',
+      '- se houver Spotify agendado, incluir um link em HTML com o URL informado',
+      '',
+      'TÍTULO SELECIONADO:',
+      selectedTitle,
+      '',
+      'SPOTIFY AGENDADO:',
+      mat.spotify_link || 'ainda não informado',
+      '',
+      'CONTEXTO DO EPISÓDIO:',
+      `Dia: ${context.dayLabel}`,
+      `Data: ${mat.episode_date}`,
+      context.summary,
+      '',
+      'BLOCO INSTITUCIONAL PARA INCLUIR NO FINAL EXATAMENTE UMA VEZ:',
+      brandBlock,
+      '',
+      'FORMATO ESPERADO:',
+      '- 1 parágrafo de abertura',
+      '- 1 ou 2 parágrafos resumindo os destaques',
+      '- 1 lista curta com highlights do episódio',
+      '- bloco institucional',
+      '- CTA final em HTML',
+    ].join('\n');
+  };
 
   const generateDescriptionAI = useCallback(async (materialId: string) => {
     const mat = weekMaterials.find((material) => material.id === materialId);
