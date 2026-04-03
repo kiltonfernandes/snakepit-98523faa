@@ -895,6 +895,26 @@ export default function Materials() {
     return 'bg-muted-foreground';
   };
 
+  if (!dataReady) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Palette className="h-6 w-6 text-primary" />
+            Materiais
+          </h1>
+          <p className="mt-1 text-muted-foreground">Títulos, descrições e capas dos episódios</p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="mb-4 h-12 w-12 text-muted-foreground/30 animate-spin" />
+            <p className="text-muted-foreground">Carregando dados...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   if (weeks.length === 0) {
     return (
       <div className="space-y-6">
