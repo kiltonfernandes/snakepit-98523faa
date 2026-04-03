@@ -210,6 +210,77 @@ export default function Pautas() {
     });
   };
 
+  // ─── Generate with AI (streaming) ───
+  const handleGenerateAI = useCallback(async () => {
+    if (!activePauta) return;
+    const prompt = promptScope === 'week'
+      ? generateWeekPrompt()
+      : generatePrompt(activePauta, activeSection || undefined);
+    if (!prompt) return;
+
+    setGenerating(true);
+    setPromptResponse('');
+    setParseError(null);
+
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
+    try {
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: 'Erro desconhecido' }));
+        toast.error(err.error || `Erro ${resp.status}`);
+        setGenerating(false);
+        return;
+      }
+
+      const reader = resp.body?.getReader();
+      if (!reader) { setGenerating(false); return; }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let full = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let nlIdx: number;
+        while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, nlIdx);
+          buffer = buffer.slice(nlIdx + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              full += content;
+              setPromptResponse(full);
+            }
+          } catch { /* partial json, skip */ }
+        }
+      }
+
+      setGenerating(false);
+      toast.success('Resposta gerada com IA');
+      logActivity('IA gerou resposta', `scope: ${promptScope}, pauta: ${activePauta.publication_date}`);
+    } catch (e) {
+      console.error('AI generation error:', e);
+      toast.error('Erro ao gerar com IA');
+      setGenerating(false);
+    }
+  }, [activePauta, activeSection, promptScope]);
+
   // ─── Apply response using ResponseParser ───
   const [parseError, setParseError] = useState<string | null>(null);
 
