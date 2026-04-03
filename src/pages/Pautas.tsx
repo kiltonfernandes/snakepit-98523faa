@@ -150,7 +150,12 @@ export default function Pautas() {
   const [flowGenerating, setFlowGenerating] = useState(false);
   const [flowProgress, setFlowProgress] = useState<Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>>>({});
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
-  const [weekCarouselStart, setWeekCarouselStart] = useState(0);
+  const [weekCarouselStart, setWeekCarouselStart] = useState(() => {
+    const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const idx = sorted.findIndex(w => w.start_date >= todayStr);
+    return Math.max(0, idx >= 0 ? idx : sorted.length - 1);
+  });
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
 
