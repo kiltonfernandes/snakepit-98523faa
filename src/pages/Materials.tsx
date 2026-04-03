@@ -606,7 +606,21 @@ export default function Materials() {
     };
 
     const drawOverlay = () => {
-      const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
+      const WEEKDAYS: DaySlot[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      const isWeekday = coverDaySlot && WEEKDAYS.includes(coverDaySlot);
+      const baseTitle = getTitle(mat) || `Episódio ${coverDaySlot}`;
+      
+      let title = baseTitle;
+      if (isWeekday) {
+        const pauta = getPautaForMaterial(mat);
+        const inputs = ((pauta?.raw_inputs_json || {}) as Record<string, any>);
+        const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
+        const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
+        const bandName = anniversary || (reviewRelease ? `${reviewRelease.artist}` : '');
+        if (bandName) {
+          title = `${baseTitle}\n${bandName}`;
+        }
+      }
       const imageAreaH = Math.round(SIZE * 0.62);
       const panelTop = imageAreaH + 80;
 
@@ -1068,7 +1082,7 @@ export default function Materials() {
       )}
 
       <Dialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Criar Capa</DialogTitle>
             <DialogDescription>A busca agora usa contexto real da pauta para sugerir imagens melhores.</DialogDescription>
