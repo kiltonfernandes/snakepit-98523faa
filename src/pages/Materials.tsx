@@ -367,6 +367,16 @@ export default function Materials() {
         html = `<p>${html.replace(/\n{2,}/g, '</p><p>').replace(/\n/g, '<br />')}</p>`;
       }
 
+      // Apply fixed template if available
+      const template = settings.description_template_html || '';
+      if (template && !html.includes('<<<')) {
+        const selectedTitle = getTitle(mat) || `Episódio ${mat.slot_key}`;
+        const finalHtml = template
+          .replace(/<<<title>>>/g, selectedTitle)
+          .replace(/<<<generated content>>>/g, html);
+        html = finalHtml;
+      }
+
       const brandBlock = getPromptText('material_brand_block', promptOverrides);
       if (!html.includes('Heavynauta')) {
         html = `${html}\n${brandBlock}`;
