@@ -431,32 +431,80 @@ export default function Pautas() {
     input.click();
   };
 
-  // Release picker for inputs
+  // Release picker for inputs — searchable, grouped by week > genre, filtered D+1
   const ReleasePicker = ({ pauta, inputKey, label }: { pauta: Pauta; inputKey: string; label: string }) => {
+    const [search, setSearch] = useState('');
+    const [open, setOpen] = useState(false);
     const inputs = getRawInputs(pauta);
     const eligible = getEligibleReviews(releases, pauta.publication_date);
     const selectedId = inputs[inputKey];
     const selected = releases.find(r => r.id === selectedId);
 
+    const filtered = search.trim()
+      ? eligible.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
+      : eligible;
+
+    const grouped = groupReleasesByWeekAndGenre(filtered);
+
     return (
       <div className="space-y-1">
         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</Label>
-        {eligible.length > 0 ? (
-          <Select value={selectedId || ''} onValueChange={v => updateRawInput(pauta.id, inputKey, v)}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue placeholder="Selecionar release..." />
-            </SelectTrigger>
-            <SelectContent>
-              {eligible.map(r => (
-                <SelectItem key={r.id} value={r.id} className="text-xs">
-                  {r.artist} – {r.album}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ) : (
-          <p className="text-[10px] text-muted-foreground italic">Nenhum release na janela D-30/D-1</p>
-        )}
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="w-full justify-start text-xs h-8 font-normal">
+              {selected ? `${selected.artist} – ${selected.album}` : 'Selecionar release...'}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-80 p-0" align="start">
+            <div className="p-2 border-b border-border">
+              <Input
+                placeholder="Buscar artista ou álbum..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="h-7 text-xs"
+              />
+            </div>
+            <ScrollArea className="max-h-[300px]">
+              {grouped.length > 0 ? (
+                <div className="p-1">
+                  {grouped.map(week => (
+                    <div key={week.weekLabel} className="mb-2">
+                      <p className="text-[10px] font-semibold text-muted-foreground px-2 py-1 uppercase tracking-wider">
+                        Semana {week.weekLabel}
+                      </p>
+                      {week.genres.map(g => (
+                        <div key={g.genre}>
+                          <p className="text-[10px] text-primary/70 px-3 py-0.5 font-medium">{g.genre}</p>
+                          {g.releases.map(r => (
+                            <button
+                              key={r.id}
+                              className={cn(
+                                'w-full text-left px-3 py-1.5 text-xs rounded hover:bg-accent transition-colors',
+                                r.id === selectedId && 'bg-accent font-medium'
+                              )}
+                              onClick={() => {
+                                updateRawInput(pauta.id, inputKey, r.id);
+                                setOpen(false);
+                                setSearch('');
+                              }}
+                            >
+                              {r.artist} – {r.album}
+                              <span className="text-muted-foreground ml-1">({r.release_date})</span>
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground p-3 text-center italic">
+                  {eligible.length === 0 ? 'Nenhum release a partir de D+1' : 'Nenhum resultado'}
+                </p>
+              )}
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
         {selected && (
           <p className="text-[10px] text-muted-foreground">{selected.artist} – {selected.album} ({selected.release_date})</p>
         )}
