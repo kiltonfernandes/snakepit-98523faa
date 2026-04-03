@@ -1340,16 +1340,10 @@ export default function Pautas() {
 
       {/* Pauta Preview Dialog */}
       <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
+          <DialogHeader className="sr-only">
             <DialogTitle>Visualização da Pauta</DialogTitle>
-            <DialogDescription>
-              {previewPauta && (() => {
-                const slot = getPautaSlot(previewPauta);
-                const dayInfo = DAY_SLOTS.find(d => d.key === slot);
-                return `${dayInfo?.label} — ${previewPauta.publication_date}`;
-              })()}
-            </DialogDescription>
+            <DialogDescription>Preview da pauta para gravação</DialogDescription>
           </DialogHeader>
           {previewPauta && (() => {
             const slot = getPautaSlot(previewPauta);
@@ -1358,15 +1352,26 @@ export default function Pautas() {
             const inputs = getRawInputs(previewPauta);
             const dayInfo = DAY_SLOTS.find(d => d.key === slot);
 
+            const INTRO_SEGWAY = `Saudações, heavynautas!\n\nNossa nave está aterrissando em mais um episódio do nosso podcast diário com os melhores lançamentos do heavy metal. O meu nome é Kilton Fernandes e hoje eu estou com meu copiloto Rafa Ferreira. Seja muito bem-vindo!`;
+            const OUTRO_SEGWAY = `Kilton: Nossa nave espacial está se preparando para levantar voo e partir por hoje. Muito obrigado por nos acompanhar nessa jornada pelo universo do heavy metal.\n\nRafa: E não se esqueçam, heavynautas! Estamos de volta amanhã com mais novidades do mundo do metal. O Snakepit vai ao ar todos os dias, de segunda a sexta as 6 da manhã. Desejo a todos uma ótima noite e até a nossa próxima viagem!`;
+
             return (
-              <div className="prose prose-sm dark:prose-invert max-w-none space-y-6">
-                <div className="text-center border-b border-border pb-4 mb-6">
-                  <h2 className="text-xl font-bold tracking-tight m-0">🐍 SNAKEPIT</h2>
-                  <p className="text-muted-foreground text-sm m-0 mt-1">
+              <div className="space-y-8 p-4">
+                {/* Header */}
+                <div className="text-center border-b border-white/20 pb-6">
+                  <h2 className="text-2xl font-bold tracking-tight text-white m-0">🐍 SNAKEPIT</h2>
+                  <p className="text-white/60 text-base m-0 mt-2">
                     {dayInfo?.label} — {new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
 
+                {/* Intro Segway */}
+                <div className="border-l-4 border-primary pl-4">
+                  <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">ABERTURA</p>
+                  <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{INTRO_SEGWAY}</p>
+                </div>
+
+                {/* Sections */}
                 {sections.map((sec, idx) => {
                   const content = data[sec.key]?.trim();
                   let contextNote = '';
@@ -1382,24 +1387,30 @@ export default function Pautas() {
                   if (sec.key === 'news') contextNote = inputs.news_link ? `🔗 ${inputs.news_link}` : '';
 
                   return (
-                    <div key={sec.key} className={idx > 0 ? 'border-t border-border/50 pt-4' : ''}>
-                      <h3 className="text-base font-bold uppercase tracking-wider text-primary m-0 mb-2">
+                    <div key={sec.key} className={idx > 0 ? 'border-t border-white/10 pt-6' : ''}>
+                      <h3 className="text-lg font-bold uppercase tracking-wider text-primary m-0 mb-3">
                         {sec.label}
                       </h3>
                       {contextNote && (
-                        <p className="text-xs text-muted-foreground italic m-0 mb-2">{contextNote}</p>
+                        <p className="text-sm text-white/50 italic m-0 mb-3">{contextNote}</p>
                       )}
                       {content ? (
-                        <div className="text-sm leading-relaxed whitespace-pre-wrap">{content}</div>
+                        <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
                       ) : (
-                        <p className="text-sm text-muted-foreground/50 italic">Seção não preenchida</p>
+                        <p className="text-base text-white/30 italic">Seção não preenchida</p>
                       )}
                     </div>
                   );
                 })}
 
-                <div className="border-t border-border pt-4 mt-6 text-center">
-                  <p className="text-xs text-muted-foreground m-0">Status: {previewPauta.status}</p>
+                {/* Outro Segway */}
+                <div className="border-l-4 border-primary pl-4 border-t border-white/10 pt-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">ENCERRAMENTO</p>
+                  <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{OUTRO_SEGWAY}</p>
+                </div>
+
+                <div className="border-t border-white/10 pt-4 text-center">
+                  <p className="text-xs text-white/40 m-0">Status: {previewPauta.status}</p>
                 </div>
               </div>
             );
