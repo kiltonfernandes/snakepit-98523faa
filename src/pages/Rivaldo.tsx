@@ -1,7 +1,9 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Layers, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useApp } from '@/contexts/AppContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
@@ -49,11 +51,32 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
+  const { materials, pautas } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
   const [masterTracks, setMasterTracks] = useState<File[]>([]);
   const [filename, setFilename] = useState('');
+
+  // Episode titles from finalized pautas
+  const episodeOptions = useMemo(() => {
+    const finalizedPautaIds = new Set(
+      pautas.filter(p => p.status === 'finalized').map(p => p.id)
+    );
+    return materials
+      .filter(m => {
+        if (!m.source_pauta_id) return false;
+        return finalizedPautaIds.has(m.source_pauta_id);
+      })
+      .map(m => {
+        const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
+        const title = (m.selected_title_index != null && opts[m.selected_title_index]?.text)
+          ? opts[m.selected_title_index].text
+          : opts[0]?.text || `Episódio ${m.slot_key}`;
+        return { value: title, label: title, date: m.episode_date };
+      })
+      .filter(o => o.value);
+  }, [materials, pautas]);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -150,7 +173,22 @@ const Rivaldo = () => {
       <div className="px-6 py-4 flex items-center gap-4 border-b border-border">
         <HeavynautaBrand compact />
         <div className="flex-1 max-w-md ml-8">
-          <input type="text" value={filename} onChange={(e) => setFilename(e.target.value)} placeholder="Nome do arquivo final..." className="w-full bg-transparent border-b border-border focus:border-primary outline-none text-sm py-2 text-foreground placeholder:text-muted-foreground transition-colors font-mono" />
+          <Select value={filename} onValueChange={setFilename}>
+            <SelectTrigger className="w-full bg-transparent border-0 border-b border-border rounded-none focus:ring-0 text-sm font-mono h-auto py-2">
+              <SelectValue placeholder="Selecione o episódio..." />
+            </SelectTrigger>
+            <SelectContent>
+              {episodeOptions.length === 0 && (
+                <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma pauta finalizada</div>
+              )}
+              {episodeOptions.map((opt, i) => (
+                <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
+                  <span className="text-xs text-muted-foreground mr-2">{opt.date}</span>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="ml-auto flex items-center gap-1.5">
           <Layers className="w-4 h-4" /> Bulk 3.2
