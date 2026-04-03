@@ -604,7 +604,7 @@ export default function Pautas() {
                 className="h-7 text-xs"
               />
             </div>
-            <ScrollArea className="max-h-[300px]">
+            <ScrollArea className="h-[300px]">
               {grouped.length > 0 ? (
                 <div className="p-1">
                   {grouped.map(week => (
