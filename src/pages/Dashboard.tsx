@@ -29,7 +29,19 @@ export default function Dashboard() {
 
     return DAY_SLOTS.map(day => {
       const mat = weekMaterials.find(m => m.slot_key === day.key);
-      const pauta = mat?.source_pauta_id ? weekPautas.find(p => p.id === mat.source_pauta_id) : null;
+      // Find pauta: try source_pauta_id, then by date, then by slot
+      let pauta = mat?.source_pauta_id ? weekPautas.find(p => p.id === mat.source_pauta_id) : null;
+      if (!pauta && mat) {
+        pauta = weekPautas.find(p => p.publication_date === mat.episode_date) || null;
+      }
+      if (!pauta) {
+        pauta = weekPautas.find(p => {
+          const d = new Date(p.publication_date + 'T12:00:00');
+          const wd = d.getDay();
+          const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+          return slotMap[wd] === day.key;
+        }) || null;
+      }
       const indicators: EpisodeCompletionIndicators = {
         pauta: pauta?.status === 'finalized',
         title: mat?.selected_title_index != null,

@@ -513,7 +513,7 @@ export default function Pautas() {
     logActivity('Salvar todos inputs', `Semana: ${selectedWeek?.start_date}`);
   };
 
-  // ─── Flow: auto-generate all prompts ───
+  // ─── Flow: auto-generate all prompts with granular progress ───
   const handleFlowAutoGenerate = useCallback(async () => {
     if (!selectedWeek || weekPautas.length === 0) return;
     setFlowGenerating(true);
@@ -523,14 +523,35 @@ export default function Pautas() {
       return slot !== 'sunday';
     });
 
+    // Initialize progress map
+    const initialProgress: Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>> = {};
     for (const pauta of weekdayPautas) {
+      const slot = getPautaSlot(pauta);
+      const sections = getSectionsForDay(slot);
+      initialProgress[slot] = {};
+      for (const sec of sections) {
+        initialProgress[slot][sec.key] = 'pending';
+      }
+    }
+    setFlowProgress(initialProgress);
+
+    for (const pauta of weekdayPautas) {
+      const slot = getPautaSlot(pauta);
+      const sections = getSectionsForDay(slot);
+
+      // Mark all sections of this day as generating
+      setFlowProgress(prev => {
+        const next = { ...prev };
+        next[slot] = { ...next[slot] };
+        for (const sec of sections) next[slot][sec.key] = 'generating';
+        return next;
+      });
+
       const prompt = buildDayPrompt(pauta, promptCtx);
       if (!prompt) continue;
 
       try {
         const responseText = await streamAI(prompt, () => {});
-        const slot = getPautaSlot(pauta);
-        const sections = getSectionsForDay(slot);
         const result = parsePautaResponse(responseText, 'day', { publication_date: pauta.publication_date });
 
         if (result.success && result.sections) {
@@ -545,12 +566,30 @@ export default function Pautas() {
             rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
             rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
           });
-          toast.success(`Gerado: ${slot}`);
+          // Mark sections as done
+          setFlowProgress(prev => {
+            const next = { ...prev };
+            next[slot] = { ...next[slot] };
+            for (const sec of sections) next[slot][sec.key] = 'done';
+            return next;
+          });
         } else {
-          toast.error(`Falha ao gerar: ${slot} — ${result.error}`);
+          setFlowProgress(prev => {
+            const next = { ...prev };
+            next[slot] = { ...next[slot] };
+            for (const sec of sections) next[slot][sec.key] = 'error';
+            return next;
+          });
+          toast.error(`Falha: ${slot} — ${result.error}`);
         }
       } catch (e: any) {
-        toast.error(`Erro na geração: ${e.message}`);
+        setFlowProgress(prev => {
+          const next = { ...prev };
+          next[slot] = { ...next[slot] };
+          for (const sec of sections) next[slot][sec.key] = 'error';
+          return next;
+        });
+        toast.error(`Erro: ${e.message}`);
       }
     }
 
