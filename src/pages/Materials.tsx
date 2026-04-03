@@ -224,7 +224,7 @@ Responda APENAS com os 3 títulos no formato acima, sem explicações extras.`;
       for (const { pattern, style } of styles) {
         const match = fullText.match(pattern);
         if (match) {
-          options.push({ text: match[1].trim(), style });
+          options.push({ text: match[1].trim(), style: style as TitleOption['style'] });
         }
       }
       
