@@ -194,6 +194,29 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Description Template */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4" /> Descrição Fixa
+              </CardTitle>
+              <CardDescription>Template HTML base para descrições de episódios. Use <code className="text-xs bg-muted px-1 rounded">{'<<<title>>>'}</code> para o título e <code className="text-xs bg-muted px-1 rounded">{'<<<generated content>>>'}</code> para o conteúdo gerado por IA.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  {settings.description_template_html ? `${settings.description_template_html.length} caracteres` : 'Não configurado'}
+                </span>
+                <Button size="sm" className="gap-2" onClick={() => {
+                  setDescTemplateValue(settings.description_template_html || '');
+                  setDescTemplateOpen(true);
+                }}>
+                  <FileText className="h-3.5 w-3.5" /> Editar Template
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Coluna Direita */}
