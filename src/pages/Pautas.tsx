@@ -6,6 +6,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { resolveAllLinks } from '@/lib/dynamic-links';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -1375,14 +1376,34 @@ export default function Pautas() {
                 {sections.map((sec, idx) => {
                   const content = data[sec.key]?.trim();
                   let contextNote = '';
-                  if (sec.key === 'anniversary') contextNote = inputs.anniversary ? `📅 ${inputs.anniversary}` : '';
+                  let quickLinks: { youtube: string; spotify: string; deezer: string; metal_archives: string } | null = null;
+
+                  if (sec.key === 'anniversary') {
+                    contextNote = inputs.anniversary ? `📅 ${inputs.anniversary}` : '';
+                    // Parse "Artist - Album" or just "Artist" from anniversary text
+                    if (inputs.anniversary) {
+                      const parts = inputs.anniversary.split(/\s*[-–—]\s*/);
+                      const artist = parts[0]?.trim() || inputs.anniversary;
+                      const album = parts[1]?.trim() || '';
+                      const links = resolveAllLinks({ artist, album: album || artist });
+                      quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                    }
+                  }
                   if (sec.key === 'review_rafa') {
                     const rel = releases.find(r => r.id === inputs.review_rafa_id);
                     contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
+                    if (rel) {
+                      const links = resolveAllLinks(rel);
+                      quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                    }
                   }
                   if (sec.key === 'review_kilton') {
                     const rel = releases.find(r => r.id === inputs.review_kilton_id);
                     contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
+                    if (rel) {
+                      const links = resolveAllLinks(rel);
+                      quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                    }
                   }
                   if (sec.key === 'news') contextNote = inputs.news_link ? `🔗 ${inputs.news_link}` : '';
 
@@ -1398,6 +1419,25 @@ export default function Pautas() {
                         <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
                       ) : (
                         <p className="text-base text-white/30 italic">Seção não preenchida</p>
+                      )}
+                      {quickLinks && (
+                        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5">
+                          <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">Links rápidos:</span>
+                          {([
+                            { key: 'youtube', label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
+                            { key: 'spotify', label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
+                            { key: 'deezer', label: 'Deezer', color: 'text-purple-400 hover:text-purple-300' },
+                            { key: 'metal_archives', label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300' },
+                          ] as const).map((p, i, arr) => (
+                            <span key={p.key} className="flex items-center gap-1">
+                              <a href={quickLinks![p.key]} target="_blank" rel="noopener noreferrer"
+                                className={`text-xs font-medium transition-colors ${p.color}`}>
+                                {p.label}
+                              </a>
+                              {i < arr.length - 1 && <span className="text-white/20">|</span>}
+                            </span>
+                          ))}
+                        </div>
                       )}
                     </div>
                   );
