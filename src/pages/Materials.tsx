@@ -292,6 +292,20 @@ export default function Materials() {
         </div>
       )}
 
+      {selectedWeek && weekMaterials.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16 gap-4">
+            <Palette className="h-12 w-12 text-muted-foreground/30" />
+            <p className="text-muted-foreground">Materiais não encontrados para esta semana. Criando automaticamente...</p>
+            <Button onClick={repairMaterials} disabled={repairing} className="gap-2">
+              <RefreshCw className={`h-4 w-4 ${repairing ? 'animate-spin' : ''}`} />
+              {repairing ? 'Criando...' : 'Criar Materiais'}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {weekMaterials.length > 0 && (
       <Tabs defaultValue="titles" className="space-y-4">
         <TabsList>
           <TabsTrigger value="titles">Títulos</TabsTrigger>
