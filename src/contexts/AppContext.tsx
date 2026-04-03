@@ -102,7 +102,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadMaterials = useCallback(async () => {
-    const { data } = await supabase.from('episode_materials' as any).select('*');
+    const { data, error } = await supabase.from('episode_materials' as any).select('*');
+    if (error) console.error('[loadMaterials] error:', error.message);
     if (data) setMaterials(data as any[]);
   }, []);
 
@@ -314,7 +315,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateMaterial = useCallback((id: string, m: Partial<EpisodeMaterial>) => {
     setMaterials(prev => prev.map(x => x.id === id ? { ...x, ...m } : x));
-    supabase.from('episode_materials' as any).update({ ...m, updated_at: now() } as any).eq('id', id).then();
+    supabase.from('episode_materials' as any).update({ ...m, updated_at: now() } as any).eq('id', id)
+      .then(({ error }) => {
+        if (error) console.error('[updateMaterial] Supabase error:', error.message, error);
+      });
   }, []);
 
   const getMaterialsForWeek = useCallback((weekId: string) => materials.filter(m => m.week_id === weekId), [materials]);
