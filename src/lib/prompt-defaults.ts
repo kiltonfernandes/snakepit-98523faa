@@ -66,7 +66,7 @@ REGRAS DE SAÍDA:
 - NÃO copie de nenhuma fonte. Sempre parafraseie e sintetize.
 - Seja objetivo, equilibrado e respeitoso.
 - Abertura: data e fato celebrado.
-- Mínimo 500 palavras.
+- Aproximadamente 200 palavras.
 - Inclua links de catálogo quando possível.
 - Sem input: fallback honesto.`;
 
