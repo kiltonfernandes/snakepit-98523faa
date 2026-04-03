@@ -55,7 +55,7 @@ function extractSseText(raw: string): string {
 }
 
 export default function Materials() {
-  const { weeks, materials, pautas, releases, settings, getMaterialsForWeek, getPautasForWeek, updateMaterial } = useApp();
+  const { weeks, materials, pautas, releases, settings, getMaterialsForWeek, getPautasForWeek, updateMaterial, dataReady } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
@@ -67,7 +67,10 @@ export default function Materials() {
   const [generatingAllTitles, setGeneratingAllTitles] = useState(false);
   const [generatingAllDescriptions, setGeneratingAllDescriptions] = useState(false);
 
-  const selectedWeek = weeks.find((w) => w.id === selectedWeekId) || weeks[0];
+  // Default to the latest week that has pautas
+  const selectedWeek = weeks.find((w) => w.id === selectedWeekId)
+    || weeks.find((w) => pautas.some((p) => p.week_id === w.id))
+    || weeks[0];
   const weekMaterials = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
   const promptOverrides = (settings.prompt_overrides_json || {}) as Record<string, string>;
