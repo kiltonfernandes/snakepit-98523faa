@@ -62,6 +62,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [materials, setMaterials] = useState<EpisodeMaterial[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [dataReady, setDataReady] = useState(false);
 
   const loadReleases = useCallback(async () => {
     const { data: relData } = await supabase.from('releases' as any).select('*').order('release_date', { ascending: false });
