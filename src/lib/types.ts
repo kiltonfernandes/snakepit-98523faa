@@ -14,6 +14,12 @@ export interface Release {
   created_at: string;
   updated_at: string;
   genres?: string[];
+  youtube_url?: string | null;
+  spotify_url?: string | null;
+  deezer_url?: string | null;
+  apple_music_url?: string | null;
+  bandcamp_url?: string | null;
+  metal_archives_url?: string | null;
 }
 
 export interface EditorialWeek {

@@ -46,37 +46,105 @@ const GLOBAL_PLAYBOOK = `- Texto direto dentro da tag correta (sem code blocks).
 
 // ─── OUTPUT BLOCKS (section-specific instructions) ──────────────────────────
 
-const PLAYBOOK_ANNIVERSARY = `- Gere efeméride principal com base no aniversário manual.
-- Entrada: "Banda - Álbum" em raw_inputs.anniversary.
-- Use comment_anniversary como direção editorial.
-- Contexto histórico, recepção, impacto cultural.
-- Abertura: data e fato celebrado.
-- Mínimo 500 palavras.
-- Inclua links de catálogo quando possível.
-- Sem input: fallback honesto.`;
+const PLAYBOOK_ANNIVERSARY = `You are a research and content synthesis expert.
 
-const PLAYBOOK_REVIEW_RAFA = `- Review pesquisado e granular do disco selecionado.
-- Alvo: raw_inputs.review_rafa_release.
-- Use comment_review_rafa como briefing.
-- Mínimo 500 palavras.
-- Estrutura: gênero, recepção, curiosidades, tema.
-- Exige links de catálogo do release.
-- Sem release: fallback honesto.`;
+YOUR CORE MISSION:
+Take the anniversary album (artist + album from raw_inputs.anniversary) and create a deep, well-researched editorial section about this album's anniversary.
 
-const PLAYBOOK_NEWS = `- Transforme a notícia em matéria aprofundada.
-- Âncora: sources.news_items.
-- Use comment_news como enquadramento.
-- Uma matéria por dia.
-- Estrutura: título, subtítulo, o que aconteceu, envolvidos.
-- Mínimo 500 palavras.`;
+WORKFLOW:
+1. ANALYSIS: Identify the album, band, release year, and anniversary milestone.
+2. RESEARCH SYNTHESIS: Combine all available context to produce comprehensive coverage:
+   - Historical context: what was happening in the band's career and in the genre at the time
+   - Album reception: critical and fan reception when released
+   - Cultural impact: how this album influenced the genre, other bands, or the scene
+   - Legacy: how it is viewed today, reissues, live performances of tracks
+   - Curiosities: recording stories, lineup changes, production details
+3. Use comment_anniversary as editorial direction.
 
-const PLAYBOOK_REVIEW_KILTON = `- Análise aprofundada com contexto, expectativa e relevância.
-- Alvo: raw_inputs.review_kilton_release.
-- Use comment_review_kilton como ajuste.
-- Mínimo 500 palavras.
-- Estrutura: contextualização, expectativas, citações, relevância.
-- Exige links de catálogo.
-- Sem release: fallback honesto.`;
+OUTPUT RULES:
+- Write in Portuguese (BR), Heavynauta editorial voice.
+- ESL B1-equivalent clarity: simple grammar, common vocabulary, short sentences (10-18 words), clear connectors.
+- Do NOT copy from any source. Always paraphrase and synthesize.
+- Be objective, balanced, and respectful.
+- Opening: date and celebrated fact.
+- Minimum 500 words.
+- Include catalog links when possible.
+- Without input: honest fallback.`;
+
+const PLAYBOOK_REVIEW_RAFA = `You are a research and content synthesis expert.
+
+YOUR CORE MISSION:
+Take the target album (from raw_inputs.review_rafa_release) and create a deep, researched review.
+
+WORKFLOW:
+1. ANALYSIS: Identify album, artist, genre, release date.
+2. EXTENSIVE RESEARCH: Cross-reference multiple sources for:
+   - Main facts and data about the release
+   - Different opinions and perspectives from critics and fans
+   - Controversies or debates around the album
+   - Musical analysis: production, songwriting, themes
+   - Context within the band's discography
+   - Comparison with peers in the genre
+3. Use comment_review_rafa as editorial briefing.
+
+OUTPUT RULES:
+- Write in Portuguese (BR), Heavynauta editorial voice.
+- ESL B1-equivalent clarity: accessible but informed language.
+- Do NOT copy text. Always paraphrase and synthesize.
+- Be objective, balanced, and neutral in tone.
+- Structure: genre context, musical analysis, reception, curiosities, thematic depth.
+- Minimum 500 words.
+- Requires catalog links for the release.
+- Without release: honest fallback.`;
+
+const PLAYBOOK_NEWS = `You are a research and content synthesis expert.
+
+YOUR CORE MISSION:
+Take the news URLs from sources.news_items and transform each into a deep, well-researched editorial piece.
+
+WORKFLOW PER NEWS ITEM:
+1. URL ANALYSIS: Study the content carefully. Identify main topic, purpose, target audience, key messages.
+2. EXTENSIVE RESEARCH: From the main topic, search widely:
+   - Cross-check important facts across multiple sources
+   - Collect different opinions and perspectives
+   - Identify controversies or debates
+   - Find real-world context and examples
+   - Note future trends or expected developments
+3. Use comment_news as editorial framing.
+
+OUTPUT RULES:
+- Write in Portuguese (BR), Heavynauta editorial voice.
+- ESL B1-equivalent clarity: simple grammar, common vocabulary, short sentences.
+- Do NOT copy text from any source. Always paraphrase and synthesize.
+- Be objective, balanced, and neutral in tone.
+- Structure: título, subtítulo, o que aconteceu, quem está envolvido, contexto, impacto.
+- One story per day.
+- Minimum 500 words.`;
+
+const PLAYBOOK_REVIEW_KILTON = `You are a research and content synthesis expert.
+
+YOUR CORE MISSION:
+Take the target album (from raw_inputs.review_kilton_release) and create a deep, analytical review with context, expectation, and relevance.
+
+WORKFLOW:
+1. ANALYSIS: Identify album, artist, genre, release date, discography position.
+2. EXTENSIVE RESEARCH: Cross-reference multiple sources:
+   - Band history and previous work
+   - Pre-release expectations and hype
+   - Critical reception and fan response
+   - Musical and thematic analysis
+   - Relevance within the genre's current landscape
+   - Production credits and collaborations
+3. Use comment_review_kilton as editorial adjustment.
+
+OUTPUT RULES:
+- Write in Portuguese (BR), Heavynauta editorial voice.
+- ESL B1-equivalent clarity: accessible but informed language.
+- Do NOT copy text. Always paraphrase and synthesize.
+- Structure: contextualização, expectativas, análise musical, citações relevantes, relevância no cenário.
+- Minimum 500 words.
+- Requires catalog links.
+- Without release: honest fallback.`;
 
 const PLAYBOOK_NEXT_WEEK_RELEASES = `- Seção de sábado com destaques e demais lançamentos.
 - Pool: raw_inputs.weekly_release_pool.

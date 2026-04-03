@@ -5,16 +5,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare } from 'lucide-react';
+import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
+import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
 import { toast } from 'sonner';
 
-const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '' };
+const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '' };
 
 interface ImportSummary { valid: number; duplicates: number; invalid: number; errors: string[]; }
 
@@ -212,7 +214,7 @@ export default function Releases() {
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (r: Release) => {
-    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '' });
+    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '' });
     setEditingId(r.id); setDialogOpen(true);
   };
 
@@ -221,6 +223,12 @@ export default function Releases() {
       artist: form.artist, album: form.album, release_date: form.release_date,
       genres: form.genres.split(',').map(g => g.trim()).filter(Boolean),
       rating: form.rating, comments: form.comments,
+      youtube_url: form.youtube_url || null,
+      spotify_url: form.spotify_url || null,
+      deezer_url: form.deezer_url || null,
+      apple_music_url: form.apple_music_url || null,
+      bandcamp_url: form.bandcamp_url || null,
+      metal_archives_url: form.metal_archives_url || null,
     };
     if (editingId) updateRelease(editingId, data);
     else addRelease(data);
@@ -228,13 +236,20 @@ export default function Releases() {
   };
 
   const handleExport = (format: 'json' | 'csv') => {
-    const data = filtered;
+    const data = filtered.map(r => ({
+      ...r,
+      links: resolveAllLinks(r),
+      links_markdown: linksToMarkdown(r),
+    }));
     let content: string;
     let mime: string;
     let ext: string;
     if (format === 'csv') {
-      const header = 'artist,album,release_date,genres,rating,comments';
-      const rows = data.map(r => [r.artist, r.album, r.release_date, (r.genres || []).join(';'), r.rating || '', r.comments || ''].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      const header = 'artist,album,release_date,genres,rating,comments,youtube,spotify,deezer,apple_music,bandcamp,metal_archives';
+      const rows = data.map(r => {
+        const l = r.links;
+        return [r.artist, r.album, r.release_date, (r.genres || []).join(';'), r.rating || '', r.comments || '', l.youtube, l.spotify, l.deezer, l.apple_music, l.bandcamp, l.metal_archives].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+      });
       content = [header, ...rows].join('\n');
       mime = 'text/csv';
       ext = 'csv';
@@ -584,7 +599,18 @@ export default function Releases() {
                         <div className="flex gap-0.5">
                           {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
                         </div>
-                        {r.comments && <Badge variant="outline" className="text-[9px]">{r.comments}</Badge>}
+                        <div className="flex items-center gap-1">
+                          {(['youtube', 'spotify', 'metal_archives'] as const).map(p => {
+                            const link = resolveAllLinks(r)[p];
+                            return (
+                              <a key={p} href={link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                className="text-[9px] text-muted-foreground hover:text-primary transition-colors" title={PLATFORM_CONFIG[p].label}>
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            );
+                          })}
+                          {r.comments && <Badge variant="outline" className="text-[9px]">{r.comments}</Badge>}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -673,32 +699,65 @@ export default function Releases() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit/Create dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Editar Lançamento' : 'Novo Lançamento'}</DialogTitle>
             <DialogDescription>Preencha os dados do lançamento musical.</DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5"><Label>Artista</Label><Input value={form.artist} onChange={e => setForm(p => ({ ...p, artist: e.target.value }))} /></div>
-              <div className="space-y-1.5"><Label>Álbum</Label><Input value={form.album} onChange={e => setForm(p => ({ ...p, album: e.target.value }))} /></div>
-            </div>
-            <div className="space-y-1.5"><Label>Data de Lançamento</Label><Input type="date" value={form.release_date} onChange={e => setForm(p => ({ ...p, release_date: e.target.value }))} /></div>
-            <div className="space-y-1.5"><Label>Gêneros (separados por vírgula)</Label><Input value={form.genres} onChange={e => setForm(p => ({ ...p, genres: e.target.value }))} placeholder="Death Metal, Black Metal, Thrash" /></div>
-            <div className="space-y-1.5">
-              <Label>Rating ({form.rating}/5)</Label>
-              <div className="flex gap-1">
-                {[1,2,3,4,5].map(i => (
-                  <button key={i} type="button" onClick={() => setForm(p => ({ ...p, rating: i }))}>
-                    <Star className={`h-5 w-5 transition-colors ${i <= form.rating ? 'text-primary fill-primary' : 'text-muted-foreground/30 hover:text-primary/50'}`} />
-                  </button>
-                ))}
+          <Tabs defaultValue="info">
+            <TabsList className="w-full">
+              <TabsTrigger value="info" className="flex-1">Informações</TabsTrigger>
+              <TabsTrigger value="links" className="flex-1 gap-1"><Link2 className="h-3 w-3" /> Links</TabsTrigger>
+            </TabsList>
+            <TabsContent value="info" className="space-y-4 pt-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>Artista</Label><Input value={form.artist} onChange={e => setForm(p => ({ ...p, artist: e.target.value }))} /></div>
+                <div className="space-y-1.5"><Label>Álbum</Label><Input value={form.album} onChange={e => setForm(p => ({ ...p, album: e.target.value }))} /></div>
               </div>
-            </div>
-            <div className="space-y-1.5"><Label>Comentários</Label><Textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))} rows={3} /></div>
-          </div>
+              <div className="space-y-1.5"><Label>Data de Lançamento</Label><Input type="date" value={form.release_date} onChange={e => setForm(p => ({ ...p, release_date: e.target.value }))} /></div>
+              <div className="space-y-1.5"><Label>Gêneros (separados por vírgula)</Label><Input value={form.genres} onChange={e => setForm(p => ({ ...p, genres: e.target.value }))} placeholder="Death Metal, Black Metal, Thrash" /></div>
+              <div className="space-y-1.5">
+                <Label>Rating ({form.rating}/5)</Label>
+                <div className="flex gap-1">
+                  {[1,2,3,4,5].map(i => (
+                    <button key={i} type="button" onClick={() => setForm(p => ({ ...p, rating: i }))}>
+                      <Star className={`h-5 w-5 transition-colors ${i <= form.rating ? 'text-primary fill-primary' : 'text-muted-foreground/30 hover:text-primary/50'}`} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5"><Label>Comentários</Label><Textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))} rows={3} /></div>
+            </TabsContent>
+            <TabsContent value="links" className="space-y-4 pt-2">
+              <p className="text-xs text-muted-foreground">Links oficiais (override). Se vazio, será gerado automaticamente a partir de artista + álbum.</p>
+              {(Object.entries(PLATFORM_CONFIG) as [keyof PlatformLinks, typeof PLATFORM_CONFIG[keyof PlatformLinks]][]).map(([key, cfg]) => {
+                const fieldKey = `${key}_url` as keyof typeof form;
+                const dynamicLink = form.artist && form.album ? resolveAllLinks({ artist: form.artist, album: form.album })[key] : '';
+                return (
+                  <div key={key} className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-medium">{cfg.label}</Label>
+                      {dynamicLink && !form[fieldKey] && (
+                        <a href={dynamicLink} target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1">
+                          <ExternalLink className="h-3 w-3" /> Link dinâmico
+                        </a>
+                      )}
+                      {form[fieldKey] && (
+                        <Badge variant="secondary" className="text-[9px]">Override</Badge>
+                      )}
+                    </div>
+                    <Input
+                      value={form[fieldKey]}
+                      onChange={e => setForm(p => ({ ...p, [fieldKey]: e.target.value }))}
+                      placeholder={dynamicLink || `https://...`}
+                      className="text-xs h-8"
+                    />
+                  </div>
+                );
+              })}
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={!form.artist || !form.album}>{editingId ? 'Salvar' : 'Criar'}</Button>
