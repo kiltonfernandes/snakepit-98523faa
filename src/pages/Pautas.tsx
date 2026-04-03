@@ -1037,6 +1037,9 @@ export default function Pautas() {
                           <StatusBadge status={pauta.status} />
                         </div>
                         <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-6 w-6" title="Visualizar pauta" onClick={() => setPreviewPauta(pauta)}>
+                            <Eye className="h-3 w-3" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" title="Prompt completo" onClick={() => openPromptDialog(pauta)}>
                             <Sparkles className="h-3 w-3" />
                           </Button>
