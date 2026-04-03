@@ -584,7 +584,11 @@ export default function Pautas() {
         <div className="flex gap-2 flex-wrap">
           {weeks.map(w => (
             <Button key={w.id} variant={selectedWeek?.id === w.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(w.id)}>
-              {new Date(w.start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+              {(() => {
+                const mon = new Date(w.start_date + 'T12:00:00');
+                const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+                return `Semana ${format(mon, 'dd.MM')} a ${format(sun, 'dd.MM')}`;
+              })()}
               <StatusBadge status={w.status} className="ml-2 text-[10px]" />
             </Button>
           ))}
