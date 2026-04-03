@@ -316,6 +316,33 @@ export default function Settings() {
           setPromptManagerOpen(false);
         }}
       />
+
+      <Dialog open={descTemplateOpen} onOpenChange={setDescTemplateOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Template de Descrição Fixa</DialogTitle>
+            <DialogDescription>
+              Cole aqui o HTML base para as descrições dos episódios.<br />
+              Use <code className="bg-muted px-1 rounded text-xs">{'<<<title>>>'}</code> onde o título do episódio deve aparecer.<br />
+              Use <code className="bg-muted px-1 rounded text-xs">{'<<<generated content>>>'}</code> onde o conteúdo gerado por IA deve ser inserido.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            className="min-h-[300px] font-mono text-xs"
+            placeholder="<p><b><<<title>>></b></p>\n<p><<<generated content>>></p>\n<p>Ouça no Spotify...</p>"
+            value={descTemplateValue}
+            onChange={e => setDescTemplateValue(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDescTemplateOpen(false)}>Cancelar</Button>
+            <Button onClick={() => {
+              updateSettings({ description_template_html: descTemplateValue });
+              setDescTemplateOpen(false);
+              toast.success('Template de descrição salvo');
+            }}>Salvar Template</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
