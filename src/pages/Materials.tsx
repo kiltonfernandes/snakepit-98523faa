@@ -55,7 +55,7 @@ function extractSseText(raw: string): string {
 }
 
 export default function Materials() {
-  const { weeks, materials, pautas, releases, settings, getMaterialsForWeek, getPautasForWeek, updateMaterial } = useApp();
+  const { weeks, materials, pautas, releases, settings, getMaterialsForWeek, getPautasForWeek, updateMaterial, dataReady } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
@@ -67,7 +67,10 @@ export default function Materials() {
   const [generatingAllTitles, setGeneratingAllTitles] = useState(false);
   const [generatingAllDescriptions, setGeneratingAllDescriptions] = useState(false);
 
-  const selectedWeek = weeks.find((w) => w.id === selectedWeekId) || weeks[0];
+  // Default to the latest week that has pautas
+  const selectedWeek = weeks.find((w) => w.id === selectedWeekId)
+    || weeks.find((w) => pautas.some((p) => p.week_id === w.id))
+    || weeks[0];
   const weekMaterials = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
   const promptOverrides = (settings.prompt_overrides_json || {}) as Record<string, string>;
@@ -77,7 +80,20 @@ export default function Materials() {
 
     setRepairing(true);
     try {
-      const existing = new Set(weekMaterials.map((m) => m.slot_key));
+      // Check DB directly to avoid race conditions with local state
+      const { data: dbMaterials, error: fetchError } = await supabase
+        .from('episode_materials' as any)
+        .select('slot_key')
+        .eq('week_id', selectedWeek.id);
+
+      if (fetchError) {
+        console.error('[repairMaterials] fetch error:', fetchError);
+        toast.error(`Erro ao verificar materiais: ${fetchError.message}`);
+        setRepairing(false);
+        return;
+      }
+
+      const existing = new Set((dbMaterials as any[])?.map((m: any) => m.slot_key) || []);
       const weekPautasList = getPautasForWeek(selectedWeek.id);
       const newMaterials: EpisodeMaterial[] = [];
 
@@ -128,6 +144,12 @@ export default function Materials() {
         return;
       }
 
+      // Materials exist in DB but not in local state — just reload
+      if ((dbMaterials as any[])?.length > 0 && weekMaterials.length === 0) {
+        window.location.reload();
+        return;
+      }
+
       toast.success('Nenhum reparo necessário');
     } catch (err: any) {
       console.error('[repairMaterials] error:', err);
@@ -138,10 +160,10 @@ export default function Materials() {
   };
 
   useEffect(() => {
-    if (selectedWeek && weekPautas.length > 0 && weekMaterials.length === 0 && !repairing) {
+    if (dataReady && selectedWeek && weekPautas.length > 0 && weekMaterials.length === 0 && !repairing) {
       repairMaterials();
     }
-  }, [selectedWeek?.id, weekPautas.length, weekMaterials.length, repairing]);
+  }, [selectedWeek?.id, weekPautas.length, weekMaterials.length, repairing, dataReady]);
 
   const getTitleOptions = (mat: EpisodeMaterial) => (Array.isArray(mat.title_options_json) ? (mat.title_options_json as TitleOption[]) : []);
 
@@ -872,6 +894,26 @@ export default function Materials() {
     if (count >= 1) return 'bg-secondary';
     return 'bg-muted-foreground';
   };
+
+  if (!dataReady) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Palette className="h-6 w-6 text-primary" />
+            Materiais
+          </h1>
+          <p className="mt-1 text-muted-foreground">Títulos, descrições e capas dos episódios</p>
+        </div>
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="mb-4 h-12 w-12 text-muted-foreground/30 animate-spin" />
+            <p className="text-muted-foreground">Carregando dados...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (weeks.length === 0) {
     return (

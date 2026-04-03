@@ -11,6 +11,8 @@ interface ActivityEntry {
 }
 
 interface AppContextType {
+  dataReady: boolean;
+  loadMaterialCover: (id: string) => Promise<string | null>;
   releases: Release[];
   weeks: EditorialWeek[];
   pautas: Pauta[];
@@ -62,6 +64,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [materials, setMaterials] = useState<EpisodeMaterial[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [activityLog, setActivityLog] = useState<ActivityEntry[]>([]);
+  const [dataReady, setDataReady] = useState(false);
 
   const loadReleases = useCallback(async () => {
     const { data: relData } = await supabase.from('releases' as any).select('*').order('release_date', { ascending: false });
@@ -102,9 +105,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadMaterials = useCallback(async () => {
-    const { data, error } = await supabase.from('episode_materials' as any).select('*');
+    // Exclude cover_url from initial load — it can be multi-MB base64 and causes timeouts
+    const { data, error } = await supabase
+      .from('episode_materials' as any)
+      .select('id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,created_at,updated_at');
     if (error) console.error('[loadMaterials] error:', error.message);
-    if (data) setMaterials(data as any[]);
+    if (data) {
+      // Preserve any cover_url already in local state (loaded on demand)
+      setMaterials(prev => {
+        const coverMap = new Map(prev.filter(m => m.cover_url).map(m => [m.id, m.cover_url]));
+        return (data as any[]).map((m: any) => ({ ...m, cover_url: coverMap.get(m.id) || null }));
+      });
+    }
   }, []);
 
   const loadSettings = useCallback(async () => {
@@ -122,12 +134,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    loadReleases();
-    loadWeeks();
-    loadPautas();
-    loadMaterials();
-    loadSettings();
-    loadActivityLog();
+    Promise.all([loadReleases(), loadWeeks(), loadPautas(), loadMaterials(), loadSettings(), loadActivityLog()])
+      .finally(() => setDataReady(true));
   }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings, loadActivityLog]);
 
   // Auto-recalc week statuses after initial load
@@ -323,6 +331,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const getMaterialsForWeek = useCallback((weekId: string) => materials.filter(m => m.week_id === weekId), [materials]);
 
+  const loadMaterialCover = useCallback(async (id: string): Promise<string | null> => {
+    // Check local state first
+    const local = materials.find(m => m.id === id);
+    if (local?.cover_url) return local.cover_url;
+    // Fetch from DB
+    const { data } = await supabase
+      .from('episode_materials' as any)
+      .select('cover_url')
+      .eq('id', id)
+      .single();
+    const coverUrl = (data as any)?.cover_url || null;
+    if (coverUrl) {
+      setMaterials(prev => prev.map(m => m.id === id ? { ...m, cover_url: coverUrl } : m));
+    }
+    return coverUrl;
+  }, [materials]);
+
   const updateSettings = useCallback((s: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...s }));
     supabase.from('app_settings' as any).update(s as any).eq('singleton_id', 1).then();
@@ -386,11 +411,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AppContext.Provider value={{
+      dataReady,
       releases, weeks, pautas, materials, settings, activityLog,
       addRelease, updateRelease, deleteRelease,
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
       updatePauta, getPautasForWeek,
-      updateMaterial, getMaterialsForWeek,
+      updateMaterial, getMaterialsForWeek, loadMaterialCover,
       updateSettings, logActivity, importReleases, loadReleases,
       savePromptSession,
     }}>
