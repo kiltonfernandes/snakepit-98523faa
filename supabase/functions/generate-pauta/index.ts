@@ -12,13 +12,19 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt } = await req.json();
+    const body = await req.json();
+    const { prompt, bannedTerms } = body;
     if (!prompt || typeof prompt !== "string") {
       return new Response(JSON.stringify({ error: "prompt is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    const bannedList = Array.isArray(bannedTerms) && bannedTerms.length > 0 ? bannedTerms : [];
+    const bannedInstruction = bannedList.length > 0
+      ? `\n\nREGRA ABSOLUTA: NUNCA use nenhum destes termos no seu texto, nem variações deles: ${bannedList.join(', ')}. Se encontrar um desses termos no contexto fornecido, substitua por um sinônimo adequado.`
+      : '';
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -39,7 +45,7 @@ serve(async (req) => {
             {
               role: "system",
               content:
-                "Você é um redator especialista em música pesada (heavy metal, rock, punk, etc). Siga rigorosamente o contrato de resposta descrito no prompt do usuário. Responda sempre em português brasileiro.",
+                "Você é um redator especialista em música pesada (heavy metal, rock, punk, etc). Siga rigorosamente o contrato de resposta descrito no prompt do usuário. Responda sempre em português brasileiro." + bannedInstruction,
             },
             { role: "user", content: prompt },
           ],

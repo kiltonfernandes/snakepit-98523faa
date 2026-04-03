@@ -176,7 +176,7 @@ export default function Materials() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
       },
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify({ prompt, bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [] }),
     });
 
     if (!response.ok) {
@@ -443,8 +443,8 @@ export default function Materials() {
     const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
     const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
 
-    if (anniversary) return `${anniversary} album cover band`;
-    if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} album cover`;
+    if (anniversary) return `${anniversary} band promo`;
+    if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} band promo`;
 
     const textPool = [
       selectedTitle,
@@ -556,72 +556,106 @@ export default function Materials() {
     };
 
     const drawCoverImage = (img: HTMLImageElement) => {
-      const safeMargin = 110;
-      const targetX = safeMargin;
-      const targetY = safeMargin;
-      const targetW = SIZE - safeMargin * 2;
-      const targetH = 1660;
-      const imageRatio = img.width / img.height;
-      const targetRatio = targetW / targetH;
+      // Image takes up ~65% of vertical space, with a subtle frame
+      const frameMargin = 80;
+      const frameTop = 40;
+      const imageAreaW = SIZE - frameMargin * 2;
+      const imageAreaH = Math.round(SIZE * 0.62);
 
-      let drawWidth = targetW;
-      let drawHeight = targetH;
-      let offsetX = targetX;
-      let offsetY = targetY;
+      // Draw dark border/frame lines (like the reference covers)
+      ctx.strokeStyle = 'rgba(200, 200, 200, 0.15)';
+      ctx.lineWidth = 3;
+      // Hexagonal/angular clip path inspired by reference
+      const clipInset = 30;
+      const cornerCut = 60;
+      ctx.beginPath();
+      ctx.moveTo(frameMargin + cornerCut, frameTop + clipInset);
+      ctx.lineTo(SIZE - frameMargin - cornerCut, frameTop + clipInset);
+      ctx.lineTo(SIZE - frameMargin - clipInset, frameTop + cornerCut);
+      ctx.lineTo(SIZE - frameMargin - clipInset, frameTop + imageAreaH - cornerCut);
+      ctx.lineTo(SIZE - frameMargin - cornerCut, frameTop + imageAreaH - clipInset);
+      ctx.lineTo(frameMargin + cornerCut, frameTop + imageAreaH - clipInset);
+      ctx.lineTo(frameMargin + clipInset, frameTop + imageAreaH - cornerCut);
+      ctx.lineTo(frameMargin + clipInset, frameTop + cornerCut);
+      ctx.closePath();
+      ctx.stroke();
+
+      // Clip image to the angular frame
+      ctx.save();
+      ctx.clip();
+
+      const imageRatio = img.width / img.height;
+      const targetRatio = imageAreaW / imageAreaH;
+      let drawWidth = imageAreaW;
+      let drawHeight = imageAreaH;
+      let offsetX = frameMargin;
+      let offsetY = frameTop;
 
       if (imageRatio > targetRatio) {
-        drawHeight = targetH;
+        drawHeight = imageAreaH;
         drawWidth = drawHeight * imageRatio;
-        offsetX = targetX - (drawWidth - targetW) / 2;
+        offsetX = frameMargin - (drawWidth - imageAreaW) / 2;
       } else {
-        drawWidth = targetW;
+        drawWidth = imageAreaW;
         drawHeight = drawWidth / imageRatio;
-        offsetY = targetY - (drawHeight - targetH) / 2;
+        offsetY = frameTop - (drawHeight - imageAreaH) / 2;
       }
 
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(targetX, targetY, targetW, targetH);
-      ctx.clip();
       ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
       ctx.restore();
     };
 
     const drawOverlay = () => {
       const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
+      const imageAreaH = Math.round(SIZE * 0.62);
+      const panelTop = imageAreaH + 80;
 
-      const panelY = 1760;
-      ctx.fillStyle = 'rgba(20, 10, 35, 0.92)';
-      ctx.fillRect(0, panelY, SIZE, SIZE - panelY);
+      // Gradient fade from image to panel
+      const grad = ctx.createLinearGradient(0, panelTop - 200, 0, panelTop + 100);
+      grad.addColorStop(0, 'rgba(26, 14, 46, 0)');
+      grad.addColorStop(1, 'rgba(26, 14, 46, 0.98)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, panelTop - 200, SIZE, 400);
 
-      const gradient = ctx.createLinearGradient(0, 1500, 0, 2100);
-      gradient.addColorStop(0, 'rgba(26, 14, 46, 0)');
-      gradient.addColorStop(1, 'rgba(26, 14, 46, 0.95)');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 1400, SIZE, 700);
+      // Solid panel below
+      ctx.fillStyle = 'rgba(220, 210, 230, 0.95)';
+      ctx.fillRect(0, panelTop + 100, SIZE, SIZE - panelTop - 100);
 
-      ctx.fillStyle = '#3a3a3a';
-      ctx.fillRect(0, 1810, SIZE, 16);
+      // Grey horizontal bar (like reference)
+      ctx.fillStyle = '#8a8a8a';
+      ctx.fillRect(0, panelTop + 100, SIZE, 20);
 
+      // "Heavynauta" label with purple highlight background
+      const labelY = panelTop + 200;
       ctx.fillStyle = '#C8A2C8';
-      ctx.font = 'bold 78px sans-serif';
-      ctx.fillText('Heavynauta', 140, 1980);
+      ctx.fillRect(100, labelY - 60, 620, 90);
+      ctx.fillStyle = '#1a0e2e';
+      ctx.font = 'bold 72px sans-serif';
+      ctx.fillText('Heavynauta', 120, labelY + 8);
 
-      ctx.fillStyle = '#e8d5f5';
-      ctx.font = 'bold 108px sans-serif';
-      drawWrappedText(ctx, title, 140, 2180, 2350, 128, 4);
+      // Title in bold purple
+      ctx.fillStyle = '#4a1a7a';
+      ctx.font = 'bold 100px sans-serif';
+      drawWrappedText(ctx, title, 100, panelTop + 420, 2100, 120, 3);
 
-      ctx.fillStyle = '#8a7a9a';
-      ctx.font = '62px sans-serif';
-      ctx.fillText('Papo Sério Sobre Música Pesada', 140, 2650);
+      // Accent bar under title
+      ctx.fillStyle = '#4a1a4a';
+      ctx.fillRect(100, panelTop + 780, 1200, 12);
 
-      ctx.fillStyle = '#7c3aed';
-      ctx.fillRect(80, 1900, 8, 780);
+      // Tagline
+      ctx.fillStyle = '#3a2a4a';
+      ctx.font = 'italic 58px sans-serif';
+      ctx.fillText('Papo Sério Sobre Música Pesada', 100 + 800, panelTop + 870);
 
+      // Purple side accent
+      ctx.fillStyle = '#4a1a5e';
+      ctx.fillRect(0, panelTop + 100, 16, SIZE - panelTop - 100);
+
+      // Logo in bottom-right
       const logo = new window.Image();
       logo.onload = () => {
-        const logoSize = 400;
-        ctx.drawImage(logo, SIZE - logoSize - 100, SIZE - logoSize - 100, logoSize, logoSize);
+        const logoSize = 420;
+        ctx.drawImage(logo, SIZE - logoSize - 100, SIZE - logoSize - 80, logoSize, logoSize);
         exportCover();
       };
       logo.onerror = () => exportCover();
