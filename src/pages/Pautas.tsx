@@ -1341,7 +1341,7 @@ export default function Pautas() {
 
       {/* Pauta Preview Dialog */}
       <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
           <DialogHeader className="sr-only">
             <DialogTitle>Visualização da Pauta</DialogTitle>
             <DialogDescription>Preview da pauta para gravação</DialogDescription>
@@ -1357,101 +1357,110 @@ export default function Pautas() {
             const OUTRO_SEGWAY = `Kilton: Nossa nave espacial está se preparando para levantar voo e partir por hoje. Muito obrigado por nos acompanhar nessa jornada pelo universo do heavy metal.\n\nRafa: E não se esqueçam, heavynautas! Estamos de volta amanhã com mais novidades do mundo do metal. O Snakepit vai ao ar todos os dias, de segunda a sexta as 6 da manhã. Desejo a todos uma ótima noite e até a nossa próxima viagem!`;
 
             return (
-              <div className="space-y-8 p-4">
-                {/* Header */}
-                <div className="text-center border-b border-white/20 pb-6">
-                  <h2 className="text-2xl font-bold tracking-tight text-white m-0">🐍 SNAKEPIT</h2>
-                  <p className="text-white/60 text-base m-0 mt-2">
+              <div className="space-y-10 p-4">
+                <header className="border-b border-white/20 pb-6 text-center">
+                  <h1 className="m-0 text-3xl font-bold tracking-tight text-white">🐍 SNAKEPIT</h1>
+                  <h2 className="mt-3 text-xl font-semibold text-white/80">
                     {dayInfo?.label} — {new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
-                  </p>
-                </div>
+                  </h2>
+                  <p className="mt-2 text-sm text-white/50">Roteiro organizado por blocos editoriais para facilitar a gravação.</p>
+                </header>
 
-                {/* Intro Segway */}
-                <div className="border-l-4 border-primary pl-4">
-                  <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">ABERTURA</p>
-                  <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{INTRO_SEGWAY}</p>
-                </div>
+                <section className="space-y-3">
+                  <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Abertura</h2>
+                  <div className="border-l-4 border-primary pl-4">
+                    <p className="text-lg leading-relaxed whitespace-pre-wrap text-white/90">{INTRO_SEGWAY}</p>
+                  </div>
+                </section>
 
-                {/* Sections */}
-                {sections.map((sec, idx) => {
-                  const content = data[sec.key]?.trim();
-                  let contextNote = '';
-                  let quickLinks: { youtube: string; spotify: string; deezer: string; metal_archives: string } | null = null;
+                <section className="space-y-6">
+                  <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Blocos do episódio</h2>
+                  {sections.map((sec, idx) => {
+                    const content = data[sec.key]?.trim();
+                    let contextNote = '';
+                    let quickLinks: { youtube: string; spotify: string; deezer: string; metal_archives: string } | null = null;
 
-                  if (sec.key === 'anniversary') {
-                    contextNote = inputs.anniversary ? `📅 ${inputs.anniversary}` : '';
-                    // Parse "Artist - Album" or just "Artist" from anniversary text
-                    if (inputs.anniversary) {
-                      const parts = inputs.anniversary.split(/\s*[-–—]\s*/);
-                      const artist = parts[0]?.trim() || inputs.anniversary;
-                      const album = parts[1]?.trim() || '';
-                      const links = resolveAllLinks({ artist, album: album || artist });
-                      quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                    if (sec.key === 'anniversary') {
+                      contextNote = inputs.anniversary ? `📅 ${inputs.anniversary}` : '';
+                      if (inputs.anniversary) {
+                        const parts = inputs.anniversary.split(/\s*[-–—]\s*/);
+                        const artist = parts[0]?.trim() || inputs.anniversary;
+                        const album = parts[1]?.trim() || '';
+                        const links = resolveAllLinks({ artist, album: album || artist });
+                        quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                      }
                     }
-                  }
-                  if (sec.key === 'review_rafa') {
-                    const rel = releases.find(r => r.id === inputs.review_rafa_id);
-                    contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
-                    if (rel) {
-                      const links = resolveAllLinks(rel);
-                      quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                    if (sec.key === 'review_rafa') {
+                      const rel = releases.find(r => r.id === inputs.review_rafa_id);
+                      contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
+                      if (rel) {
+                        const links = resolveAllLinks(rel);
+                        quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                      }
                     }
-                  }
-                  if (sec.key === 'review_kilton') {
-                    const rel = releases.find(r => r.id === inputs.review_kilton_id);
-                    contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
-                    if (rel) {
-                      const links = resolveAllLinks(rel);
-                      quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                    if (sec.key === 'review_kilton') {
+                      const rel = releases.find(r => r.id === inputs.review_kilton_id);
+                      contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
+                      if (rel) {
+                        const links = resolveAllLinks(rel);
+                        quickLinks = { youtube: links.youtube, spotify: links.spotify, deezer: links.deezer, metal_archives: links.metal_archives };
+                      }
                     }
-                  }
-                  if (sec.key === 'news') contextNote = inputs.news_link ? `🔗 ${inputs.news_link}` : '';
+                    if (sec.key === 'news') contextNote = inputs.news_link ? `🔗 ${inputs.news_link}` : '';
 
-                  return (
-                    <div key={sec.key} className={idx > 0 ? 'border-t border-white/10 pt-6' : ''}>
-                      <h3 className="text-lg font-bold uppercase tracking-wider text-primary m-0 mb-3">
-                        {sec.label}
-                      </h3>
-                      {contextNote && (
-                        <p className="text-sm text-white/50 italic m-0 mb-3">{contextNote}</p>
-                      )}
-                      {content ? (
-                        <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
-                      ) : (
-                        <p className="text-base text-white/30 italic">Seção não preenchida</p>
-                      )}
-                      {quickLinks && (
-                        <div className="flex items-center gap-2 mt-3 pt-2 border-t border-white/5">
-                          <span className="text-[10px] text-white/30 uppercase tracking-wider font-semibold">Links rápidos:</span>
-                          {([
-                            { key: 'youtube', label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
-                            { key: 'spotify', label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
-                            { key: 'deezer', label: 'Deezer', color: 'text-purple-400 hover:text-purple-300' },
-                            { key: 'metal_archives', label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300' },
-                          ] as const).map((p, i, arr) => (
-                            <span key={p.key} className="flex items-center gap-1">
-                              <a href={quickLinks![p.key]} target="_blank" rel="noopener noreferrer"
-                                className={`text-xs font-medium transition-colors ${p.color}`}>
-                                {p.label}
-                              </a>
-                              {i < arr.length - 1 && <span className="text-white/20">|</span>}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                    return (
+                      <article key={sec.key} className={idx > 0 ? 'border-t border-white/10 pt-6' : ''}>
+                        <h3 className="mb-3 text-lg font-bold uppercase tracking-wider text-white">
+                          {sec.label}
+                        </h3>
+                        {contextNote && (
+                          <h4 className="mb-3 text-sm font-medium italic text-white/55">{contextNote}</h4>
+                        )}
+                        {content ? (
+                          <div className="text-lg leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
+                        ) : (
+                          <p className="text-lg italic text-white/30">Seção não preenchida</p>
+                        )}
+                        {quickLinks && (
+                          <div className="mt-4 border-t border-white/5 pt-3">
+                            <h4 className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/40">Links rápidos</h4>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {([
+                                { key: 'youtube', label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
+                                { key: 'spotify', label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
+                                { key: 'deezer', label: 'Deezer', color: 'text-purple-400 hover:text-purple-300' },
+                                { key: 'metal_archives', label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300' },
+                              ] as const).map((platform, i, arr) => (
+                                <span key={platform.key} className="flex items-center gap-1">
+                                  <a
+                                    href={quickLinks![platform.key]}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className={`text-sm font-medium transition-colors ${platform.color}`}
+                                  >
+                                    {platform.label}
+                                  </a>
+                                  {i < arr.length - 1 && <span className="text-white/20">|</span>}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    );
+                  })}
+                </section>
 
-                {/* Outro Segway */}
-                <div className="border-l-4 border-primary pl-4 border-t border-white/10 pt-6">
-                  <p className="text-xs font-bold uppercase tracking-widest text-primary mb-2">ENCERRAMENTO</p>
-                  <p className="text-base leading-relaxed text-white/90 whitespace-pre-wrap">{OUTRO_SEGWAY}</p>
-                </div>
+                <section className="space-y-3 border-t border-white/10 pt-6">
+                  <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Encerramento</h2>
+                  <div className="border-l-4 border-primary pl-4">
+                    <p className="text-lg leading-relaxed whitespace-pre-wrap text-white/90">{OUTRO_SEGWAY}</p>
+                  </div>
+                </section>
 
-                <div className="border-t border-white/10 pt-4 text-center">
-                  <p className="text-xs text-white/40 m-0">Status: {previewPauta.status}</p>
-                </div>
+                <footer className="border-t border-white/10 pt-4 text-center">
+                  <p className="m-0 text-xs text-white/40">Status: {previewPauta.status}</p>
+                </footer>
               </div>
             );
           })()}
@@ -1461,7 +1470,23 @@ export default function Pautas() {
               const slot = getPautaSlot(previewPauta);
               const sections = getSectionsForDay(slot);
               const data = (previewPauta.sections_json || {}) as Record<string, string>;
-              const text = sections.map(s => `## ${s.label}\n\n${data[s.key]?.trim() || 'N/A'}`).join('\n\n---\n\n');
+              const inputs = getRawInputs(previewPauta);
+              const text = [
+                '# SNAKEPIT',
+                `## ${new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}`,
+                '',
+                '## Abertura',
+                INTRO_SEGWAY,
+                '',
+                '## Blocos do episódio',
+                ...sections.flatMap((section) => {
+                  const lines = [`### ${section.label}`, data[section.key]?.trim() || 'N/A'];
+                  if (section.key === 'anniversary' && inputs.anniversary) lines.splice(1, 0, `#### Contexto\n${inputs.anniversary}`);
+                  return [...lines, ''];
+                }),
+                '## Encerramento',
+                OUTRO_SEGWAY,
+              ].join('\n');
               navigator.clipboard.writeText(text);
               toast.success('Conteúdo copiado');
             }}>
