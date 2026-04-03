@@ -76,53 +76,65 @@ export default function Materials() {
     if (!selectedWeek) return;
 
     setRepairing(true);
-    const existing = new Set(weekMaterials.map((m) => m.slot_key));
-    const weekPautasList = getPautasForWeek(selectedWeek.id);
-    const newMaterials: EpisodeMaterial[] = [];
+    try {
+      const existing = new Set(weekMaterials.map((m) => m.slot_key));
+      const weekPautasList = getPautasForWeek(selectedWeek.id);
+      const newMaterials: EpisodeMaterial[] = [];
 
-    for (let i = 0; i < DAY_SLOTS.length; i++) {
-      const slot = DAY_SLOTS[i];
-      if (existing.has(slot.key)) continue;
+      for (let i = 0; i < DAY_SLOTS.length; i++) {
+        const slot = DAY_SLOTS[i];
+        if (existing.has(slot.key)) continue;
 
-      const epDate = new Date(selectedWeek.start_date);
-      epDate.setDate(epDate.getDate() + i);
-      const dateStr = epDate.toISOString().slice(0, 10);
+        const epDate = new Date(selectedWeek.start_date);
+        epDate.setDate(epDate.getDate() + i);
+        const dateStr = epDate.toISOString().slice(0, 10);
 
-      const pauta =
-        weekPautasList.find((p) => p.publication_date === dateStr) ||
-        weekPautasList.find((p) => {
-          const d = new Date(`${p.publication_date}T12:00:00`);
-          const wd = d.getDay();
-          const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
-          return slotMap[wd] === slot.key;
-        }) ||
-        null;
+        const pauta =
+          weekPautasList.find((p) => p.publication_date === dateStr) ||
+          weekPautasList.find((p) => {
+            const d = new Date(`${p.publication_date}T12:00:00`);
+            const wd = d.getDay();
+            const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+            return slotMap[wd] === slot.key;
+          }) ||
+          null;
 
-      newMaterials.push({
-        id: crypto.randomUUID(),
-        week_id: selectedWeek.id,
-        slot_key: slot.key,
-        episode_date: dateStr,
-        source_pauta_id: pauta?.id || null,
-        title_options_json: [],
-        selected_title_index: null,
-        description_html: null,
-        cover_url: null,
-        spotify_link: null,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      });
+        newMaterials.push({
+          id: crypto.randomUUID(),
+          week_id: selectedWeek.id,
+          slot_key: slot.key,
+          episode_date: dateStr,
+          source_pauta_id: pauta?.id || null,
+          title_options_json: [],
+          selected_title_index: null,
+          description_html: null,
+          cover_url: null,
+          spotify_link: null,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
+
+      if (newMaterials.length > 0) {
+        const { error } = await supabase.from('episode_materials' as any).insert(newMaterials as any);
+        if (error) {
+          console.error('[repairMaterials] insert error:', error);
+          toast.error(`Erro ao criar materiais: ${error.message}`);
+          setRepairing(false);
+          return;
+        }
+        toast.success(`${newMaterials.length} materiais criados`);
+        window.location.reload();
+        return;
+      }
+
+      toast.success('Nenhum reparo necessário');
+    } catch (err: any) {
+      console.error('[repairMaterials] error:', err);
+      toast.error(err.message || 'Erro ao criar materiais');
+    } finally {
+      setRepairing(false);
     }
-
-    if (newMaterials.length > 0) {
-      await supabase.from('episode_materials' as any).insert(newMaterials as any);
-      toast.success(`${newMaterials.length} materiais recriados`);
-      window.location.reload();
-      return;
-    }
-
-    toast.success('Nenhum reparo necessário');
-    setRepairing(false);
   };
 
   useEffect(() => {
