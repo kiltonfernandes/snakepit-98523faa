@@ -33,12 +33,48 @@ function getPautaSlot(pauta: Pauta): DaySlot {
 
 function getEligibleReviews(releases: Release[], publicationDate: string): Release[] {
   const pub = new Date(publicationDate + 'T12:00:00');
-  const dMinus30 = new Date(pub); dMinus30.setDate(pub.getDate() - 30);
-  const dMinus1 = new Date(pub); dMinus1.setDate(pub.getDate() - 1);
+  const dPlus1 = new Date(pub); dPlus1.setDate(pub.getDate() + 1);
   return releases.filter(r => {
     const rd = new Date(r.release_date + 'T12:00:00');
-    return rd >= dMinus30 && rd <= dMinus1;
+    return rd >= dPlus1;
   });
+}
+
+function getISOWeekLabel(dateStr: string): string {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dayOfWeek = d.getDay();
+  const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return `${format(monday, 'dd/MM')} – ${format(sunday, 'dd/MM')}`;
+}
+
+function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; genres: { genre: string; releases: Release[] }[] }[] {
+  const weekMap = new Map<string, Release[]>();
+  for (const r of releases) {
+    const label = getISOWeekLabel(r.release_date);
+    if (!weekMap.has(label)) weekMap.set(label, []);
+    weekMap.get(label)!.push(r);
+  }
+  const result: { weekLabel: string; genres: { genre: string; releases: Release[] }[] }[] = [];
+  for (const [weekLabel, rels] of weekMap) {
+    const genreMap = new Map<string, Release[]>();
+    for (const r of rels) {
+      const genres = r.genres && r.genres.length > 0 ? r.genres : ['Sem gênero'];
+      for (const g of genres) {
+        if (!genreMap.has(g)) genreMap.set(g, []);
+        genreMap.get(g)!.push(r);
+      }
+    }
+    const genres = Array.from(genreMap.entries())
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => a.artist.localeCompare(b.artist)) }));
+    result.push({ weekLabel, genres });
+  }
+  result.sort((a, b) => a.weekLabel.localeCompare(b.weekLabel));
+  return result;
 }
 
 function getEligibleSaturdayReleases(releases: Release[], publicationDate: string): Release[] {
