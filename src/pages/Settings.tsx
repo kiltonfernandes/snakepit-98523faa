@@ -30,6 +30,8 @@ export default function Settings() {
   const [logSearch, setLogSearch] = useState('');
   const [logFilter, setLogFilter] = useState<string>('all');
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
+  const [descTemplateOpen, setDescTemplateOpen] = useState(false);
+  const [descTemplateValue, setDescTemplateValue] = useState('');
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
