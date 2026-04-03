@@ -654,8 +654,8 @@ export default function Materials() {
       // Logo in bottom-right
       const logo = new window.Image();
       logo.onload = () => {
-        const logoSize = 420;
-        ctx.drawImage(logo, SIZE - logoSize - 100, SIZE - logoSize - 80, logoSize, logoSize);
+        const logoSize = 580;
+        ctx.drawImage(logo, SIZE - logoSize - 80, SIZE - logoSize - 60, logoSize, logoSize);
         exportCover();
       };
       logo.onerror = () => exportCover();
@@ -1109,8 +1109,9 @@ export default function Materials() {
             </Button>
             {coverPreview && (
               <div className="space-y-2">
-                <Label>Capa Gerada</Label>
-                <img src={coverPreview} alt="Capa final" className="mx-auto aspect-square w-full max-w-[300px] rounded-md" />
+                <Label>Preview da Capa</Label>
+                <img src={coverPreview} alt="Capa final" className="mx-auto aspect-square w-full rounded-lg border border-border shadow-md" />
+                <p className="text-center text-xs text-muted-foreground">3000 × 3000 px • PNG</p>
               </div>
             )}
           </div>
