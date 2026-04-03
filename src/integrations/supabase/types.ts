@@ -50,6 +50,7 @@ export type Database = {
           brand_tone_temperature: number
           default_export_container: string
           default_export_layout: string
+          description_template_html: string
           prompt_overrides_json: Json
           singleton_id: number
           theme_name: string
@@ -59,6 +60,7 @@ export type Database = {
           brand_tone_temperature?: number
           default_export_container?: string
           default_export_layout?: string
+          description_template_html?: string
           prompt_overrides_json?: Json
           singleton_id?: number
           theme_name?: string
@@ -68,6 +70,7 @@ export type Database = {
           brand_tone_temperature?: number
           default_export_container?: string
           default_export_layout?: string
+          description_template_html?: string
           prompt_overrides_json?: Json
           singleton_id?: number
           theme_name?: string

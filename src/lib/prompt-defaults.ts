@@ -20,7 +20,6 @@ NÃO invente tags extras.
 Siga a identidade editorial Heavynauta.
 Nunca invente fatos, datas, quotes ou créditos.
 Se faltar insumo, use fallback honesto.
-Seções densas: mínimo 500 palavras.
 Intro/Outro são locais — NÃO entram no contrato.`;
 
 const BRAND_VOICE = `Público: Comunidade metal brasileira.
@@ -67,7 +66,7 @@ REGRAS DE SAÍDA:
 - NÃO copie de nenhuma fonte. Sempre parafraseie e sintetize.
 - Seja objetivo, equilibrado e respeitoso.
 - Abertura: data e fato celebrado.
-- Mínimo 500 palavras.
+- Aproximadamente 200 palavras.
 - Inclua links de catálogo quando possível.
 - Sem input: fallback honesto.`;
 
@@ -93,7 +92,7 @@ REGRAS DE SAÍDA:
 - NÃO copie texto. Sempre parafraseie e sintetize.
 - Seja objetivo, equilibrado e neutro no tom.
 - Estrutura: contexto do gênero, análise musical, recepção, curiosidades, profundidade temática.
-- Mínimo 500 palavras.
+- Aproximadamente 300 palavras.
 - Requer links de catálogo do release.
 - Sem release: fallback honesto.`;
 
@@ -119,7 +118,7 @@ REGRAS DE SAÍDA:
 - Seja objetivo, equilibrado e neutro no tom.
 - Estrutura: título, subtítulo, o que aconteceu, quem está envolvido, contexto, impacto.
 - Uma matéria por dia.
-- Mínimo 500 palavras.`;
+- Aproximadamente 500 palavras.`;
 
 const PLAYBOOK_REVIEW_KILTON = `Você é um especialista em pesquisa e síntese de conteúdo.
 
@@ -142,7 +141,7 @@ REGRAS DE SAÍDA:
 - Clareza equivalente a ESL B1: linguagem acessível mas informada.
 - NÃO copie texto. Sempre parafraseie e sintetize.
 - Estrutura: contextualização, expectativas, análise musical, citações relevantes, relevância no cenário.
-- Mínimo 500 palavras.
+- Aproximadamente 300 palavras.
 - Requer links de catálogo.
 - Sem release: fallback honesto.`;
 

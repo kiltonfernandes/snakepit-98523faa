@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
@@ -28,6 +30,8 @@ export default function Settings() {
   const [logSearch, setLogSearch] = useState('');
   const [logFilter, setLogFilter] = useState<string>('all');
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
+  const [descTemplateOpen, setDescTemplateOpen] = useState(false);
+  const [descTemplateValue, setDescTemplateValue] = useState('');
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
@@ -190,6 +194,29 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Description Template */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <FileText className="h-4 w-4" /> Descrição Fixa
+              </CardTitle>
+              <CardDescription>Template HTML base para descrições de episódios. Use <code className="text-xs bg-muted px-1 rounded">{'<<<title>>>'}</code> para o título e <code className="text-xs bg-muted px-1 rounded">{'<<<generated content>>>'}</code> para o conteúdo gerado por IA.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">
+                  {settings.description_template_html ? `${settings.description_template_html.length} caracteres` : 'Não configurado'}
+                </span>
+                <Button size="sm" className="gap-2" onClick={() => {
+                  setDescTemplateValue(settings.description_template_html || '');
+                  setDescTemplateOpen(true);
+                }}>
+                  <FileText className="h-3.5 w-3.5" /> Editar Template
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Coluna Direita */}
@@ -289,6 +316,33 @@ export default function Settings() {
           setPromptManagerOpen(false);
         }}
       />
+
+      <Dialog open={descTemplateOpen} onOpenChange={setDescTemplateOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Template de Descrição Fixa</DialogTitle>
+            <DialogDescription>
+              Cole aqui o HTML base para as descrições dos episódios.<br />
+              Use <code className="bg-muted px-1 rounded text-xs">{'<<<title>>>'}</code> onde o título do episódio deve aparecer.<br />
+              Use <code className="bg-muted px-1 rounded text-xs">{'<<<generated content>>>'}</code> onde o conteúdo gerado por IA deve ser inserido.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            className="min-h-[300px] font-mono text-xs"
+            placeholder="<p><b><<<title>>></b></p>\n<p><<<generated content>>></p>\n<p>Ouça no Spotify...</p>"
+            value={descTemplateValue}
+            onChange={e => setDescTemplateValue(e.target.value)}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDescTemplateOpen(false)}>Cancelar</Button>
+            <Button onClick={() => {
+              updateSettings({ description_template_html: descTemplateValue });
+              setDescTemplateOpen(false);
+              toast.success('Template de descrição salvo');
+            }}>Salvar Template</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

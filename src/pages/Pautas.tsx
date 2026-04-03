@@ -53,6 +53,39 @@ function getISOWeekLabel(dateStr: string): string {
   return `${format(monday, 'dd/MM')} – ${format(sunday, 'dd/MM')}`;
 }
 
+const NORMALIZED_GENRES = [
+  'Heavy Metal', 'Thrash Metal', 'Death Metal', 'Black Metal', 'Power Metal',
+  'Doom Metal', 'Progressive Metal', 'Groove Metal', 'Metalcore', 'Melodic Death Metal', 'Symphonic Metal',
+] as const;
+
+function normalizeGenre(genre: string): string {
+  const lower = genre.toLowerCase().trim();
+  for (const ng of NORMALIZED_GENRES) {
+    if (lower === ng.toLowerCase()) return ng;
+    // partial matching: "melodic death" -> "Melodic Death Metal", "prog metal" -> "Progressive Metal"
+    const ngLower = ng.toLowerCase();
+    if (lower.includes(ngLower.replace(' metal', '')) && ngLower.includes('metal')) return ng;
+  }
+  // Fuzzy: check if genre contains key words
+  if (lower.includes('thrash')) return 'Thrash Metal';
+  if (lower.includes('death') && lower.includes('melod')) return 'Melodic Death Metal';
+  if (lower.includes('death')) return 'Death Metal';
+  if (lower.includes('black')) return 'Black Metal';
+  if (lower.includes('power')) return 'Power Metal';
+  if (lower.includes('doom') || lower.includes('stoner') || lower.includes('sludge')) return 'Doom Metal';
+  if (lower.includes('prog')) return 'Progressive Metal';
+  if (lower.includes('groove')) return 'Groove Metal';
+  if (lower.includes('core') || lower.includes('deathcore') || lower.includes('metalcore')) return 'Metalcore';
+  if (lower.includes('symphonic')) return 'Symphonic Metal';
+  if (lower.includes('heavy') || lower.includes('nwobhm') || lower.includes('traditional')) return 'Heavy Metal';
+  return 'Heavy Metal'; // default fallback
+}
+
+function getFirstNormalizedGenre(release: Release): string {
+  if (!release.genres || release.genres.length === 0) return 'Heavy Metal';
+  return normalizeGenre(release.genres[0]);
+}
+
 function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; genres: { genre: string; releases: Release[] }[] }[] {
   const weekMap = new Map<string, Release[]>();
   for (const r of releases) {
@@ -64,11 +97,9 @@ function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; 
   for (const [weekLabel, rels] of weekMap) {
     const genreMap = new Map<string, Release[]>();
     for (const r of rels) {
-      const genres = r.genres && r.genres.length > 0 ? r.genres : ['Sem gênero'];
-      for (const g of genres) {
-        if (!genreMap.has(g)) genreMap.set(g, []);
-        genreMap.get(g)!.push(r);
-      }
+      const genre = getFirstNormalizedGenre(r);
+      if (!genreMap.has(genre)) genreMap.set(genre, []);
+      genreMap.get(genre)!.push(r);
     }
     const genres = Array.from(genreMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
@@ -695,9 +726,16 @@ export default function Pautas() {
   };
 
   const SaturdayReleasePicker = ({ pauta }: { pauta: Pauta }) => {
+    const [search, setSearch] = useState('');
     const inputs = getRawInputs(pauta);
     const eligible = getEligibleSaturdayReleases(releases, pauta.publication_date);
     const selectedIds: string[] = inputs.selected_release_ids || [];
+
+    const filtered = search.trim()
+      ? eligible.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
+      : eligible;
+
+    const grouped = groupReleasesByWeekAndGenre(filtered);
 
     const toggle = (id: string) => {
       const next = selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id];
@@ -707,21 +745,44 @@ export default function Pautas() {
     return (
       <div className="space-y-1">
         <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Destaques da Semana (D+2 a D+10)</Label>
-        {eligible.length > 0 ? (
-          <div className="space-y-1 max-h-[120px] overflow-y-auto">
-            {eligible.map(r => (
-              <button
-                key={r.id}
-                className={`w-full text-left p-1.5 rounded text-xs border transition-colors ${selectedIds.includes(r.id) ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30'}`}
-                onClick={() => toggle(r.id)}
-              >
-                {r.artist} – {r.album}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <p className="text-[10px] text-muted-foreground italic">Nenhum release na janela D+2/D+10</p>
-        )}
+        <Input
+          placeholder="Buscar artista ou álbum..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="h-7 text-xs mb-1"
+        />
+        <ScrollArea className="h-[200px]">
+          {grouped.length > 0 ? (
+            <div className="space-y-1">
+              {grouped.map(week => (
+                <div key={week.weekLabel} className="mb-2">
+                  <p className="text-[10px] font-semibold text-muted-foreground px-1 py-0.5 uppercase tracking-wider">
+                    Semana {week.weekLabel}
+                  </p>
+                  {week.genres.map(g => (
+                    <div key={g.genre}>
+                      <p className="text-[10px] text-primary/70 px-2 py-0.5 font-medium">{g.genre}</p>
+                      {g.releases.map(r => (
+                        <button
+                          key={r.id}
+                          className={`w-full text-left p-1.5 rounded text-xs border transition-colors ${selectedIds.includes(r.id) ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/30'}`}
+                          onClick={() => toggle(r.id)}
+                        >
+                          {r.artist} – {r.album}
+                          <span className="text-muted-foreground ml-1">({r.release_date})</span>
+                        </button>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[10px] text-muted-foreground italic p-2">
+              {eligible.length === 0 ? 'Nenhum release na janela D+2/D+10' : 'Nenhum resultado'}
+            </p>
+          )}
+        </ScrollArea>
       </div>
     );
   };

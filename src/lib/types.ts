@@ -83,6 +83,7 @@ export interface AppSettings {
   default_export_container: string;
   theme_name: string;
   prompt_overrides_json: Record<string, string>;
+  description_template_html: string;
 }
 
 export interface ActivityLog {
