@@ -223,6 +223,12 @@ export default function Releases() {
       artist: form.artist, album: form.album, release_date: form.release_date,
       genres: form.genres.split(',').map(g => g.trim()).filter(Boolean),
       rating: form.rating, comments: form.comments,
+      youtube_url: form.youtube_url || null,
+      spotify_url: form.spotify_url || null,
+      deezer_url: form.deezer_url || null,
+      apple_music_url: form.apple_music_url || null,
+      bandcamp_url: form.bandcamp_url || null,
+      metal_archives_url: form.metal_archives_url || null,
     };
     if (editingId) updateRelease(editingId, data);
     else addRelease(data);
