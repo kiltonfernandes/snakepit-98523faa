@@ -865,7 +865,10 @@ export default function Pautas() {
           {!flowGenerating && (
             <div className="flex gap-4">
               <Button size="lg" className="gap-2" onClick={handleFlowAutoGenerate}>
-                <Zap className="h-4 w-4" /> Gerar Automaticamente
+                <Zap className="h-4 w-4" /> Gerar Todos
+              </Button>
+              <Button size="lg" variant="secondary" className="gap-2" onClick={handleFlowRegenerate}>
+                <Sparkles className="h-4 w-4" /> Regenerar Todos
               </Button>
               <Button size="lg" variant="outline" className="gap-2" onClick={handleFlowManual}>
                 <FileText className="h-4 w-4" /> Gerar Manualmente
