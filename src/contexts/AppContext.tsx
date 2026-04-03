@@ -115,6 +115,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadActivityLog();
   }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings, loadActivityLog]);
 
+  // Auto-recalc week statuses after initial load
+  useEffect(() => {
+    if (weeks.length > 0 && pautas.length > 0) {
+      weeks.forEach(w => {
+        const weekPautas = pautas.filter(p => p.week_id === w.id);
+        if (weekPautas.length === 0) return;
+        const allFinalized = weekPautas.every(p => p.status === 'finalized');
+        const anyNeedsReview = weekPautas.some(p => p.status === 'needs_review');
+        const anyGenerated = weekPautas.some(p => p.status !== 'draft');
+        let expected = 'draft';
+        if (allFinalized) expected = 'finalized';
+        else if (anyNeedsReview) expected = 'review';
+        else if (anyGenerated) expected = 'in_progress';
+        if (w.status !== expected) {
+          setWeeks(prev => prev.map(x => x.id === w.id ? { ...x, status: expected as any } : x));
+          supabase.from('editorial_weeks' as any).update({ status: expected, updated_at: now() } as any).eq('id', w.id).then();
+        }
+      });
+    }
+  }, [weeks.length, pautas.length]);
+
   const logActivity = useCallback((action: string, details: string) => {
     const entry = { id: uid(), action, details, timestamp: now() };
     setActivityLog(prev => [entry, ...prev]);
