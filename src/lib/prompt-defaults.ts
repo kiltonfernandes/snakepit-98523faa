@@ -20,7 +20,6 @@ NÃO invente tags extras.
 Siga a identidade editorial Heavynauta.
 Nunca invente fatos, datas, quotes ou créditos.
 Se faltar insumo, use fallback honesto.
-Seções densas: mínimo 500 palavras.
 Intro/Outro são locais — NÃO entram no contrato.`;
 
 const BRAND_VOICE = `Público: Comunidade metal brasileira.
