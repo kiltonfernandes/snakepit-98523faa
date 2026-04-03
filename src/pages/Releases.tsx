@@ -214,7 +214,7 @@ export default function Releases() {
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (r: Release) => {
-    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '' });
+    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '' });
     setEditingId(r.id); setDialogOpen(true);
   };
 
