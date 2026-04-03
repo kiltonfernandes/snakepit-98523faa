@@ -1437,7 +1437,12 @@ export default function Pautas() {
                 <section className="space-y-6">
                   <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Blocos do episódio</h2>
                   {sections.map((sec, idx) => {
-                    const content = data[sec.key]?.trim();
+                    const rawContent = data[sec.key]?.trim() || '';
+                    const content = rawContent
+                      .replace(/<title>[\s\S]*?<\/title>\s*/gi, '')
+                      .replace(/<\/?content>\s*/gi, '')
+                      .replace(/<\/?section[^>]*>\s*/gi, '')
+                      .trim() || null;
                     let contextNote = '';
                     let quickLinks: { youtube: string; spotify: string; deezer: string; metal_archives: string } | null = null;
 
