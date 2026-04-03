@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Palette, Sparkles, Image, ExternalLink, Download, Copy } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Palette, Sparkles, Image, ExternalLink, Download, Copy, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,6 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { useApp } from '@/contexts/AppContext';
 import { TitleOption, DaySlot, EpisodeMaterial } from '@/lib/types';
+import { DAY_SLOTS } from '@/lib/constants';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 function parseProperNouns(title: string): string {
@@ -24,10 +26,62 @@ export default function Materials() {
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
   const [imageUrl, setImageUrl] = useState('');
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [repairing, setRepairing] = useState(false);
 
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekMaterials = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
+
+  // Auto-repair: create missing materials for the selected week
+  const repairMaterials = async () => {
+    if (!selectedWeek || weekMaterials.length >= 7) return;
+    setRepairing(true);
+    const existing = new Set(weekMaterials.map(m => m.slot_key));
+    const weekPautasList = getPautasForWeek(selectedWeek.id);
+    const newMaterials: EpisodeMaterial[] = [];
+
+    for (let i = 0; i < DAY_SLOTS.length; i++) {
+      const slot = DAY_SLOTS[i];
+      if (existing.has(slot.key)) continue;
+
+      const epDate = new Date(selectedWeek.start_date);
+      epDate.setDate(epDate.getDate() + i);
+      const dateStr = epDate.toISOString().slice(0, 10);
+
+      // Find matching pauta
+      const pauta = weekPautasList.find(p => p.publication_date === dateStr) || null;
+
+      const mat: EpisodeMaterial = {
+        id: crypto.randomUUID(),
+        week_id: selectedWeek.id,
+        slot_key: slot.key,
+        episode_date: dateStr,
+        source_pauta_id: pauta?.id || null,
+        title_options_json: [],
+        selected_title_index: null,
+        description_html: null,
+        cover_url: null,
+        spotify_link: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      newMaterials.push(mat);
+    }
+
+    if (newMaterials.length > 0) {
+      await supabase.from('episode_materials' as any).insert(newMaterials as any);
+      // Reload page to pick up new materials
+      window.location.reload();
+    }
+    setRepairing(false);
+  };
+
+  // Auto-repair on mount if materials are missing
+  useEffect(() => {
+    if (selectedWeek && weekPautas.length > 0 && weekMaterials.length === 0) {
+      repairMaterials();
+    }
+  }, [selectedWeek?.id, weekPautas.length, weekMaterials.length]);
 
   const getTitle = (mat: { title_options_json: any[]; selected_title_index: number | null }) => {
     if (mat.selected_title_index != null && mat.title_options_json[mat.selected_title_index]) {
