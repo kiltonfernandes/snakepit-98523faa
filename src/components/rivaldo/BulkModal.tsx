@@ -128,8 +128,9 @@ export function BulkModal({
       });
 
       if (!payloadResult.ok) {
-        setDesktopFeedback({ type: 'error', message: payloadResult.error.message });
-        addLog(payloadResult.error.message, 'error');
+        const e = (payloadResult as { ok: false; error: { message: string } }).error;
+        setDesktopFeedback({ type: 'error', message: e.message });
+        addLog(e.message, 'error');
         return;
       }
 

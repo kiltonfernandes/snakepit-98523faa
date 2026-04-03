@@ -123,7 +123,7 @@ const Rivaldo = () => {
       setQueueFeedback(null);
       if (!desktopApi) { addUiLog('Bridge desktop indisponivel.', 'error'); return; }
       const payloadResult = await prepareDesktopPipelinePayload({ desktopState, masterMode, masterFile, masterTracks, bgmFile: files.bgm, introFile: files.intro, outroFile: files.outro, processingProfile, audioParams, filename });
-      if (!payloadResult.ok) { setQueueFeedback({ type: 'error', message: payloadResult.error.message }); return; }
+      if (!payloadResult.ok) { const e = (payloadResult as { ok: false; error: { message: string } }).error; setQueueFeedback({ type: 'error', message: e.message }); return; }
       setIsQueueSubmitting(true);
       try {
         const job = await desktopApi.enqueuePipelineJob(payloadResult.value);
