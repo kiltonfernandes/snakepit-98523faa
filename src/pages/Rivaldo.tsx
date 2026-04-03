@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Layers, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useApp } from '@/contexts/AppContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
