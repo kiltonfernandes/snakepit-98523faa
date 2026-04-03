@@ -236,13 +236,20 @@ export default function Releases() {
   };
 
   const handleExport = (format: 'json' | 'csv') => {
-    const data = filtered;
+    const data = filtered.map(r => ({
+      ...r,
+      links: resolveAllLinks(r),
+      links_markdown: linksToMarkdown(r),
+    }));
     let content: string;
     let mime: string;
     let ext: string;
     if (format === 'csv') {
-      const header = 'artist,album,release_date,genres,rating,comments';
-      const rows = data.map(r => [r.artist, r.album, r.release_date, (r.genres || []).join(';'), r.rating || '', r.comments || ''].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+      const header = 'artist,album,release_date,genres,rating,comments,youtube,spotify,deezer,apple_music,bandcamp,metal_archives';
+      const rows = data.map(r => {
+        const l = r.links;
+        return [r.artist, r.album, r.release_date, (r.genres || []).join(';'), r.rating || '', r.comments || '', l.youtube, l.spotify, l.deezer, l.apple_music, l.bandcamp, l.metal_archives].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+      });
       content = [header, ...rows].join('\n');
       mime = 'text/csv';
       ext = 'csv';
