@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -115,7 +115,7 @@ export default function Pautas() {
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
-
+  const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
 
@@ -1037,6 +1037,9 @@ export default function Pautas() {
                           <StatusBadge status={pauta.status} />
                         </div>
                         <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" className="h-6 w-6" title="Visualizar pauta" onClick={() => setPreviewPauta(pauta)}>
+                            <Eye className="h-3 w-3" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-6 w-6" title="Prompt completo" onClick={() => openPromptDialog(pauta)}>
                             <Sparkles className="h-3 w-3" />
                           </Button>
@@ -1241,6 +1244,89 @@ export default function Pautas() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPromptDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleApplyResponse} disabled={!promptResponse || generating}>Validar e Aplicar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pauta Preview Dialog */}
+      <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Visualização da Pauta</DialogTitle>
+            <DialogDescription>
+              {previewPauta && (() => {
+                const slot = getPautaSlot(previewPauta);
+                const dayInfo = DAY_SLOTS.find(d => d.key === slot);
+                return `${dayInfo?.label} — ${previewPauta.publication_date}`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          {previewPauta && (() => {
+            const slot = getPautaSlot(previewPauta);
+            const sections = getSectionsForDay(slot);
+            const data = (previewPauta.sections_json || {}) as Record<string, string>;
+            const inputs = getRawInputs(previewPauta);
+            const dayInfo = DAY_SLOTS.find(d => d.key === slot);
+
+            return (
+              <div className="prose prose-sm dark:prose-invert max-w-none space-y-6">
+                <div className="text-center border-b border-border pb-4 mb-6">
+                  <h2 className="text-xl font-bold tracking-tight m-0">🐍 SNAKEPIT</h2>
+                  <p className="text-muted-foreground text-sm m-0 mt-1">
+                    {dayInfo?.label} — {new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                  </p>
+                </div>
+
+                {sections.map((sec, idx) => {
+                  const content = data[sec.key]?.trim();
+                  let contextNote = '';
+                  if (sec.key === 'anniversary') contextNote = inputs.anniversary ? `📅 ${inputs.anniversary}` : '';
+                  if (sec.key === 'review_rafa') {
+                    const rel = releases.find(r => r.id === inputs.review_rafa_id);
+                    contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
+                  }
+                  if (sec.key === 'review_kilton') {
+                    const rel = releases.find(r => r.id === inputs.review_kilton_id);
+                    contextNote = rel ? `🎵 ${rel.artist} — ${rel.album}` : '';
+                  }
+                  if (sec.key === 'news') contextNote = inputs.news_link ? `🔗 ${inputs.news_link}` : '';
+
+                  return (
+                    <div key={sec.key} className={idx > 0 ? 'border-t border-border/50 pt-4' : ''}>
+                      <h3 className="text-base font-bold uppercase tracking-wider text-primary m-0 mb-2">
+                        {sec.label}
+                      </h3>
+                      {contextNote && (
+                        <p className="text-xs text-muted-foreground italic m-0 mb-2">{contextNote}</p>
+                      )}
+                      {content ? (
+                        <div className="text-sm leading-relaxed whitespace-pre-wrap">{content}</div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground/50 italic">Seção não preenchida</p>
+                      )}
+                    </div>
+                  );
+                })}
+
+                <div className="border-t border-border pt-4 mt-6 text-center">
+                  <p className="text-xs text-muted-foreground m-0">Status: {previewPauta.status}</p>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              if (!previewPauta) return;
+              const slot = getPautaSlot(previewPauta);
+              const sections = getSectionsForDay(slot);
+              const data = (previewPauta.sections_json || {}) as Record<string, string>;
+              const text = sections.map(s => `## ${s.label}\n\n${data[s.key]?.trim() || 'N/A'}`).join('\n\n---\n\n');
+              navigator.clipboard.writeText(text);
+              toast.success('Conteúdo copiado');
+            }}>
+              <Copy className="h-4 w-4 mr-2" /> Copiar Texto
+            </Button>
+            <Button onClick={() => setPreviewPauta(null)}>Fechar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
