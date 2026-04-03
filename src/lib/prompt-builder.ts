@@ -193,7 +193,10 @@ function renderContextXml(payload: DayPayload): string {
 
 function weekContractHtml(dayPayloads: DayPayload[]): string {
   const days = dayPayloads.map(dp => {
-    const tags = dp.required_sections.map(s => `    <section name="${s.key}">...</section>`).join('\n');
+    const tags = dp.required_sections.map(s => {
+      const words = SECTION_WORD_TARGETS[s.key] || MIN_LONGFORM_SECTION_WORDS;
+      return `    <section name="${s.key}">... (~${words} palavras)</section>`;
+    }).join('\n');
     return `  <day publication_date="${dp.publication_date}">\n${tags}\n  </day>`;
   }).join('\n');
 
@@ -202,26 +205,30 @@ function weekContractHtml(dayPayloads: DayPayload[]): string {
   <target week_start="YYYY-MM-DD"></target>
 ${days}
 </snakepit_response>
-Todas seções obrigatórias. Mín ${MIN_LONGFORM_SECTION_WORDS} palavras/seção densa.`;
+Todas seções obrigatórias. Respeite o target de palavras por seção.`;
 }
 
 function dayContractHtml(payload: DayPayload): string {
-  const tags = payload.required_sections.map(s => `  <section name="${s.key}">...</section>`).join('\n');
+  const tags = payload.required_sections.map(s => {
+    const words = SECTION_WORD_TARGETS[s.key] || MIN_LONGFORM_SECTION_WORDS;
+    return `  <section name="${s.key}">... (~${words} palavras)</section>`;
+  }).join('\n');
   return `CONTRATO:
 <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="day">
   <target publication_date="${payload.publication_date}"></target>
 ${tags}
 </snakepit_response>
-Todas seções obrigatórias. Mín ${MIN_LONGFORM_SECTION_WORDS} palavras/seção densa.`;
+Todas seções obrigatórias. Respeite o target de palavras por seção.`;
 }
 
 function sectionContractHtml(payload: DayPayload, sectionKey: string, sectionLabel: string): string {
+  const words = SECTION_WORD_TARGETS[sectionKey] || MIN_LONGFORM_SECTION_WORDS;
   return `CONTRATO:
 <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="section">
   <target publication_date="${payload.publication_date}" section="${sectionKey}"></target>
   <section name="${sectionKey}">...</section>
 </snakepit_response>
-Apenas "${sectionLabel}". Mín ${MIN_LONGFORM_SECTION_WORDS} palavras.`;
+Apenas "${sectionLabel}". Aproximadamente ${words} palavras.`;
 }
 
 function materialTitlesContract(weekStart: string, slots: { slot: string; date: string }[]): string {
