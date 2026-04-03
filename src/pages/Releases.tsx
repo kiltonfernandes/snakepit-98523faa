@@ -599,7 +599,18 @@ export default function Releases() {
                         <div className="flex gap-0.5">
                           {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
                         </div>
-                        {r.comments && <Badge variant="outline" className="text-[9px]">{r.comments}</Badge>}
+                        <div className="flex items-center gap-1">
+                          {(['youtube', 'spotify', 'metal_archives'] as const).map(p => {
+                            const link = resolveAllLinks(r)[p];
+                            return (
+                              <a key={p} href={link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                className="text-[9px] text-muted-foreground hover:text-primary transition-colors" title={PLATFORM_CONFIG[p].label}>
+                                <ExternalLink className="h-3 w-3" />
+                              </a>
+                            );
+                          })}
+                          {r.comments && <Badge variant="outline" className="text-[9px]">{r.comments}</Badge>}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
