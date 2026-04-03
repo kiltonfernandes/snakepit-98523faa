@@ -1,0 +1,72 @@
+<svg width="640" height="640" viewBox="0 0 640 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="80" y1="48" x2="560" y2="592" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4E2D74"/>
+      <stop offset="1" stop-color="#241736"/>
+    </linearGradient>
+    <linearGradient id="flameA" x1="173" y1="170" x2="84" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A7A"/>
+      <stop offset="0.45" stop-color="#FA5FA5"/>
+      <stop offset="1" stop-color="#61D4FF"/>
+    </linearGradient>
+    <linearGradient id="flameB" x1="467" y1="170" x2="556" y2="470" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A7A"/>
+      <stop offset="0.45" stop-color="#FA5FA5"/>
+      <stop offset="1" stop-color="#61D4FF"/>
+    </linearGradient>
+    <linearGradient id="visor" x1="240" y1="172" x2="402" y2="360" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F9A7FF"/>
+      <stop offset="0.5" stop-color="#B75DD9"/>
+      <stop offset="1" stop-color="#6434A2"/>
+    </linearGradient>
+    <filter id="glow" x="-80" y="-80" width="800" height="800" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="22" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 0.6 0 0 0  0 0 1 0 0  0 0 0 0.35 0"/>
+    </filter>
+  </defs>
+
+  <rect x="8" y="8" width="624" height="624" rx="72" fill="url(#bg)"/>
+
+  <g opacity="0.9">
+    <circle cx="118" cy="112" r="4" fill="#FFAA8D"/>
+    <circle cx="170" cy="86" r="6" fill="#FFAA8D"/>
+    <circle cx="522" cy="98" r="6" fill="#FFAA8D"/>
+    <circle cx="566" cy="158" r="4" fill="#FFAA8D"/>
+    <circle cx="518" cy="472" r="5" fill="#FFAA8D"/>
+    <circle cx="92" cy="464" r="6" fill="#FFAA8D"/>
+    <circle cx="154" cy="532" r="4" fill="#FFAA8D"/>
+    <circle cx="548" cy="542" r="5" fill="#FFAA8D"/>
+    <path d="M96 170L100 156L104 170L118 174L104 178L100 192L96 178L82 174L96 170Z" fill="#FFAA8D"/>
+    <path d="M540 208L544 194L548 208L562 212L548 216L544 230L540 216L526 212L540 208Z" fill="#FFAA8D"/>
+    <path d="M206 518L210 504L214 518L228 522L214 526L210 540L206 526L192 522L206 518Z" fill="#FFAA8D"/>
+  </g>
+
+  <g filter="url(#glow)" opacity="0.65">
+    <path d="M176 438C126 370 130 250 206 162C188 262 238 332 280 396C314 448 294 520 232 550C250 508 220 492 176 438Z" fill="url(#flameA)"/>
+    <path d="M464 438C514 370 510 250 434 162C452 262 402 332 360 396C326 448 346 520 408 550C390 508 420 492 464 438Z" fill="url(#flameB)"/>
+  </g>
+
+  <path d="M174 430C128 362 132 252 204 170C188 262 232 328 274 392C308 444 290 512 238 540C252 500 218 484 174 430Z" fill="url(#flameA)"/>
+  <path d="M466 430C512 362 508 252 436 170C452 262 408 328 366 392C332 444 350 512 402 540C388 500 422 484 466 430Z" fill="url(#flameB)"/>
+
+  <g>
+    <path d="M220 222C220 162 268 114 328 114C388 114 436 162 436 222V278C436 324 399 362 352 362H304C257 362 220 324 220 278V222Z" fill="#F5EEE7"/>
+    <path d="M240 220C240 172 278 134 326 134H330C378 134 416 172 416 220V276C416 312 387 342 351 342H305C269 342 240 312 240 276V220Z" fill="#29253B"/>
+    <circle cx="328" cy="238" r="84" fill="#F5EEE7"/>
+    <circle cx="328" cy="238" r="68" fill="url(#visor)"/>
+    <path d="M298 202C326 178 364 178 386 206C362 196 332 194 308 214C288 230 280 252 282 280C264 250 272 224 298 202Z" fill="#F8D4FF" opacity="0.9"/>
+    <path d="M226 240H206C196 240 188 248 188 258V296C188 306 196 314 206 314H224L226 240Z" fill="#F5EEE7"/>
+    <path d="M430 240H450C460 240 468 248 468 258V296C468 306 460 314 450 314H432L430 240Z" fill="#F5EEE7"/>
+    <path d="M236 344C244 388 244 446 214 494L444 494C412 448 412 388 420 344H236Z" fill="#F5EEE7"/>
+    <path d="M262 372C278 408 278 444 258 494" stroke="#CEC2C2" stroke-width="18" stroke-linecap="round"/>
+    <path d="M394 372C378 408 378 444 398 494" stroke="#CEC2C2" stroke-width="18" stroke-linecap="round"/>
+    <path d="M280 352L292 494" stroke="#CEC2C2" stroke-width="18" stroke-linecap="round"/>
+    <path d="M376 352L364 494" stroke="#CEC2C2" stroke-width="18" stroke-linecap="round"/>
+  </g>
+
+  <g>
+    <path d="M148 482C148 450 174 424 206 424H450C482 424 508 450 508 482V486C508 518 482 544 450 544H206C174 544 148 518 148 486V482Z" fill="#241B32" stroke="#F5EEE7" stroke-width="8"/>
+    <path d="M160 488C160 464 180 444 204 444H452C476 444 496 464 496 488C496 512 476 532 452 532H204C180 532 160 512 160 488Z" fill="#302240"/>
+    <text x="328" y="508" text-anchor="middle" fill="#F5EEE7" font-family="Arial, Helvetica, sans-serif" font-size="54" font-weight="900" letter-spacing="3">HEAVYNAUTA</text>
+  </g>
+</svg>
