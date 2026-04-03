@@ -645,6 +645,9 @@ export default function Pautas() {
     logActivity('Flow automático', `Semana: ${selectedWeek.start_date}`);
   }, [selectedWeek, weekPautas, promptCtx, streamAI]);
 
+  const handleFlowAutoGenerate = useCallback(() => handleFlowAutoGenerateInner(false), [handleFlowAutoGenerateInner]);
+  const handleFlowRegenerate = useCallback(() => handleFlowAutoGenerateInner(true), [handleFlowAutoGenerateInner]);
+
   const handleFlowManual = () => {
     setActiveTab('inputs');
     setFlowStep(0);
