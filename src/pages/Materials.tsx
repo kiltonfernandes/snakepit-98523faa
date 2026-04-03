@@ -293,8 +293,9 @@ export default function Materials() {
     const selectedTitle = getTitle(mat) || `Snakepit ${context.dayLabel}`;
     const descriptionInstructions = getPromptText('material_descriptions_instructions', promptOverrides);
     const brandBlock = getPromptText('material_brand_block', promptOverrides);
+    const template = settings.description_template_html || '';
 
-    return [
+    const lines = [
       'Você vai escrever a descrição HTML de um episódio do podcast Heavynauta.',
       '',
       'REGRAS:',
@@ -304,6 +305,16 @@ export default function Materials() {
       '- manter um tom editorial, direto e legível',
       '- usar o título selecionado como gancho da abertura',
       '- se houver Spotify agendado, incluir um link em HTML com o URL informado',
+    ];
+
+    if (template) {
+      lines.push('', 'TEMPLATE FIXO (respeite a estrutura, substitua os placeholders):');
+      lines.push(template);
+      lines.push('', 'SUBSTITUA <<<title>>> pelo título selecionado.');
+      lines.push('SUBSTITUA <<<generated content>>> pelo conteúdo editorial gerado.');
+    }
+
+    lines.push(
       '',
       'TÍTULO SELECIONADO:',
       selectedTitle,
@@ -320,12 +331,14 @@ export default function Materials() {
       brandBlock,
       '',
       'FORMATO ESPERADO:',
-      '- 1 parágrafo de abertura',
+      template ? '- Siga o template fixo acima' : '- 1 parágrafo de abertura',
       '- 1 ou 2 parágrafos resumindo os destaques',
       '- 1 lista curta com highlights do episódio',
       '- bloco institucional',
       '- CTA final em HTML',
-    ].join('\n');
+    );
+
+    return lines.join('\n');
   };
 
   const generateDescriptionAI = useCallback(async (materialId: string) => {
