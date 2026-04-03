@@ -159,9 +159,12 @@ export default function Dashboard() {
                         : <ChevronRightIcon className="h-4 w-4 text-muted-foreground shrink-0" />
                       }
                       <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${trafficLight(wPct)}`} />
-                      <span className="text-sm font-medium min-w-[60px]">S{weekNum}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(week.start_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+                      <span className="text-sm font-medium">
+                        {(() => {
+                          const mon = new Date(week.start_date + 'T12:00:00');
+                          const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+                          return `Semana ${format(mon, 'dd.MM')} a ${format(sun, 'dd.MM')}`;
+                        })()}
                       </span>
                       <div className="flex-1 mx-3">
                         <Progress value={wPct} className="h-1.5" />
