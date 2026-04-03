@@ -444,7 +444,7 @@ export default function Materials() {
     const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
 
     if (anniversary) return `${anniversary} album cover band`;
-    if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} album cover`; 
+    if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} album cover`;
 
     const textPool = [
       selectedTitle,
@@ -459,10 +459,79 @@ export default function Materials() {
     return proper ? `${proper} band promo photo` : `${selectedTitle || 'heavy metal'} band photo`;
   };
 
-  const generateCover = () => {
+  const fetchCanvasSafeImageUrl = useCallback(async (url: string) => {
+    if (url.startsWith('data:') || url.startsWith('blob:')) {
+      return { src: url, revoke: () => undefined };
+    }
+
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-remote-image`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+      },
+      body: JSON.stringify({ url }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Não foi possível baixar a imagem remota' }));
+      throw new Error(error.error || 'Não foi possível baixar a imagem remota');
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    return {
+      src: objectUrl,
+      revoke: () => URL.revokeObjectURL(objectUrl),
+    };
+  }, []);
+
+  const drawWrappedText = (
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    lineHeight: number,
+    maxLines: number,
+  ) => {
+    const words = text.split(/\s+/).filter(Boolean);
+    const lines: string[] = [];
+    let currentLine = '';
+
+    words.forEach((word) => {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (ctx.measureText(testLine).width <= maxWidth) {
+        currentLine = testLine;
+        return;
+      }
+
+      if (currentLine) lines.push(currentLine);
+      currentLine = word;
+    });
+
+    if (currentLine) lines.push(currentLine);
+
+    const visibleLines = lines.slice(0, maxLines).map((line, index, arr) => {
+      if (index !== arr.length - 1 || lines.length <= maxLines) return line;
+      let trimmed = line;
+      while (ctx.measureText(`${trimmed}…`).width > maxWidth && trimmed.length > 0) {
+        trimmed = trimmed.slice(0, -1).trim();
+      }
+      return `${trimmed}…`;
+    });
+
+    visibleLines.forEach((line, index) => {
+      ctx.fillText(line, x, y + index * lineHeight);
+    });
+  };
+
+  const generateCover = async () => {
     if (!imageUrl || !coverDaySlot || !selectedWeek) return;
     const mat = weekMaterials.find((material) => material.slot_key === coverDaySlot);
     if (!mat) return;
+
+    setCoverPreview(null);
 
     const SIZE = 3000;
     const canvas = document.createElement('canvas');
@@ -474,55 +543,108 @@ export default function Materials() {
     ctx.fillStyle = '#1a0e2e';
     ctx.fillRect(0, 0, SIZE, SIZE);
 
+    const exportCover = () => {
+      try {
+        const dataUrl = canvas.toDataURL('image/png');
+        setCoverPreview(dataUrl);
+        updateMaterial(mat.id, { cover_url: dataUrl });
+        toast.success('Capa gerada (3000×3000)');
+      } catch (error) {
+        console.error('Cover export error:', error);
+        toast.error('A capa não pôde ser exportada. Tente outra imagem.');
+      }
+    };
+
+    const drawCoverImage = (img: HTMLImageElement) => {
+      const safeMargin = 110;
+      const targetX = safeMargin;
+      const targetY = safeMargin;
+      const targetW = SIZE - safeMargin * 2;
+      const targetH = 1660;
+      const imageRatio = img.width / img.height;
+      const targetRatio = targetW / targetH;
+
+      let drawWidth = targetW;
+      let drawHeight = targetH;
+      let offsetX = targetX;
+      let offsetY = targetY;
+
+      if (imageRatio > targetRatio) {
+        drawHeight = targetH;
+        drawWidth = drawHeight * imageRatio;
+        offsetX = targetX - (drawWidth - targetW) / 2;
+      } else {
+        drawWidth = targetW;
+        drawHeight = drawWidth / imageRatio;
+        offsetY = targetY - (drawHeight - targetH) / 2;
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(targetX, targetY, targetW, targetH);
+      ctx.clip();
+      ctx.drawImage(img, offsetX, offsetY, drawWidth, drawHeight);
+      ctx.restore();
+    };
+
     const drawOverlay = () => {
-      // Gray bar
+      const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
+
+      const panelY = 1760;
+      ctx.fillStyle = 'rgba(20, 10, 35, 0.92)';
+      ctx.fillRect(0, panelY, SIZE, SIZE - panelY);
+
+      const gradient = ctx.createLinearGradient(0, 1500, 0, 2100);
+      gradient.addColorStop(0, 'rgba(26, 14, 46, 0)');
+      gradient.addColorStop(1, 'rgba(26, 14, 46, 0.95)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 1400, SIZE, 700);
+
       ctx.fillStyle = '#3a3a3a';
       ctx.fillRect(0, 1810, SIZE, 16);
-      // Heavynauta label
+
       ctx.fillStyle = '#C8A2C8';
       ctx.font = 'bold 78px sans-serif';
       ctx.fillText('Heavynauta', 140, 1980);
-      // Title
+
       ctx.fillStyle = '#e8d5f5';
-      ctx.font = 'bold 116px sans-serif';
-      ctx.fillText(getTitle(mat) || `Episódio ${coverDaySlot}`, 140, 2220, 2500);
-      // Tagline
+      ctx.font = 'bold 108px sans-serif';
+      drawWrappedText(ctx, title, 140, 2180, 2350, 128, 4);
+
       ctx.fillStyle = '#8a7a9a';
       ctx.font = '62px sans-serif';
-      ctx.fillText('Papo Sério Sobre Música Pesada', 140, 2400);
-      // Purple decorative line
-      ctx.fillStyle = '#7c3aed';
-      ctx.fillRect(80, 1900, 8, 580);
+      ctx.fillText('Papo Sério Sobre Música Pesada', 140, 2650);
 
-      // Logo bottom-right
+      ctx.fillStyle = '#7c3aed';
+      ctx.fillRect(80, 1900, 8, 780);
+
       const logo = new window.Image();
-      logo.crossOrigin = 'anonymous';
       logo.onload = () => {
         const logoSize = 400;
         ctx.drawImage(logo, SIZE - logoSize - 100, SIZE - logoSize - 100, logoSize, logoSize);
-        finalize();
+        exportCover();
       };
-      logo.onerror = () => finalize();
+      logo.onerror = () => exportCover();
       logo.src = heavynautaLogo;
     };
 
-    const finalize = () => {
-      const dataUrl = canvas.toDataURL('image/png');
-      setCoverPreview(dataUrl);
-      updateMaterial(mat.id, { cover_url: dataUrl });
-      toast.success('Capa gerada (3000×3000)');
-    };
-
-    const img = new window.Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      ctx.drawImage(img, 110, 110, 2780, 1660);
-      drawOverlay();
-    };
-    img.onerror = () => {
-      drawOverlay();
-    };
-    img.src = imageUrl;
+    try {
+      const proxiedImage = await fetchCanvasSafeImageUrl(imageUrl);
+      const img = new window.Image();
+      img.onload = () => {
+        drawCoverImage(img);
+        proxiedImage.revoke();
+        drawOverlay();
+      };
+      img.onerror = () => {
+        proxiedImage.revoke();
+        toast.error('Não foi possível carregar essa imagem para montar a capa.');
+      };
+      img.src = proxiedImage.src;
+    } catch (error: any) {
+      console.error('Cover generation error:', error);
+      toast.error(error.message || 'Erro ao preparar imagem da capa');
+    }
   };
 
   const generateSundayContent = async (mat: EpisodeMaterial) => {
