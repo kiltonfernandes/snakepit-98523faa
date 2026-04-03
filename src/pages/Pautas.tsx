@@ -1012,6 +1012,7 @@ export default function Pautas() {
 
             <TabsContent value="content">
               <WorkspaceShell
+                excludeDays={['sunday']}
                 weekLabel={`Conteúdo – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
                 actions={
                   <div className="flex gap-2">
