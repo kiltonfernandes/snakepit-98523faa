@@ -621,7 +621,7 @@ export default function Pautas() {
                         <div className="flex items-center gap-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Aniversário do Dia</Label>
                           <Button variant="ghost" size="icon" className="h-4 w-4" title="Buscar aniversários"
-                            onClick={() => window.open('https://en.wikipedia.org/wiki/List_of_heavy_metal_festivals', '_blank')}>
+                            onClick={() => window.open('https://en.wikipedia.org/wiki/2026_in_heavy_metal_music', '_blank')}>
                             <ExternalLink className="h-2.5 w-2.5" />
                           </Button>
                         </div>
