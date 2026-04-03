@@ -1,0 +1,1 @@
+ALTER TABLE public.app_settings ADD COLUMN IF NOT EXISTS prompt_overrides_json jsonb NOT NULL DEFAULT '{}'::jsonb;

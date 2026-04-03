@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useApp } from '@/contexts/AppContext';
 import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
+import { PromptManager } from '@/components/PromptManager';
+import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 
 const TONE_PRESETS = [
   { label: 'Cirúrgico', value: 30, desc: 'Extremamente preciso e direto. Mínimo de adjetivos, foco em dados.' },
@@ -25,6 +27,7 @@ export default function Settings() {
   const [copied, setCopied] = useState(false);
   const [logSearch, setLogSearch] = useState('');
   const [logFilter, setLogFilter] = useState<string>('all');
+  const [promptManagerOpen, setPromptManagerOpen] = useState(false);
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
@@ -53,7 +56,6 @@ export default function Settings() {
     toast.success('Prompt do laboratório copiado');
   };
 
-  // Filtered activity log
   const filteredLog = activityLog.filter(entry => {
     const matchSearch = !logSearch || entry.action.toLowerCase().includes(logSearch.toLowerCase()) || entry.details.toLowerCase().includes(logSearch.toLowerCase());
     const matchFilter = logFilter === 'all' || entry.action.toLowerCase().includes(logFilter.toLowerCase());
@@ -61,6 +63,8 @@ export default function Settings() {
   });
 
   const logActions = [...new Set(activityLog.map(e => e.action))];
+
+  const overridesCount = Object.keys(settings.prompt_overrides_json || {}).length;
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -71,6 +75,29 @@ export default function Settings() {
         </h1>
         <p className="text-muted-foreground mt-1">Preferências da workstation</p>
       </div>
+
+      {/* Prompt Manager */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <FileCode className="h-4 w-4" /> System Prompts
+          </CardTitle>
+          <CardDescription>Gerencie todos os prompts do sistema — instruções, identidade, playbooks por seção</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">{PROMPT_BLOCKS.length} blocos de prompt</span>
+              {overridesCount > 0 && (
+                <Badge variant="secondary" className="text-xs">{overridesCount} customizado{overridesCount > 1 ? 's' : ''}</Badge>
+              )}
+            </div>
+            <Button size="sm" className="gap-2" onClick={() => setPromptManagerOpen(true)}>
+              <FileCode className="h-3.5 w-3.5" /> Gerenciar Prompts
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Tone Lab */}
       <Card>
@@ -114,7 +141,6 @@ export default function Settings() {
             <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">{currentPreset.desc}</p>
           )}
 
-          {/* Lab prompt preview */}
           <div className="space-y-2 border-t border-border pt-4">
             <div className="flex items-center justify-between">
               <label className="text-xs font-medium">Preview do Prompt de Tom</label>
@@ -200,7 +226,7 @@ export default function Settings() {
         </CardContent>
       </Card>
 
-      {/* Activity Log with filters */}
+      {/* Activity Log */}
       <Card>
         <CardHeader>
           <CardTitle className="text-sm flex items-center gap-2">
@@ -245,6 +271,16 @@ export default function Settings() {
           )}
         </CardContent>
       </Card>
+
+      <PromptManager
+        open={promptManagerOpen}
+        onOpenChange={setPromptManagerOpen}
+        overrides={settings.prompt_overrides_json || {}}
+        onSave={(overrides) => {
+          updateSettings({ prompt_overrides_json: overrides });
+          setPromptManagerOpen(false);
+        }}
+      />
     </div>
   );
 }

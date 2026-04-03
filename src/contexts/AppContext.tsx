@@ -45,6 +45,7 @@ const defaultSettings: AppSettings = {
   default_export_layout: 'split',
   default_export_container: 'zip',
   theme_name: 'heavynauta',
+  prompt_overrides_json: {},
 };
 
 const emptySections: PautaSections = {
