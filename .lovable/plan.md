@@ -1,208 +1,61 @@
 
 
-# Plano: Database Lovable Cloud + Pipeline Semanal Correto
+## Plano: Portar o Podcast Pal para a aba Rivaldo do Snakepit
 
-## Contexto
+### Contexto
+O projeto **Podcast Pal** (Rivaldo by Heavynauta 3.2) é uma workstation de processamento de áudio com pipeline RNNoise + WPE, auto-duck, multi-track, bulk processing e fila desktop. O objetivo é trazer todo esse app para dentro da aba Rivaldo do Snakepit, substituindo o placeholder atual.
 
-O usuario quer:
-1. Criar o schema completo no banco Lovable Cloud baseado no Snakepit original
-2. Importar os 667 releases + 937 genres do export SQL
-3. Corrigir o Dashboard para mostrar um **pipeline de completude real** por episodio e por semana
-4. Agendamento = campo `spotify_link` no episode_materials (quando preenchido = agendado)
-5. Secoes corretas das pautas: `anniversary`, `review_rafa`, `news`, `review_kilton`, `next_week_releases` (sabado)
-6. Domingo incluido no fluxo de materiais
+### Escopo da migração
 
-## 1. Schema do Banco (Migration)
+**Arquivos a copiar do Podcast Pal → Snakepit:**
 
-Tabelas a criar, baseadas no database-reference.md original:
-
-```sql
--- releases (catalogo de lancamentos)
-CREATE TABLE public.releases (
-  id TEXT PRIMARY KEY,
-  artist TEXT NOT NULL,
-  album TEXT NOT NULL,
-  release_date TEXT NOT NULL,
-  rating REAL,
-  comments TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(artist, album, release_date)
-);
-CREATE INDEX idx_releases_release_date ON public.releases(release_date);
-CREATE INDEX idx_releases_artist ON public.releases(artist);
-
--- release_genres (many-to-one)
-CREATE TABLE public.release_genres (
-  release_id TEXT NOT NULL REFERENCES public.releases(id) ON DELETE CASCADE,
-  genre TEXT NOT NULL,
-  PRIMARY KEY (release_id, genre)
-);
-CREATE INDEX idx_release_genres_genre ON public.release_genres(genre);
-
--- editorial_weeks
-CREATE TABLE public.editorial_weeks (
-  id TEXT PRIMARY KEY,
-  start_date TEXT NOT NULL UNIQUE,
-  status TEXT NOT NULL DEFAULT 'draft',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- pautas (diarias, ligadas a semana)
-CREATE TABLE public.pautas (
-  id TEXT PRIMARY KEY,
-  week_id TEXT NOT NULL REFERENCES public.editorial_weeks(id) ON DELETE CASCADE,
-  publication_date TEXT NOT NULL UNIQUE,
-  pauta_type TEXT NOT NULL DEFAULT 'weekday',
-  status TEXT NOT NULL DEFAULT 'draft',
-  raw_inputs_json JSONB NOT NULL DEFAULT '{}',
-  sections_json JSONB NOT NULL DEFAULT '{}',
-  rendered_markdown TEXT,
-  rendered_text TEXT,
-  warnings_json JSONB NOT NULL DEFAULT '[]',
-  discovered_links_json JSONB NOT NULL DEFAULT '[]',
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  finalized_at TEXT
-);
-CREATE INDEX idx_pautas_week_id ON public.pautas(week_id);
-
--- pauta_news_links
-CREATE TABLE public.pauta_news_links (
-  pauta_id TEXT NOT NULL REFERENCES public.pautas(id) ON DELETE CASCADE,
-  position INTEGER NOT NULL,
-  url TEXT NOT NULL,
-  PRIMARY KEY (pauta_id, position)
-);
-
--- pauta_releases (join table)
-CREATE TABLE public.pauta_releases (
-  pauta_id TEXT NOT NULL REFERENCES public.pautas(id) ON DELETE CASCADE,
-  release_id TEXT NOT NULL REFERENCES public.releases(id) ON DELETE CASCADE,
-  position INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (pauta_id, release_id)
-);
-
--- episode_materials (com spotify_link para agendamento)
-CREATE TABLE public.episode_materials (
-  id TEXT PRIMARY KEY,
-  week_id TEXT NOT NULL REFERENCES public.editorial_weeks(id) ON DELETE CASCADE,
-  slot_key TEXT NOT NULL,
-  episode_date TEXT NOT NULL,
-  source_pauta_id TEXT REFERENCES public.pautas(id) ON DELETE SET NULL,
-  title_options_json JSONB NOT NULL DEFAULT '[]',
-  selected_title_index INTEGER,
-  description_html TEXT,
-  cover_url TEXT,
-  spotify_link TEXT,           -- NOVO: quando preenchido = episodio agendado
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  UNIQUE(week_id, slot_key)
-);
-CREATE INDEX idx_episode_materials_week_id ON public.episode_materials(week_id);
-
--- app_settings (singleton)
-CREATE TABLE public.app_settings (
-  singleton_id INTEGER PRIMARY KEY DEFAULT 1 CHECK (singleton_id = 1),
-  brand_tone_temperature INTEGER NOT NULL DEFAULT 55,
-  banned_terms_text TEXT NOT NULL DEFAULT '',
-  default_export_layout TEXT NOT NULL DEFAULT 'split',
-  default_export_container TEXT NOT NULL DEFAULT 'zip',
-  theme_name TEXT NOT NULL DEFAULT 'heavynauta'
-);
-
--- activity_logs
-CREATE TABLE public.activity_logs (
-  id TEXT PRIMARY KEY,
-  action_type TEXT NOT NULL,
-  entity_type TEXT NOT NULL,
-  entity_id TEXT,
-  summary TEXT NOT NULL,
-  details_json JSONB NOT NULL DEFAULT '{}',
-  created_at TEXT NOT NULL
-);
-CREATE INDEX idx_activity_logs_created_at ON public.activity_logs(created_at DESC);
-
--- prompt_sessions
-CREATE TABLE public.prompt_sessions (
-  id TEXT PRIMARY KEY,
-  scope TEXT NOT NULL,
-  target_json JSONB NOT NULL,
-  prompt_text TEXT NOT NULL,
-  response_text TEXT,
-  parsed_payload_json JSONB,
-  status TEXT NOT NULL DEFAULT 'prepared',
-  error_message TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  applied_at TEXT
-);
-```
-
-RLS: todas as tabelas com RLS desabilitado inicialmente (app single-user sem auth nesta fase).
-
-## 2. Import dos Releases
-
-Executar o SQL de import via `psql` (split em releases + release_genres, usando `ON CONFLICT DO NOTHING`).
-
-## 3. Atualizar Tipos TypeScript
-
-Reescrever `src/lib/types.ts` para refletir o schema real:
-
-- `DaySlot` inclui `'sunday'`
-- `PautaSections` mapeado para as secoes reais: `anniversary`, `review_rafa`, `news`, `review_kilton`, `next_week_releases`
-- `EpisodeMaterial` ganha campo `spotify_link`
-- Remover tipos que nao existem no schema real (ex: `Episode` separado -- tudo vive em `episode_materials`)
-
-## 4. Pipeline Semanal no Dashboard (logica correta)
-
-O pipeline mostra **completude por episodio** com 5 indicadores:
-
-```text
-Episodio (dia)     Pauta  Titulo  Descricao  Capa  Agendamento
-─────────────────  ─────  ──────  ─────────  ────  ───────────
-Segunda            ●      ●       ○          ○     ○
-Terca              ●      ●       ●          ○     ○
-Quarta             ○      ○       ○          ○     ○
-...
-```
-
-- **Pauta**: `pautas.status = 'finalized'`
-- **Titulo**: `episode_materials.selected_title_index IS NOT NULL`
-- **Descricao**: `episode_materials.description_html IS NOT NULL`
-- **Capa**: `episode_materials.cover_url IS NOT NULL`
-- **Agendamento**: `episode_materials.spotify_link IS NOT NULL`
-
-Cada indicador e um circulo (verde/cinza). A barra de progresso da semana = % de indicadores verdes / total.
-
-As semanas do ano mostram barras de progresso agregadas.
-
-## 5. Campo Spotify Link no Calendario
-
-No modal do episodio no Calendario, adicionar input "Link Spotify" que salva em `episode_materials.spotify_link`. Quando preenchido, o episodio e considerado agendado.
-
-## 6. Secoes Corretas das Pautas
-
-Dias da semana (seg-sex): `anniversary`, `review_rafa`, `news`, `review_kilton`
-Sabado: `next_week_releases`
-
-Atualizar `PAUTA_SECTIONS` em constants.ts e a UI de Pautas.
-
-## 7. Refatorar AppContext
-
-Trocar o state local por queries Supabase (`@tanstack/react-query` + supabase client). Manter a mesma interface publica do contexto para nao quebrar as paginas.
-
-## Arquivos afetados
-
-| Arquivo | Mudanca |
+| Origem (Podcast Pal) | Destino (Snakepit) |
 |---|---|
-| Migration SQL | Schema completo (novo) |
-| `src/lib/types.ts` | Tipos alinhados ao schema real |
-| `src/lib/constants.ts` | Secoes corretas, domingo adicionado |
-| `src/contexts/AppContext.tsx` | Queries Supabase em vez de useState |
-| `src/pages/Dashboard.tsx` | Pipeline de completude real |
-| `src/pages/Pautas.tsx` | Secoes corretas |
-| `src/pages/CalendarView.tsx` | Campo spotify_link |
-| `src/pages/Materials.tsx` | Domingo, spotify_link |
+| `src/lib/audio/*` (8 arquivos: types, pipeline, decoder, encoder, dsp, assembler, auto-duck, voice-processor, voice-worker, voice-worker-client, analysis, pre-master, silence-remover) | `src/lib/audio/*` |
+| `src/lib/assets/presets.ts` | `src/lib/assets/presets.ts` |
+| `src/lib/desktop/runtime.ts`, `types.ts`, `queue.ts` | `src/lib/desktop/runtime.ts`, `types.ts`, `queue.ts` |
+| `src/assets/heavynauta-badge.svg` | `src/assets/heavynauta-badge.svg` |
+| `src/components/MultiTrackMaster.tsx` | `src/components/rivaldo/MultiTrackMaster.tsx` |
+| `src/components/UploadSlot.tsx` | `src/components/rivaldo/UploadSlot.tsx` |
+| `src/components/ParametersSidebar.tsx` | `src/components/rivaldo/ParametersSidebar.tsx` |
+| `src/components/GranularProgress.tsx` | `src/components/rivaldo/GranularProgress.tsx` |
+| `src/components/ProcessLog.tsx` | `src/components/rivaldo/ProcessLog.tsx` |
+| `src/components/BulkModal.tsx` | `src/components/rivaldo/BulkModal.tsx` |
+| `src/components/ElapsedTimer.tsx` | `src/components/rivaldo/ElapsedTimer.tsx` |
+| `src/components/ProcessingReportPanel.tsx` | `src/components/rivaldo/ProcessingReportPanel.tsx` |
+| `src/components/HeavynautaBrand.tsx` | `src/components/rivaldo/HeavynautaBrand.tsx` |
+| `src/components/DesktopJobsPanel.tsx` | `src/components/rivaldo/DesktopJobsPanel.tsx` |
+| `public/presets/*` (10 MP3 files) | `public/presets/*` |
+
+**Arquivos a modificar no Snakepit:**
+
+| Arquivo | Alteração |
+|---|---|
+| `src/pages/Rivaldo.tsx` | Substituir completamente pelo conteúdo de `Index.tsx` do Podcast Pal, ajustando imports para os novos paths (`@/components/rivaldo/*`) |
+| `package.json` | Adicionar dependências: `@breezystack/lamejs`, `@jitsi/rnnoise-wasm`, `fft.js` |
+
+### Detalhes técnicos
+
+1. **Dependências novas**: 3 pacotes de áudio (`@breezystack/lamejs` para encoding MP3, `@jitsi/rnnoise-wasm` para denoise via WASM, `fft.js` para FFT). O `framer-motion` já existe no Snakepit mas em versão `^11.0.0` — o Podcast Pal usa `^12.36.0`; atualizaremos para a versão mais recente.
+
+2. **Estrutura**: Componentes do Rivaldo ficarão em `src/components/rivaldo/` para não conflitar com componentes existentes do Snakepit. As bibliotecas de áudio e desktop ficam em `src/lib/audio/` e `src/lib/desktop/`.
+
+3. **Adaptação do layout**: O `Rivaldo.tsx` original (Podcast Pal) tem seu próprio `<header>` e layout full-page. Como no Snakepit ele já está dentro do `AppLayout` (com sidebar + header), removeremos o header duplicado do componente e ajustaremos para que o conteúdo se encaixe no `<main>` do layout.
+
+4. **Desktop mode**: O código de desktop (`window.rivaldoDesktop`) funciona apenas no Electron. No browser, `isDesktopRuntime()` retorna `false` e todo o código desktop é ignorado automaticamente — não precisa de alteração.
+
+5. **Assets de preset**: Os 10 arquivos MP3 de presets (intro, outro, 8 BGMs) serão copiados para `public/presets/`.
+
+6. **Módulos não utilizados**: `pre-master.ts` e `silence-remover.ts` referenciam tipos inexistentes (`PreProcessOptions`, campos extras em `AudioParams`). Serão copiados mas não são importados pelo pipeline principal — funcionam como código morto sem impacto.
+
+### Etapas de implementação
+
+1. Instalar dependências (`@breezystack/lamejs`, `@jitsi/rnnoise-wasm`, `fft.js`, atualizar `framer-motion`)
+2. Copiar os 10 arquivos de preset MP3 para `public/presets/`
+3. Copiar o SVG badge para `src/assets/`
+4. Criar `src/lib/audio/` com todos os 12 arquivos de áudio
+5. Criar `src/lib/desktop/` com os 3 arquivos desktop
+6. Criar `src/lib/assets/presets.ts`
+7. Criar `src/components/rivaldo/` com os 10 componentes
+8. Reescrever `src/pages/Rivaldo.tsx` com o conteúdo completo do Index.tsx adaptado ao layout do Snakepit
 
