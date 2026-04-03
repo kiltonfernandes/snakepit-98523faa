@@ -12,7 +12,7 @@ interface DayColumnProps {
 export function DayColumn({ label, shortLabel, children, className, isActive }: DayColumnProps) {
   return (
     <Card className={cn(
-      'min-w-[200px] flex-1 transition-colors',
+      'flex-1 transition-colors',
       isActive && 'border-primary/50 shadow-lg shadow-primary/5',
       className
     )}>

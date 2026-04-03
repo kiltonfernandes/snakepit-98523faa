@@ -150,6 +150,12 @@ export default function Pautas() {
   const [flowGenerating, setFlowGenerating] = useState(false);
   const [flowProgress, setFlowProgress] = useState<Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>>>({});
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  const [weekCarouselStart, setWeekCarouselStart] = useState(() => {
+    const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const idx = sorted.findIndex(w => w.start_date >= todayStr);
+    return Math.max(0, idx >= 0 ? idx : sorted.length - 1);
+  });
   const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
   const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
 
@@ -1023,20 +1029,36 @@ export default function Pautas() {
         </div>
       </div>
 
-      {weeks.length > 0 && (
-        <div className="flex gap-2 flex-wrap">
-          {weeks.map(w => (
-            <Button key={w.id} variant={selectedWeek?.id === w.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(w.id)}>
-              {(() => {
-                const mon = new Date(w.start_date + 'T12:00:00');
-                const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-                return `Semana ${format(mon, 'dd.MM')} a ${format(sun, 'dd.MM')}`;
-              })()}
-              <StatusBadge status={w.status} className="ml-2 text-[10px]" />
+      {weeks.length > 0 && (() => {
+        const sortedWeeks = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
+        const visible = 4;
+        const visibleWeeks = sortedWeeks.slice(weekCarouselStart, weekCarouselStart + visible);
+        const canPrev = weekCarouselStart > 0;
+        const canNext = weekCarouselStart + visible < sortedWeeks.length;
+
+        return (
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={!canPrev} onClick={() => setWeekCarouselStart(s => Math.max(0, s - 1))}>
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-          ))}
-        </div>
-      )}
+            <div className="flex gap-2 overflow-hidden">
+              {visibleWeeks.map(w => (
+                <Button key={w.id} variant={selectedWeek?.id === w.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(w.id)}>
+                  {(() => {
+                    const mon = new Date(w.start_date + 'T12:00:00');
+                    const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+                    return `Semana ${format(mon, 'dd.MM')} a ${format(sun, 'dd.MM')}`;
+                  })()}
+                  <StatusBadge status={w.status} className="ml-2 text-[10px]" />
+                </Button>
+              ))}
+            </div>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" disabled={!canNext} onClick={() => setWeekCarouselStart(s => Math.min(sortedWeeks.length - visible, s + 1))}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      })()}
 
       {selectedWeek ? (
         <>

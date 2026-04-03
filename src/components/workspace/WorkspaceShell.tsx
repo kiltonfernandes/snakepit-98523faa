@@ -1,6 +1,5 @@
 import { DAY_SLOTS } from '@/lib/constants';
 import { DayColumn } from './DayColumn';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { DaySlot } from '@/lib/types';
 
 interface WorkspaceShellProps {
@@ -25,16 +24,13 @@ export function WorkspaceShell({ weekLabel, renderDay, actions, excludeDays }: W
         {actions && <div className="flex items-center gap-2">{actions}</div>}
       </div>
 
-      <ScrollArea className="w-full">
-        <div className="flex gap-4 pb-4">
-          {visibleDays.map((day) => (
-            <DayColumn key={day.key} label={day.label} shortLabel={day.short}>
-              {renderDay(day)}
-            </DayColumn>
-          ))}
-        </div>
-        <ScrollBar orientation="horizontal" />
-      </ScrollArea>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-4">
+        {visibleDays.map((day) => (
+          <DayColumn key={day.key} label={day.label} shortLabel={day.short}>
+            {renderDay(day)}
+          </DayColumn>
+        ))}
+      </div>
     </div>
   );
 }
