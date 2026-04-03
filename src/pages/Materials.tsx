@@ -235,7 +235,7 @@ Responda APENAS com os 3 títulos no formato acima, sem explicações extras.`;
         lines.slice(0, 3).forEach((line, i) => {
           const cleanLine = line.replace(/^[\d\.\-\*\•]+\s*/, '').replace(/^\[.*?\]\s*/, '').trim();
           if (cleanLine) {
-            options.push({ text: cleanLine, style: styleNames[i] || 'geral' });
+            options.push({ text: cleanLine, style: (styleNames[i] || 'clickbait') as TitleOption['style'] });
           }
         });
       }
