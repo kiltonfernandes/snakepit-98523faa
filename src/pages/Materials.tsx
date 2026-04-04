@@ -360,7 +360,7 @@ export default function Materials() {
 
     try {
       const prompt = buildTitlePrompt(mat, pauta);
-      const aiText = await runAIPrompt(prompt);
+      const aiText = await runAIPrompt(prompt, 'title', mat.episode_date);
       const options = parseTitleResponse(aiText);
 
       if (!options.length) {
