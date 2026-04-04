@@ -51,32 +51,59 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
-  const { materials, pautas } = useApp();
+  const { materials, pautas, weeks } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
   const [masterTracks, setMasterTracks] = useState<File[]>([]);
   const [filename, setFilename] = useState('');
 
-  // Episode titles from finalized pautas
-  const episodeOptions = useMemo(() => {
+  const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
+
+  // Episode titles from finalized pautas, grouped by week
+  const episodeGroups = useMemo(() => {
     const finalizedPautaIds = new Set(
       pautas.filter(p => p.status === 'finalized').map(p => p.id)
     );
-    return materials
-      .filter(m => {
-        if (!m.source_pauta_id) return false;
-        return finalizedPautaIds.has(m.source_pauta_id);
-      })
+    const eligibleMaterials = materials
+      .filter(m => m.source_pauta_id && finalizedPautaIds.has(m.source_pauta_id))
       .map(m => {
         const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
         const title = (m.selected_title_index != null && opts[m.selected_title_index]?.text)
           ? opts[m.selected_title_index].text
           : opts[0]?.text || `Episódio ${m.slot_key}`;
-        return { value: title, label: title, date: m.episode_date };
+        const d = new Date(`${m.episode_date}T12:00:00`);
+        const dayName = DAY_NAMES[d.getDay()] || '';
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const label = `[${dd}.${mm} - ${dayName}] - ${title}`;
+        return { value: title, label, date: m.episode_date, week_id: m.week_id };
       })
       .filter(o => o.value);
-  }, [materials, pautas]);
+
+    // Group by week
+    const groups: { weekLabel: string; weekId: string; items: typeof eligibleMaterials }[] = [];
+    const byWeek = new Map<string, typeof eligibleMaterials>();
+    for (const item of eligibleMaterials) {
+      if (!byWeek.has(item.week_id)) byWeek.set(item.week_id, []);
+      byWeek.get(item.week_id)!.push(item);
+    }
+
+    for (const [weekId, items] of byWeek) {
+      items.sort((a, b) => a.date.localeCompare(b.date));
+      const week = weeks.find(w => w.id === weekId);
+      const weekLabel = week ? `Semana de ${new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : weekId;
+      groups.push({ weekLabel, weekId, items });
+    }
+
+    groups.sort((a, b) => {
+      const wa = weeks.find(w => w.id === a.weekId);
+      const wb = weeks.find(w => w.id === b.weekId);
+      return (wb?.start_date || '').localeCompare(wa?.start_date || '');
+    });
+
+    return groups;
+  }, [materials, pautas, weeks]);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
   const [logs, setLogs] = useState<LogEntry[]>([]);
