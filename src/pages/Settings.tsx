@@ -279,6 +279,21 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* AI Token Usage */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Cpu className="h-4 w-4" /> Uso de IA & Tokens
+              </CardTitle>
+              <CardDescription>Monitore o consumo de tokens e custos estimados</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" className="gap-2 w-full" onClick={() => setTokenDialogOpen(true)}>
+                <Cpu className="h-3.5 w-3.5" /> Ver Dashboard de Tokens
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Coluna Direita */}
