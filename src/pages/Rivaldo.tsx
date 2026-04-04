@@ -16,15 +16,12 @@ import { ProcessingReportPanel } from '@/components/rivaldo/ProcessingReportPane
 import { DesktopJobsPanel } from '@/components/rivaldo/DesktopJobsPanel';
 import { HeavynautaBrand } from '@/components/rivaldo/HeavynautaBrand';
 import { mergeQueuedJobIntoState, prepareDesktopPipelinePayload } from '@/lib/desktop/queue';
-import { runPipeline } from '@/lib/audio/pipeline';
 import {
   AudioParams,
   DEFAULT_PARAMS,
   DEFAULT_PROCESSING_PROFILE,
   LogEntry,
-  MasterReport,
   ProcessingProfile,
-  TrackReport,
 } from '@/lib/audio/types';
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
