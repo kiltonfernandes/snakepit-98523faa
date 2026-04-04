@@ -787,7 +787,7 @@ export default function Materials() {
         '[HTML da descrição em seguida]',
       ].join('\n');
 
-      const aiText = await runAIPrompt(prompt);
+      const aiText = await runAIPrompt(prompt, 'sunday_compilation', mat.episode_date);
       const cleaned = cleanAiResponse(aiText);
 
       // Parse title
