@@ -479,26 +479,19 @@ export default function Materials() {
     const mat = weekMaterials.find((material) => material.slot_key === daySlot);
     if (!mat) return 'heavy metal album cover';
 
+    const selectedTitle = getTitle(mat);
+    if (selectedTitle) return `${selectedTitle} band promo`;
+
+    // Fallback: extract proper nouns from pauta context
     const pauta = getPautaForMaterial(mat);
     const inputs = ((pauta?.raw_inputs_json || {}) as Record<string, any>);
-    const selectedTitle = getTitle(mat);
     const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
     const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
 
     if (anniversary) return `${anniversary} band promo`;
     if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} band promo`;
 
-    const textPool = [
-      selectedTitle,
-      typeof pauta?.sections_json?.news === 'string' ? pauta.sections_json.news : '',
-      typeof pauta?.sections_json?.review_rafa === 'string' ? pauta.sections_json.review_rafa : '',
-      typeof pauta?.sections_json?.review_kilton === 'string' ? pauta.sections_json.review_kilton : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    const proper = parseProperNouns(textPool);
-    return proper ? `${proper} band promo photo` : `${selectedTitle || 'heavy metal'} band photo`;
+    return 'heavy metal band photo';
   };
 
   const fetchCanvasSafeImageUrl = useCallback(async (url: string) => {
