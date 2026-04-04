@@ -456,7 +456,7 @@ export default function Materials() {
 
     try {
       const prompt = buildDescriptionPrompt(mat, pauta);
-      const rawHtml = await runAIPrompt(prompt);
+      const rawHtml = await runAIPrompt(prompt, 'description', mat.episode_date);
       let html = cleanAiResponse(rawHtml);
 
       if (!html.startsWith('<')) {
