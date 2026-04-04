@@ -44,7 +44,7 @@ export default function Settings() {
     setAiUsageLoading(true);
     supabase.from('ai_usage_logs' as any).select('*').order('created_at', { ascending: false }).limit(500)
       .then(({ data }) => { setAiUsage((data as any[]) || []); setAiUsageLoading(false); })
-      .catch(() => setAiUsageLoading(false));
+      .then(undefined, () => setAiUsageLoading(false));
   }, [tokenDialogOpen]);
 
   const totalTokensIn = aiUsage.reduce((s, r) => s + (r.tokens_input || 0), 0);
