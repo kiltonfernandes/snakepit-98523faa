@@ -157,15 +157,7 @@ const Rivaldo = () => {
     return () => unsub();
   }, [desktopApi, desktopMode]);
 
-  useEffect(() => {
-    if (!desktopMode || !latestDesktopJob) return;
-    setProgress(latestDesktopJob.progress);
-    setProgressLabel(latestDesktopJob.progressLabel);
-    setLogs(latestDesktopJob.logs);
-    setTrackReports(latestDesktopJob.trackReports);
-    setMasterReport(latestDesktopJob.masterReport);
-    setIsProcessing(latestDesktopJob.status === 'running' || latestDesktopJob.status === 'pending');
-  }, [desktopMode, latestDesktopJob]);
+  // Desktop sync is handled by the derived state above — no need for setState
 
   const handleProcess = useCallback(async () => {
     if (!allFilesReady) return;
@@ -184,26 +176,19 @@ const Rivaldo = () => {
       return;
     }
 
-    setIsProcessing(true); setProgress(0); setLogs([]); setTrackReports([]); setMasterReport(null);
-    try {
-      const result = await runPipeline(
-        { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
-        audioParams, (value, label) => { setProgress(value); setProgressLabel(label); }, addLog
-      );
-      setTrackReports(result.trackReports); setMasterReport(result.masterReport);
-      
-      // Memory purge: nullify heavy references after successful export
-      addLog('Memória liberada após export', 'info');
-      // The finalBuffer is already downloaded by the pipeline (download mode).
-      // Clear local file references to release memory
-      if (masterMode === 'single') {
-        setMasterFile(null);
-      } else {
-        setMasterTracks([]);
-      }
-    } catch (error) { addLog(error instanceof Error ? error.message : 'Erro no pipeline 3.2', 'error'); }
-    finally { setIsProcessing(false); }
-  }, [addLog, addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile]);
+    // Browser mode: use RivaldoContext for background processing
+    await rivaldo.startPipeline(
+      { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
+      audioParams
+    );
+
+    // Memory purge: clear file references after export
+    if (masterMode === 'single') {
+      setMasterFile(null);
+    } else {
+      setMasterTracks([]);
+    }
+  }, [addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile, rivaldo]);
 
   return (
     <div className="flex flex-col h-full">
