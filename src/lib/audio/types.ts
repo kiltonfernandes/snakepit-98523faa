@@ -20,6 +20,8 @@ export interface AudioParams {
   fadeDownDuration: number;
   fadeUpDuration: number;
   maxPause: number;
+  silenceCutTarget: number;
+  silenceCutBufferMs: number;
   bgmTailAfterMaster: number;
   outputBitrate: number;
   crossfadeDuration: number;
