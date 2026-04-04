@@ -44,6 +44,42 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_usage_logs: {
+        Row: {
+          created_at: string
+          episode_date: string | null
+          estimated_cost: number
+          id: string
+          model: string
+          scope: string
+          tokens_input: number
+          tokens_output: number
+          week_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          episode_date?: string | null
+          estimated_cost?: number
+          id: string
+          model?: string
+          scope?: string
+          tokens_input?: number
+          tokens_output?: number
+          week_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          episode_date?: string | null
+          estimated_cost?: number
+          id?: string
+          model?: string
+          scope?: string
+          tokens_input?: number
+          tokens_output?: number
+          week_id?: string | null
+        }
+        Relationships: []
+      }
       app_settings: {
         Row: {
           banned_terms_text: string
