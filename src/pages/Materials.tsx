@@ -336,7 +336,7 @@ export default function Materials() {
       setGeneratingTitles((prev) => new Set(prev).add(materialId));
       try {
         const prompt = `🔥 Títulos otimizados para YOUTUBE/PODCAST — COMPILAÇÃO SEMANAL\n\nEste é o episódio de DOMINGO do Heavynauta, um podcast longo que compila todos os 6 episódios da semana.\n\nTÍTULOS DOS EPISÓDIOS DA SEMANA:\n${otherTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nGere EXATAMENTE 3 títulos que capturem os destaques da semana de forma compilada.\n\nFORMATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
-        const aiText = await runAIPrompt(prompt);
+        const aiText = await runAIPrompt(prompt, 'title', mat.episode_date);
         const options = parseTitleResponse(aiText);
         if (options.length) {
           updateMaterial(materialId, { title_options_json: options as any, selected_title_index: 0 });
