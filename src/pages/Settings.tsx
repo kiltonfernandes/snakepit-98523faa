@@ -450,6 +450,69 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={tokenDialogOpen} onOpenChange={setTokenDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Cpu className="h-5 w-5" /> Dashboard de Tokens</DialogTitle>
+            <DialogDescription>Consumo estimado de tokens e custos por tipo de geração</DialogDescription>
+          </DialogHeader>
+          {aiUsageLoading ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
+          ) : aiUsage.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">Nenhum uso registrado ainda. Gere títulos ou descrições para começar a monitorar.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-muted/30 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono">{(totalTokensIn + totalTokensOut).toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground">Tokens totais</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono">{aiUsage.length}</div>
+                  <div className="text-[10px] text-muted-foreground">Chamadas</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono text-primary">${totalCost.toFixed(4)}</div>
+                  <div className="text-[10px] text-muted-foreground">Custo estimado</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium">Por tipo</h4>
+                {Object.entries(usageByScope).map(([scope, data]) => (
+                  <div key={scope} className="flex items-center justify-between bg-muted/20 rounded px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-[10px]">{scope}</Badge>
+                      <span className="text-muted-foreground">{data.count} chamadas</span>
+                    </div>
+                    <div className="flex items-center gap-4 font-mono">
+                      <span>{(data.input + data.output).toLocaleString()} tok</span>
+                      <span className="text-primary">${data.cost.toFixed(4)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium">Últimas chamadas</h4>
+                <ScrollArea className="h-[200px]">
+                  <div className="space-y-1">
+                    {aiUsage.slice(0, 50).map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-[10px] px-2 py-1 rounded bg-muted/10">
+                        <span className="text-muted-foreground font-mono">{new Date(r.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        <Badge variant="outline" className="text-[9px] h-4">{r.scope}</Badge>
+                        <span className="font-mono">{(r.tokens_input + r.tokens_output).toLocaleString()}</span>
+                        <span className="font-mono text-primary">${r.estimated_cost.toFixed(5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
