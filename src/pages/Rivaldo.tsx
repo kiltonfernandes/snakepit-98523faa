@@ -191,6 +191,16 @@ const Rivaldo = () => {
         audioParams, (value, label) => { setProgress(value); setProgressLabel(label); }, addLog
       );
       setTrackReports(result.trackReports); setMasterReport(result.masterReport);
+      
+      // Memory purge: nullify heavy references after successful export
+      addLog('Memória liberada após export', 'info');
+      // The finalBuffer is already downloaded by the pipeline (download mode).
+      // Clear local file references to release memory
+      if (masterMode === 'single') {
+        setMasterFile(null);
+      } else {
+        setMasterTracks([]);
+      }
     } catch (error) { addLog(error instanceof Error ? error.message : 'Erro no pipeline 3.2', 'error'); }
     finally { setIsProcessing(false); }
   }, [addLog, addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile]);
