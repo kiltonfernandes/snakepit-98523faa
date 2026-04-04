@@ -641,21 +641,7 @@ export default function Materials() {
     };
 
     const drawOverlay = () => {
-      const WEEKDAYS: DaySlot[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-      const isWeekday = coverDaySlot && WEEKDAYS.includes(coverDaySlot);
-      const baseTitle = getTitle(mat) || `Episódio ${coverDaySlot}`;
-      
-      let title = baseTitle;
-      if (isWeekday) {
-        const pauta = getPautaForMaterial(mat);
-        const inputs = ((pauta?.raw_inputs_json || {}) as Record<string, any>);
-        const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
-        const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
-        const bandName = anniversary || (reviewRelease ? `${reviewRelease.artist}` : '');
-        if (bandName) {
-          title = `${baseTitle}\n${bandName}`;
-        }
-      }
+      const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
       const imageAreaH = Math.round(SIZE * 0.62);
       const panelTop = imageAreaH + 80;
 
