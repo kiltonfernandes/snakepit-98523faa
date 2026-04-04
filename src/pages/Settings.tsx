@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
@@ -32,6 +34,7 @@ export default function Settings() {
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
@@ -69,6 +72,42 @@ export default function Settings() {
   const logActions = [...new Set(activityLog.map(e => e.action))];
 
   const overridesCount = Object.keys(settings.prompt_overrides_json || {}).length;
+
+  const exportLogCsv = () => {
+    const header = 'Data,Ação,Detalhes';
+    const rows = filteredLog.map(entry => {
+      const date = new Date(entry.timestamp).toLocaleString('pt-BR');
+      const action = entry.action.replace(/"/g, '""');
+      const details = entry.details.replace(/"/g, '""');
+      return `"${date}","${action}","${details}"`;
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `activity_log_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filteredLog.length} registros exportados`);
+  };
+
+  const deleteAllLogs = async () => {
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from('activity_logs' as any).delete().neq('id', '');
+      if (error) {
+        toast.error(`Erro ao limpar logs: ${error.message}`);
+      } else {
+        toast.success('Todos os logs foram removidos');
+        window.location.reload();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao limpar logs');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -262,10 +301,40 @@ export default function Settings() {
           {/* Activity Log */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Activity className="h-4 w-4" /> Log de Atividade
-              </CardTitle>
-              <CardDescription>Histórico de ações do sistema</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Activity className="h-4 w-4" /> Log de Atividade
+                  </CardTitle>
+                  <CardDescription>Histórico de ações do sistema</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={exportLogCsv} disabled={filteredLog.length === 0}>
+                    <Download className="h-3 w-3" /> CSV
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-destructive hover:text-destructive" disabled={activityLog.length === 0}>
+                        <Trash2 className="h-3 w-3" /> Limpar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Limpar todos os logs?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Essa ação é irreversível. Todos os {activityLog.length} registros de atividade serão removidos permanentemente.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={deleteAllLogs} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          {isDeleting ? 'Limpando...' : 'Sim, limpar tudo'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2">
