@@ -202,7 +202,30 @@ export default function Materials() {
     return Boolean(pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review'));
   };
 
-  const runAIPrompt = useCallback(async (prompt: string) => {
+  const logAiUsage = useCallback(async (scope: string, promptText: string, responseText: string, episodeDate?: string, weekId?: string) => {
+    // Estimate tokens: ~4 chars per token for Portuguese
+    const tokensInput = Math.ceil(promptText.length / 4);
+    const tokensOutput = Math.ceil(responseText.length / 4);
+    // Gemini 2.5 flash-lite: ~$0.075/1M input, ~$0.30/1M output
+    const estimatedCost = (tokensInput * 0.000000075) + (tokensOutput * 0.0000003);
+    
+    try {
+      await supabase.from('ai_usage_logs' as any).insert({
+        id: crypto.randomUUID(),
+        scope,
+        episode_date: episodeDate || null,
+        week_id: weekId || selectedWeek?.id || null,
+        tokens_input: tokensInput,
+        tokens_output: tokensOutput,
+        model: 'google/gemini-2.5-flash-lite',
+        estimated_cost: estimatedCost,
+      } as any);
+    } catch (err) {
+      console.warn('Failed to log AI usage:', err);
+    }
+  }, [selectedWeek?.id]);
+
+  const runAIPrompt = useCallback(async (prompt: string, scope: string = 'general', episodeDate?: string) => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
     const response = await fetch(url, {
       method: 'POST',
@@ -220,8 +243,13 @@ export default function Materials() {
 
     const raw = await response.text();
     const text = extractSseText(raw);
-    return cleanAiResponse(text || raw);
-  }, []);
+    const result = cleanAiResponse(text || raw);
+    
+    // Log AI usage asynchronously
+    logAiUsage(scope, prompt, result, episodeDate);
+    
+    return result;
+  }, [logAiUsage, settings.banned_terms_text]);
 
   const buildEpisodeContext = (mat: EpisodeMaterial, pauta: Pauta) => {
     const sections = (pauta.sections_json || {}) as Record<string, string>;
