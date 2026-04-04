@@ -35,6 +35,29 @@ export default function Settings() {
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [aiUsage, setAiUsage] = useState<{ scope: string; tokens_input: number; tokens_output: number; estimated_cost: number; created_at: string; episode_date: string | null; week_id: string | null }[]>([]);
+  const [aiUsageLoading, setAiUsageLoading] = useState(false);
+
+  useEffect(() => {
+    if (!tokenDialogOpen) return;
+    setAiUsageLoading(true);
+    supabase.from('ai_usage_logs' as any).select('*').order('created_at', { ascending: false }).limit(500)
+      .then(({ data }) => { setAiUsage((data as any[]) || []); setAiUsageLoading(false); })
+      .catch(() => setAiUsageLoading(false));
+  }, [tokenDialogOpen]);
+
+  const totalTokensIn = aiUsage.reduce((s, r) => s + (r.tokens_input || 0), 0);
+  const totalTokensOut = aiUsage.reduce((s, r) => s + (r.tokens_output || 0), 0);
+  const totalCost = aiUsage.reduce((s, r) => s + (r.estimated_cost || 0), 0);
+  const usageByScope = aiUsage.reduce((acc, r) => {
+    if (!acc[r.scope]) acc[r.scope] = { input: 0, output: 0, cost: 0, count: 0 };
+    acc[r.scope].input += r.tokens_input || 0;
+    acc[r.scope].output += r.tokens_output || 0;
+    acc[r.scope].cost += r.estimated_cost || 0;
+    acc[r.scope].count += 1;
+    return acc;
+  }, {} as Record<string, { input: number; output: number; cost: number; count: number }>);
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
