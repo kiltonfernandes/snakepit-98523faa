@@ -105,15 +105,10 @@ const Rivaldo = () => {
 
     return groups;
   }, [materials, pautas, weeks]);
-  const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const rivaldo = useRivaldo();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
   const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>({ ...DEFAULT_PROCESSING_PROFILE });
-  const [trackReports, setTrackReports] = useState<TrackReport[]>([]);
-  const [masterReport, setMasterReport] = useState<MasterReport | null>(null);
   const [desktopState, setDesktopState] = useState<DesktopState | null>(null);
   const [desktopStateError, setDesktopStateError] = useState<string | null>(null);
   const [uiLogs, setUiLogs] = useState<LogEntry[]>([]);
@@ -122,16 +117,20 @@ const Rivaldo = () => {
   const desktopMode = isDesktopRuntime();
   const desktopApi = getDesktopApi();
 
+  // Use context state for browser mode, local state for desktop mode
+  const progress = desktopMode ? (desktopState?.jobs[0]?.progress ?? 0) : rivaldo.progress;
+  const progressLabel = desktopMode ? (desktopState?.jobs[0]?.progressLabel ?? '') : rivaldo.progressLabel;
+  const logs = desktopMode ? (desktopState?.jobs[0]?.logs ?? []) : rivaldo.logs;
+  const isProcessing = desktopMode ? Boolean(desktopState?.jobs.some(j => j.status === 'running' || j.status === 'pending')) : rivaldo.isProcessing;
+  const trackReports = desktopMode ? (desktopState?.jobs[0]?.trackReports ?? []) : rivaldo.trackReports;
+  const masterReport = desktopMode ? (desktopState?.jobs[0]?.masterReport ?? null) : rivaldo.masterReport;
+
   const handleFileChange = useCallback((key: SlotKey, file: File | null) => {
     setFiles((prev) => ({ ...prev, [key]: file }));
   }, []);
 
   const addUiLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setUiLogs((prev) => [...prev, { timestamp: Date.now(), message, type }].slice(-60));
-  }, []);
-
-  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-    setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
   }, []);
 
   const masterReady = masterMode === 'single' ? !!masterFile : masterTracks.length > 0;
