@@ -205,14 +205,18 @@ const Rivaldo = () => {
               <SelectValue placeholder="Selecione o episódio..." />
             </SelectTrigger>
             <SelectContent>
-              {episodeOptions.length === 0 && (
+              {episodeGroups.length === 0 && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma pauta finalizada</div>
               )}
-              {episodeOptions.map((opt, i) => (
-                <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
-                  <span className="text-xs text-muted-foreground mr-2">{opt.date}</span>
-                  {opt.label}
-                </SelectItem>
+              {episodeGroups.map((group) => (
+                <SelectGroup key={group.weekId}>
+                  <SelectLabel className="text-xs font-semibold text-muted-foreground">{group.weekLabel}</SelectLabel>
+                  {group.items.map((opt, i) => (
+                    <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>
