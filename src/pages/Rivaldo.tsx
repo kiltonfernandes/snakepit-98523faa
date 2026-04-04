@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Layers, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
+import { useRivaldo } from '@/contexts/RivaldoContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
