@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -8,8 +8,10 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
@@ -32,6 +34,30 @@ export default function Settings() {
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
+  const [aiUsage, setAiUsage] = useState<{ scope: string; tokens_input: number; tokens_output: number; estimated_cost: number; created_at: string; episode_date: string | null; week_id: string | null }[]>([]);
+  const [aiUsageLoading, setAiUsageLoading] = useState(false);
+
+  useEffect(() => {
+    if (!tokenDialogOpen) return;
+    setAiUsageLoading(true);
+    supabase.from('ai_usage_logs' as any).select('*').order('created_at', { ascending: false }).limit(500)
+      .then(({ data }) => { setAiUsage((data as any[]) || []); setAiUsageLoading(false); })
+      .then(undefined, () => setAiUsageLoading(false));
+  }, [tokenDialogOpen]);
+
+  const totalTokensIn = aiUsage.reduce((s, r) => s + (r.tokens_input || 0), 0);
+  const totalTokensOut = aiUsage.reduce((s, r) => s + (r.tokens_output || 0), 0);
+  const totalCost = aiUsage.reduce((s, r) => s + (r.estimated_cost || 0), 0);
+  const usageByScope = aiUsage.reduce((acc, r) => {
+    if (!acc[r.scope]) acc[r.scope] = { input: 0, output: 0, cost: 0, count: 0 };
+    acc[r.scope].input += r.tokens_input || 0;
+    acc[r.scope].output += r.tokens_output || 0;
+    acc[r.scope].cost += r.estimated_cost || 0;
+    acc[r.scope].count += 1;
+    return acc;
+  }, {} as Record<string, { input: number; output: number; cost: number; count: number }>);
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
 
@@ -69,6 +95,42 @@ export default function Settings() {
   const logActions = [...new Set(activityLog.map(e => e.action))];
 
   const overridesCount = Object.keys(settings.prompt_overrides_json || {}).length;
+
+  const exportLogCsv = () => {
+    const header = 'Data,Ação,Detalhes';
+    const rows = filteredLog.map(entry => {
+      const date = new Date(entry.timestamp).toLocaleString('pt-BR');
+      const action = entry.action.replace(/"/g, '""');
+      const details = entry.details.replace(/"/g, '""');
+      return `"${date}","${action}","${details}"`;
+    });
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `activity_log_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`${filteredLog.length} registros exportados`);
+  };
+
+  const deleteAllLogs = async () => {
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from('activity_logs' as any).delete().neq('id', '');
+      if (error) {
+        toast.error(`Erro ao limpar logs: ${error.message}`);
+      } else {
+        toast.success('Todos os logs foram removidos');
+        window.location.reload();
+      }
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao limpar logs');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -217,6 +279,21 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* AI Token Usage */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Cpu className="h-4 w-4" /> Uso de IA & Tokens
+              </CardTitle>
+              <CardDescription>Monitore o consumo de tokens e custos estimados</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button size="sm" className="gap-2 w-full" onClick={() => setTokenDialogOpen(true)}>
+                <Cpu className="h-3.5 w-3.5" /> Ver Dashboard de Tokens
+              </Button>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Coluna Direita */}
@@ -262,10 +339,40 @@ export default function Settings() {
           {/* Activity Log */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Activity className="h-4 w-4" /> Log de Atividade
-              </CardTitle>
-              <CardDescription>Histórico de ações do sistema</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Activity className="h-4 w-4" /> Log de Atividade
+                  </CardTitle>
+                  <CardDescription>Histórico de ações do sistema</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={exportLogCsv} disabled={filteredLog.length === 0}>
+                    <Download className="h-3 w-3" /> CSV
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-destructive hover:text-destructive" disabled={activityLog.length === 0}>
+                        <Trash2 className="h-3 w-3" /> Limpar
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Limpar todos os logs?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Essa ação é irreversível. Todos os {activityLog.length} registros de atividade serão removidos permanentemente.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={deleteAllLogs} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                          {isDeleting ? 'Limpando...' : 'Sim, limpar tudo'}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2">
@@ -341,6 +448,69 @@ export default function Settings() {
               toast.success('Template de descrição salvo');
             }}>Salvar Template</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tokenDialogOpen} onOpenChange={setTokenDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Cpu className="h-5 w-5" /> Dashboard de Tokens</DialogTitle>
+            <DialogDescription>Consumo estimado de tokens e custos por tipo de geração</DialogDescription>
+          </DialogHeader>
+          {aiUsageLoading ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
+          ) : aiUsage.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground text-sm">Nenhum uso registrado ainda. Gere títulos ou descrições para começar a monitorar.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-muted/30 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono">{(totalTokensIn + totalTokensOut).toLocaleString()}</div>
+                  <div className="text-[10px] text-muted-foreground">Tokens totais</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono">{aiUsage.length}</div>
+                  <div className="text-[10px] text-muted-foreground">Chamadas</div>
+                </div>
+                <div className="bg-muted/30 rounded-lg p-3 text-center">
+                  <div className="text-lg font-bold font-mono text-primary">${totalCost.toFixed(4)}</div>
+                  <div className="text-[10px] text-muted-foreground">Custo estimado</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium">Por tipo</h4>
+                {Object.entries(usageByScope).map(([scope, data]) => (
+                  <div key={scope} className="flex items-center justify-between bg-muted/20 rounded px-3 py-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="text-[10px]">{scope}</Badge>
+                      <span className="text-muted-foreground">{data.count} chamadas</span>
+                    </div>
+                    <div className="flex items-center gap-4 font-mono">
+                      <span>{(data.input + data.output).toLocaleString()} tok</span>
+                      <span className="text-primary">${data.cost.toFixed(4)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-xs font-medium">Últimas chamadas</h4>
+                <ScrollArea className="h-[200px]">
+                  <div className="space-y-1">
+                    {aiUsage.slice(0, 50).map((r, i) => (
+                      <div key={i} className="flex items-center justify-between text-[10px] px-2 py-1 rounded bg-muted/10">
+                        <span className="text-muted-foreground font-mono">{new Date(r.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                        <Badge variant="outline" className="text-[9px] h-4">{r.scope}</Badge>
+                        <span className="font-mono">{(r.tokens_input + r.tokens_output).toLocaleString()}</span>
+                        <span className="font-mono text-primary">${r.estimated_cost.toFixed(5)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>

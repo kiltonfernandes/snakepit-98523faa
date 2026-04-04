@@ -202,7 +202,30 @@ export default function Materials() {
     return Boolean(pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review'));
   };
 
-  const runAIPrompt = useCallback(async (prompt: string) => {
+  const logAiUsage = useCallback(async (scope: string, promptText: string, responseText: string, episodeDate?: string, weekId?: string) => {
+    // Estimate tokens: ~4 chars per token for Portuguese
+    const tokensInput = Math.ceil(promptText.length / 4);
+    const tokensOutput = Math.ceil(responseText.length / 4);
+    // Gemini 2.5 flash-lite: ~$0.075/1M input, ~$0.30/1M output
+    const estimatedCost = (tokensInput * 0.000000075) + (tokensOutput * 0.0000003);
+    
+    try {
+      await supabase.from('ai_usage_logs' as any).insert({
+        id: crypto.randomUUID(),
+        scope,
+        episode_date: episodeDate || null,
+        week_id: weekId || selectedWeek?.id || null,
+        tokens_input: tokensInput,
+        tokens_output: tokensOutput,
+        model: 'google/gemini-2.5-flash-lite',
+        estimated_cost: estimatedCost,
+      } as any);
+    } catch (err) {
+      console.warn('Failed to log AI usage:', err);
+    }
+  }, [selectedWeek?.id]);
+
+  const runAIPrompt = useCallback(async (prompt: string, scope: string = 'general', episodeDate?: string) => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
     const response = await fetch(url, {
       method: 'POST',
@@ -220,8 +243,13 @@ export default function Materials() {
 
     const raw = await response.text();
     const text = extractSseText(raw);
-    return cleanAiResponse(text || raw);
-  }, []);
+    const result = cleanAiResponse(text || raw);
+    
+    // Log AI usage asynchronously
+    logAiUsage(scope, prompt, result, episodeDate);
+    
+    return result;
+  }, [logAiUsage, settings.banned_terms_text]);
 
   const buildEpisodeContext = (mat: EpisodeMaterial, pauta: Pauta) => {
     const sections = (pauta.sections_json || {}) as Record<string, string>;
@@ -252,7 +280,15 @@ export default function Materials() {
     const context = buildEpisodeContext(mat, pauta);
     const instructions = getPromptText('material_titles_instructions', promptOverrides);
 
-    return `🔥 Títulos otimizados para YOUTUBE/PODCAST\n\n${instructions}\n\nCONTEXTO DO EPISÓDIO:\nDia: ${context.dayLabel}\nData: ${mat.episode_date}\n${context.summary}\n\nREGRAS OBRIGATÓRIAS:\n- responder SEMPRE em português do Brasil\n- não usar code block\n- não explicar o raciocínio\n- os títulos devem soar fortes, editoriais e prontos para publicação\n- se houver banda/álbum no contexto, priorize esses nomes\n\nFORMATO DE RESPOSTA EXATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
+    const isSaturday = mat.slot_key === 'saturday';
+    let focusInstruction: string;
+    if (isSaturday) {
+      focusInstruction = '- O título deve ser 100% focado nos DESTAQUES e LANÇAMENTOS da semana';
+    } else {
+      focusInstruction = '- O título deve ser 100% focado no texto da NOTÍCIA PRINCIPAL do episódio';
+    }
+
+    return `🔥 Títulos otimizados para YOUTUBE/PODCAST\n\n${instructions}\n\nCONTEXTO DO EPISÓDIO:\nDia: ${context.dayLabel}\nData: ${mat.episode_date}\n${context.summary}\n\nREGRAS OBRIGATÓRIAS:\n- responder SEMPRE em português do Brasil\n- não usar code block\n- não explicar o raciocínio\n- os títulos devem soar fortes, editoriais e prontos para publicação\n${focusInstruction}\n\nFORMATO DE RESPOSTA EXATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
   };
 
   const parseTitleResponse = (rawText: string): TitleOption[] => {
@@ -300,7 +336,7 @@ export default function Materials() {
       setGeneratingTitles((prev) => new Set(prev).add(materialId));
       try {
         const prompt = `🔥 Títulos otimizados para YOUTUBE/PODCAST — COMPILAÇÃO SEMANAL\n\nEste é o episódio de DOMINGO do Heavynauta, um podcast longo que compila todos os 6 episódios da semana.\n\nTÍTULOS DOS EPISÓDIOS DA SEMANA:\n${otherTitles.map((t, i) => `${i + 1}. ${t}`).join('\n')}\n\nGere EXATAMENTE 3 títulos que capturem os destaques da semana de forma compilada.\n\nFORMATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
-        const aiText = await runAIPrompt(prompt);
+        const aiText = await runAIPrompt(prompt, 'title', mat.episode_date);
         const options = parseTitleResponse(aiText);
         if (options.length) {
           updateMaterial(materialId, { title_options_json: options as any, selected_title_index: 0 });
@@ -324,7 +360,7 @@ export default function Materials() {
 
     try {
       const prompt = buildTitlePrompt(mat, pauta);
-      const aiText = await runAIPrompt(prompt);
+      const aiText = await runAIPrompt(prompt, 'title', mat.episode_date);
       const options = parseTitleResponse(aiText);
 
       if (!options.length) {
@@ -420,7 +456,7 @@ export default function Materials() {
 
     try {
       const prompt = buildDescriptionPrompt(mat, pauta);
-      const rawHtml = await runAIPrompt(prompt);
+      const rawHtml = await runAIPrompt(prompt, 'description', mat.episode_date);
       let html = cleanAiResponse(rawHtml);
 
       if (!html.startsWith('<')) {
@@ -471,26 +507,19 @@ export default function Materials() {
     const mat = weekMaterials.find((material) => material.slot_key === daySlot);
     if (!mat) return 'heavy metal album cover';
 
+    const selectedTitle = getTitle(mat);
+    if (selectedTitle) return `${selectedTitle} band promo`;
+
+    // Fallback: extract proper nouns from pauta context
     const pauta = getPautaForMaterial(mat);
     const inputs = ((pauta?.raw_inputs_json || {}) as Record<string, any>);
-    const selectedTitle = getTitle(mat);
     const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
     const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
 
     if (anniversary) return `${anniversary} band promo`;
     if (reviewRelease) return `${reviewRelease.artist} ${reviewRelease.album} band promo`;
 
-    const textPool = [
-      selectedTitle,
-      typeof pauta?.sections_json?.news === 'string' ? pauta.sections_json.news : '',
-      typeof pauta?.sections_json?.review_rafa === 'string' ? pauta.sections_json.review_rafa : '',
-      typeof pauta?.sections_json?.review_kilton === 'string' ? pauta.sections_json.review_kilton : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
-
-    const proper = parseProperNouns(textPool);
-    return proper ? `${proper} band promo photo` : `${selectedTitle || 'heavy metal'} band photo`;
+    return 'heavy metal band photo';
   };
 
   const fetchCanvasSafeImageUrl = useCallback(async (url: string) => {
@@ -640,21 +669,7 @@ export default function Materials() {
     };
 
     const drawOverlay = () => {
-      const WEEKDAYS: DaySlot[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
-      const isWeekday = coverDaySlot && WEEKDAYS.includes(coverDaySlot);
-      const baseTitle = getTitle(mat) || `Episódio ${coverDaySlot}`;
-      
-      let title = baseTitle;
-      if (isWeekday) {
-        const pauta = getPautaForMaterial(mat);
-        const inputs = ((pauta?.raw_inputs_json || {}) as Record<string, any>);
-        const anniversary = typeof inputs.anniversary === 'string' ? inputs.anniversary.trim() : '';
-        const reviewRelease = getReleaseFromPauta(pauta, 'review_rafa_id') || getReleaseFromPauta(pauta, 'review_kilton_id');
-        const bandName = anniversary || (reviewRelease ? `${reviewRelease.artist}` : '');
-        if (bandName) {
-          title = `${baseTitle}\n${bandName}`;
-        }
-      }
+      const title = getTitle(mat) || `Episódio ${coverDaySlot}`;
       const imageAreaH = Math.round(SIZE * 0.62);
       const panelTop = imageAreaH + 80;
 
@@ -772,7 +787,7 @@ export default function Materials() {
         '[HTML da descrição em seguida]',
       ].join('\n');
 
-      const aiText = await runAIPrompt(prompt);
+      const aiText = await runAIPrompt(prompt, 'sunday_compilation', mat.episode_date);
       const cleaned = cleanAiResponse(aiText);
 
       // Parse title

@@ -84,6 +84,20 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
       </div>
 
       <div className="space-y-3">
+        <span className="text-[11px] font-medium text-foreground uppercase tracking-wider">Corte de Silêncio</span>
+        {sliderField('Silêncio máximo (s)', params.maxPause, 0.5, 6, 0.1, (value) =>
+          onParamsChange({ ...params, maxPause: value })
+        )}
+        {sliderField('Duração alvo após corte (s)', params.silenceCutTarget, 0.2, 2, 0.1, (value) =>
+          onParamsChange({ ...params, silenceCutTarget: value })
+        )}
+        {sliderField('Buffer antes/depois (ms)', params.silenceCutBufferMs, 0, 500, 10, (value) =>
+          onParamsChange({ ...params, silenceCutBufferMs: value })
+        )}
+      </div>
+
+      <div className="space-y-3 border-t border-border pt-4">
+        <span className="text-[11px] font-medium text-foreground uppercase tracking-wider">Limpeza</span>
         {sliderField('Denoise amount', profile.cleanup.denoiseAmount, 0, 100, 1, (value) =>
           onProfileChange({ ...profile, cleanup: { ...profile.cleanup, denoiseAmount: value } })
         )}

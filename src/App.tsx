@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "./contexts/AppContext";
+import { RivaldoProvider } from "./contexts/RivaldoContext";
 import { AppLayout } from "./layouts/AppLayout";
 import Dashboard from "./pages/Dashboard";
 import Releases from "./pages/Releases";
@@ -19,6 +20,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppProvider>
+    <RivaldoProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -37,6 +39,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </RivaldoProvider>
     </AppProvider>
   </QueryClientProvider>
 );

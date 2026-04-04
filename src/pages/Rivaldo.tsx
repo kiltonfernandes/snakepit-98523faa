@@ -2,8 +2,9 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Layers, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useApp } from '@/contexts/AppContext';
+import { useRivaldo } from '@/contexts/RivaldoContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
@@ -15,15 +16,12 @@ import { ProcessingReportPanel } from '@/components/rivaldo/ProcessingReportPane
 import { DesktopJobsPanel } from '@/components/rivaldo/DesktopJobsPanel';
 import { HeavynautaBrand } from '@/components/rivaldo/HeavynautaBrand';
 import { mergeQueuedJobIntoState, prepareDesktopPipelinePayload } from '@/lib/desktop/queue';
-import { runPipeline } from '@/lib/audio/pipeline';
 import {
   AudioParams,
   DEFAULT_PARAMS,
   DEFAULT_PROCESSING_PROFILE,
   LogEntry,
-  MasterReport,
   ProcessingProfile,
-  TrackReport,
 } from '@/lib/audio/types';
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
@@ -51,41 +49,63 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
-  const { materials, pautas } = useApp();
+  const { materials, pautas, weeks } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
   const [masterTracks, setMasterTracks] = useState<File[]>([]);
   const [filename, setFilename] = useState('');
 
-  // Episode titles from finalized pautas
-  const episodeOptions = useMemo(() => {
+  const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
+
+  // Episode titles from finalized pautas, grouped by week
+  const episodeGroups = useMemo(() => {
     const finalizedPautaIds = new Set(
       pautas.filter(p => p.status === 'finalized').map(p => p.id)
     );
-    return materials
-      .filter(m => {
-        if (!m.source_pauta_id) return false;
-        return finalizedPautaIds.has(m.source_pauta_id);
-      })
+    const eligibleMaterials = materials
+      .filter(m => m.source_pauta_id && finalizedPautaIds.has(m.source_pauta_id))
       .map(m => {
         const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
         const title = (m.selected_title_index != null && opts[m.selected_title_index]?.text)
           ? opts[m.selected_title_index].text
           : opts[0]?.text || `Episódio ${m.slot_key}`;
-        return { value: title, label: title, date: m.episode_date };
+        const d = new Date(`${m.episode_date}T12:00:00`);
+        const dayName = DAY_NAMES[d.getDay()] || '';
+        const dd = String(d.getDate()).padStart(2, '0');
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const label = `[${dd}.${mm} - ${dayName}] - ${title}`;
+        return { value: title, label, date: m.episode_date, week_id: m.week_id };
       })
       .filter(o => o.value);
-  }, [materials, pautas]);
-  const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+
+    // Group by week
+    const groups: { weekLabel: string; weekId: string; items: typeof eligibleMaterials }[] = [];
+    const byWeek = new Map<string, typeof eligibleMaterials>();
+    for (const item of eligibleMaterials) {
+      if (!byWeek.has(item.week_id)) byWeek.set(item.week_id, []);
+      byWeek.get(item.week_id)!.push(item);
+    }
+
+    for (const [weekId, items] of byWeek) {
+      items.sort((a, b) => a.date.localeCompare(b.date));
+      const week = weeks.find(w => w.id === weekId);
+      const weekLabel = week ? `Semana de ${new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : weekId;
+      groups.push({ weekLabel, weekId, items });
+    }
+
+    groups.sort((a, b) => {
+      const wa = weeks.find(w => w.id === a.weekId);
+      const wb = weeks.find(w => w.id === b.weekId);
+      return (wb?.start_date || '').localeCompare(wa?.start_date || '');
+    });
+
+    return groups;
+  }, [materials, pautas, weeks]);
+  const rivaldo = useRivaldo();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
   const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>({ ...DEFAULT_PROCESSING_PROFILE });
-  const [trackReports, setTrackReports] = useState<TrackReport[]>([]);
-  const [masterReport, setMasterReport] = useState<MasterReport | null>(null);
   const [desktopState, setDesktopState] = useState<DesktopState | null>(null);
   const [desktopStateError, setDesktopStateError] = useState<string | null>(null);
   const [uiLogs, setUiLogs] = useState<LogEntry[]>([]);
@@ -94,16 +114,20 @@ const Rivaldo = () => {
   const desktopMode = isDesktopRuntime();
   const desktopApi = getDesktopApi();
 
+  // Use context state for browser mode, local state for desktop mode
+  const progress = desktopMode ? (desktopState?.jobs[0]?.progress ?? 0) : rivaldo.progress;
+  const progressLabel = desktopMode ? (desktopState?.jobs[0]?.progressLabel ?? '') : rivaldo.progressLabel;
+  const logs = desktopMode ? (desktopState?.jobs[0]?.logs ?? []) : rivaldo.logs;
+  const isProcessing = desktopMode ? Boolean(desktopState?.jobs.some(j => j.status === 'running' || j.status === 'pending')) : rivaldo.isProcessing;
+  const trackReports = desktopMode ? (desktopState?.jobs[0]?.trackReports ?? []) : rivaldo.trackReports;
+  const masterReport = desktopMode ? (desktopState?.jobs[0]?.masterReport ?? null) : rivaldo.masterReport;
+
   const handleFileChange = useCallback((key: SlotKey, file: File | null) => {
     setFiles((prev) => ({ ...prev, [key]: file }));
   }, []);
 
   const addUiLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setUiLogs((prev) => [...prev, { timestamp: Date.now(), message, type }].slice(-60));
-  }, []);
-
-  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-    setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
   }, []);
 
   const masterReady = masterMode === 'single' ? !!masterFile : masterTracks.length > 0;
@@ -130,15 +154,7 @@ const Rivaldo = () => {
     return () => unsub();
   }, [desktopApi, desktopMode]);
 
-  useEffect(() => {
-    if (!desktopMode || !latestDesktopJob) return;
-    setProgress(latestDesktopJob.progress);
-    setProgressLabel(latestDesktopJob.progressLabel);
-    setLogs(latestDesktopJob.logs);
-    setTrackReports(latestDesktopJob.trackReports);
-    setMasterReport(latestDesktopJob.masterReport);
-    setIsProcessing(latestDesktopJob.status === 'running' || latestDesktopJob.status === 'pending');
-  }, [desktopMode, latestDesktopJob]);
+  // Desktop sync is handled by the derived state above — no need for setState
 
   const handleProcess = useCallback(async () => {
     if (!allFilesReady) return;
@@ -157,16 +173,19 @@ const Rivaldo = () => {
       return;
     }
 
-    setIsProcessing(true); setProgress(0); setLogs([]); setTrackReports([]); setMasterReport(null);
-    try {
-      const result = await runPipeline(
-        { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
-        audioParams, (value, label) => { setProgress(value); setProgressLabel(label); }, addLog
-      );
-      setTrackReports(result.trackReports); setMasterReport(result.masterReport);
-    } catch (error) { addLog(error instanceof Error ? error.message : 'Erro no pipeline 3.2', 'error'); }
-    finally { setIsProcessing(false); }
-  }, [addLog, addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile]);
+    // Browser mode: use RivaldoContext for background processing
+    await rivaldo.startPipeline(
+      { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
+      audioParams
+    );
+
+    // Memory purge: clear file references after export
+    if (masterMode === 'single') {
+      setMasterFile(null);
+    } else {
+      setMasterTracks([]);
+    }
+  }, [addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile, rivaldo]);
 
   return (
     <div className="flex flex-col h-full">
@@ -178,14 +197,18 @@ const Rivaldo = () => {
               <SelectValue placeholder="Selecione o episódio..." />
             </SelectTrigger>
             <SelectContent>
-              {episodeOptions.length === 0 && (
+              {episodeGroups.length === 0 && (
                 <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma pauta finalizada</div>
               )}
-              {episodeOptions.map((opt, i) => (
-                <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
-                  <span className="text-xs text-muted-foreground mr-2">{opt.date}</span>
-                  {opt.label}
-                </SelectItem>
+              {episodeGroups.map((group) => (
+                <SelectGroup key={group.weekId}>
+                  <SelectLabel className="text-xs font-semibold text-muted-foreground">{group.weekLabel}</SelectLabel>
+                  {group.items.map((opt, i) => (
+                    <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
               ))}
             </SelectContent>
           </Select>

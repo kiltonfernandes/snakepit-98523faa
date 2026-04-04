@@ -20,6 +20,8 @@ export interface AudioParams {
   fadeDownDuration: number;
   fadeUpDuration: number;
   maxPause: number;
+  silenceCutTarget: number;
+  silenceCutBufferMs: number;
   bgmTailAfterMaster: number;
   outputBitrate: number;
   crossfadeDuration: number;
@@ -36,6 +38,8 @@ export const DEFAULT_PARAMS: AudioParams = {
   fadeDownDuration: 1.23,
   fadeUpDuration: 0.3,
   maxPause: 4,
+  silenceCutTarget: 0.6,
+  silenceCutBufferMs: 150,
   bgmTailAfterMaster: 12,
   outputBitrate: 192,
   crossfadeDuration: 0.04,
