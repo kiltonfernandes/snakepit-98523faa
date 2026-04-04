@@ -1,61 +1,88 @@
 
 
-## Plano: Portar o Podcast Pal para a aba Rivaldo do Snakepit
+# Plano de Ajustes — Materiais, Rivaldo e Configurações
 
-### Contexto
-O projeto **Podcast Pal** (Rivaldo by Heavynauta 3.2) é uma workstation de processamento de áudio com pipeline RNNoise + WPE, auto-duck, multi-track, bulk processing e fila desktop. O objetivo é trazer todo esse app para dentro da aba Rivaldo do Snakepit, substituindo o placeholder atual.
+## 1. Materiais — Busca sugerida usa título do episódio
+**Arquivo:** `src/pages/Materials.tsx`
 
-### Escopo da migração
+Alterar `buildCoverSearchQuery` para retornar o **título selecionado do episódio** + "band promo" (em vez de extrair banda/anniversary separadamente). Se não houver título, fallback para a lógica atual.
 
-**Arquivos a copiar do Podcast Pal → Snakepit:**
+## 2. Materiais — Capa mostra APENAS o título do episódio
+**Arquivo:** `src/pages/Materials.tsx`
 
-| Origem (Podcast Pal) | Destino (Snakepit) |
-|---|---|
-| `src/lib/audio/*` (8 arquivos: types, pipeline, decoder, encoder, dsp, assembler, auto-duck, voice-processor, voice-worker, voice-worker-client, analysis, pre-master, silence-remover) | `src/lib/audio/*` |
-| `src/lib/assets/presets.ts` | `src/lib/assets/presets.ts` |
-| `src/lib/desktop/runtime.ts`, `types.ts`, `queue.ts` | `src/lib/desktop/runtime.ts`, `types.ts`, `queue.ts` |
-| `src/assets/heavynauta-badge.svg` | `src/assets/heavynauta-badge.svg` |
-| `src/components/MultiTrackMaster.tsx` | `src/components/rivaldo/MultiTrackMaster.tsx` |
-| `src/components/UploadSlot.tsx` | `src/components/rivaldo/UploadSlot.tsx` |
-| `src/components/ParametersSidebar.tsx` | `src/components/rivaldo/ParametersSidebar.tsx` |
-| `src/components/GranularProgress.tsx` | `src/components/rivaldo/GranularProgress.tsx` |
-| `src/components/ProcessLog.tsx` | `src/components/rivaldo/ProcessLog.tsx` |
-| `src/components/BulkModal.tsx` | `src/components/rivaldo/BulkModal.tsx` |
-| `src/components/ElapsedTimer.tsx` | `src/components/rivaldo/ElapsedTimer.tsx` |
-| `src/components/ProcessingReportPanel.tsx` | `src/components/rivaldo/ProcessingReportPanel.tsx` |
-| `src/components/HeavynautaBrand.tsx` | `src/components/rivaldo/HeavynautaBrand.tsx` |
-| `src/components/DesktopJobsPanel.tsx` | `src/components/rivaldo/DesktopJobsPanel.tsx` |
-| `public/presets/*` (10 MP3 files) | `public/presets/*` |
+Na função `drawOverlay`, remover a lógica que concatena `bandName` ao título. A variável `title` deve ser simplesmente `getTitle(mat)` (o título selecionado), sem acrescentar nome de banda.
 
-**Arquivos a modificar no Snakepit:**
+## 3. Materiais — Títulos focados na notícia do episódio
+**Arquivo:** `src/pages/Materials.tsx`
 
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/Rivaldo.tsx` | Substituir completamente pelo conteúdo de `Index.tsx` do Podcast Pal, ajustando imports para os novos paths (`@/components/rivaldo/*`) |
-| `package.json` | Adicionar dependências: `@breezystack/lamejs`, `@jitsi/rnnoise-wasm`, `fft.js` |
+Ajustar `buildTitlePrompt` para incluir instrução explícita:
+- **Seg-Sex**: "O título deve ser 100% focado no texto da notícia principal do episódio"
+- **Sábado**: "O título deve focar nos destaques/lançamentos da semana"
+- **Domingo**: Já está focado na retrospectiva (mantém)
 
-### Detalhes técnicos
+## 4. Configurações — Botões Export CSV e Delete All nos Logs
+**Arquivo:** `src/pages/Settings.tsx`
 
-1. **Dependências novas**: 3 pacotes de áudio (`@breezystack/lamejs` para encoding MP3, `@jitsi/rnnoise-wasm` para denoise via WASM, `fft.js` para FFT). O `framer-motion` já existe no Snakepit mas em versão `^11.0.0` — o Podcast Pal usa `^12.36.0`; atualizaremos para a versão mais recente.
+- Adicionar botão **"Exportar CSV"** que gera e baixa um CSV com colunas: data, ação, detalhes
+- Adicionar botão **"Limpar Tudo"** com modal de confirmação (`AlertDialog`) que limpa todos os registros de `activity_logs` no banco
+- Ambos ficam no header do card de Activity Log
 
-2. **Estrutura**: Componentes do Rivaldo ficarão em `src/components/rivaldo/` para não conflitar com componentes existentes do Snakepit. As bibliotecas de áudio e desktop ficam em `src/lib/audio/` e `src/lib/desktop/`.
+## 5. Rivaldo — Dropdown agrupado por semana com formato [DD.MM - dia] - título
+**Arquivo:** `src/pages/Rivaldo.tsx`
 
-3. **Adaptação do layout**: O `Rivaldo.tsx` original (Podcast Pal) tem seu próprio `<header>` e layout full-page. Como no Snakepit ele já está dentro do `AppLayout` (com sidebar + header), removeremos o header duplicado do componente e ajustaremos para que o conteúdo se encaixe no `<main>` do layout.
+Refatorar `episodeOptions` para:
+- Agrupar por `week_id` (usando `weeks` do AppContext)
+- Ordenar por data dentro de cada grupo
+- Formato: `[07.04 - Segunda] - Título do Episódio`
+- Usar `SelectGroup` + `SelectLabel` para separar semanas visualmente
 
-4. **Desktop mode**: O código de desktop (`window.rivaldoDesktop`) funciona apenas no Electron. No browser, `isDesktopRuntime()` retorna `false` e todo o código desktop é ignorado automaticamente — não precisa de alteração.
+## 6. Rivaldo — Parâmetros de corte de silêncio no sidebar
+**Arquivos:** `src/lib/audio/types.ts`, `src/components/rivaldo/ParametersSidebar.tsx`
 
-5. **Assets de preset**: Os 10 arquivos MP3 de presets (intro, outro, 8 BGMs) serão copiados para `public/presets/`.
+Adicionar ao `AudioParams` (ou expor os existentes no sidebar):
+- **Silence threshold** (max silence duration em segundos, ex: 1.1 a 2.0s) — já existe `maxPause`
+- **Silence cut target** (duração alvo após corte, ex: 0.4 a 1.0s) — novo campo `silenceCutTarget`
+- **Buffer before/after** (margem em ms antes e depois do corte, ex: 50-300ms) — novo `silenceCutBufferMs`
 
-6. **Módulos não utilizados**: `pre-master.ts` e `silence-remover.ts` referenciam tipos inexistentes (`PreProcessOptions`, campos extras em `AudioParams`). Serão copiados mas não são importados pelo pipeline principal — funcionam como código morto sem impacto.
+Expor no `ParametersSidebar` como sliders na seção principal (não apenas no modo avançado).
 
-### Etapas de implementação
+## 7. Rivaldo — Auto-download + purge de memória após export
+**Arquivo:** `src/lib/audio/pipeline.ts`, `src/pages/Rivaldo.tsx`
 
-1. Instalar dependências (`@breezystack/lamejs`, `@jitsi/rnnoise-wasm`, `fft.js`, atualizar `framer-motion`)
-2. Copiar os 10 arquivos de preset MP3 para `public/presets/`
-3. Copiar o SVG badge para `src/assets/`
-4. Criar `src/lib/audio/` com todos os 12 arquivos de áudio
-5. Criar `src/lib/desktop/` com os 3 arquivos desktop
-6. Criar `src/lib/assets/presets.ts`
-7. Criar `src/components/rivaldo/` com os 10 componentes
-8. Reescrever `src/pages/Rivaldo.tsx` com o conteúdo completo do Index.tsx adaptado ao layout do Snakepit
+- Após `encodeBufferToMp3Blob`, disparar download imediatamente via `downloadBlob`
+- Revogar o object URL logo após o download iniciar
+- Nullificar referências a `AudioBuffer` e `Float32Array` dos tracks processados
+- Limpar `trackReports`, `masterReport` e `logs` após export bem-sucedido
+- Chamar `close()` no `AudioContext` usado no pipeline
+
+## 8. Rivaldo — Processamento continua em background ao mudar de aba
+**Arquivo:** `src/pages/Rivaldo.tsx`, possivelmente novo `src/contexts/RivaldoContext.tsx`
+
+Extrair o estado de processamento (progress, logs, isProcessing, files, params) para um **contexto React** (`RivaldoContext`) que vive acima do Router. Assim, ao navegar para outra aba, o processamento no Web Worker continua e o estado é preservado ao voltar.
+
+## 9. Configurações — Dashboard de tokens/custo
+**Arquivo:** `src/pages/Settings.tsx`, banco de dados
+
+- Criar tabela `ai_usage_logs` com colunas: `id`, `created_at`, `scope` (pauta/material/título/descrição), `episode_id`, `week_id`, `tokens_input`, `tokens_output`, `model`, `estimated_cost`
+- Instrumentar `runAIPrompt` (Materials) e `generate-pauta` edge function para registrar uso
+- No Settings, criar um card "Uso de IA" com:
+  - Total de tokens por semana/mês
+  - Breakdown por tipo (títulos, descrições, pautas)
+  - Custo estimado acumulado
+  - Gráfico simples de barras (últimas 4 semanas)
+
+## Ordem de Implementação
+1. Ajustes simples: Materiais (#1, #2, #3)
+2. Settings: Log export/delete (#4)
+3. Rivaldo: Dropdown agrupado (#5)
+4. Rivaldo: Sidebar params (#6)
+5. Rivaldo: Memory purge (#7)
+6. Rivaldo: Background context (#8)
+7. Settings: Token dashboard (#9) — requer migration + instrumentação
+
+## Detalhes Técnicos
+- Items 1-6 são alterações de frontend puro
+- Item 4 requer `DELETE` no banco (migration para permitir ou usar edge function)
+- Item 8 requer refactor de estado para contexto global
+- Item 9 requer nova tabela + migration + alteração na edge function
 
