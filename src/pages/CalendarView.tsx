@@ -12,6 +12,8 @@ import {
   FileText,
   Image,
   Link as LinkIcon,
+  Loader2,
+  Search,
   Share2,
   Sparkles,
 } from 'lucide-react';
@@ -28,6 +30,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getSectionsForDay } from '@/lib/constants';
 import { resolveAllLinks } from '@/lib/dynamic-links';
+import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator';
+import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
