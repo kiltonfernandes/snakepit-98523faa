@@ -18,13 +18,28 @@ function sliderField(
   min: number,
   max: number,
   step: number,
-  onChange: (value: number) => void
+  onChange: (value: number) => void,
+  unit?: string
 ) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-[11px] text-muted-foreground truncate">{label}</span>
-        <span className="text-[11px] font-mono text-foreground">{value}</span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            value={value}
+            min={min}
+            max={max}
+            step={step}
+            onChange={(e) => {
+              const v = parseFloat(e.target.value);
+              if (!isNaN(v) && v >= min && v <= max) onChange(v);
+            }}
+            className="w-14 h-5 text-[10px] font-mono text-right bg-muted border border-border rounded px-1 text-foreground"
+          />
+          {unit && <span className="text-[9px] text-muted-foreground">{unit}</span>}
+        </div>
       </div>
       <input
         type="range"
@@ -83,19 +98,41 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
         </p>
       </div>
 
+      {/* Silence cutting */}
       <div className="space-y-3">
         <span className="text-[11px] font-medium text-foreground uppercase tracking-wider">Corte de Silêncio</span>
+        {sliderField('Threshold (dB)', params.silenceThresholdDb, -40, -10, 1, (value) =>
+          onParamsChange({ ...params, silenceThresholdDb: value }), 'dB'
+        )}
         {sliderField('Silêncio máximo (s)', params.maxPause, 0.5, 6, 0.1, (value) =>
-          onParamsChange({ ...params, maxPause: value })
+          onParamsChange({ ...params, maxPause: value }), 's'
         )}
         {sliderField('Duração alvo após corte (s)', params.silenceCutTarget, 0.2, 2, 0.1, (value) =>
-          onParamsChange({ ...params, silenceCutTarget: value })
+          onParamsChange({ ...params, silenceCutTarget: value }), 's'
         )}
         {sliderField('Buffer antes/depois (ms)', params.silenceCutBufferMs, 0, 500, 10, (value) =>
-          onParamsChange({ ...params, silenceCutBufferMs: value })
+          onParamsChange({ ...params, silenceCutBufferMs: value }), 'ms'
         )}
       </div>
 
+      {/* Auto-duck */}
+      <div className="space-y-3 border-t border-border pt-4">
+        <span className="text-[11px] font-medium text-foreground uppercase tracking-wider">Auto-Duck</span>
+        {sliderField('Redução (dB)', params.duckReductionDb, -30, -6, 1, (value) =>
+          onParamsChange({ ...params, duckReductionDb: value }), 'dB'
+        )}
+        {sliderField('Fade down (s)', params.fadeDownDuration, 0.1, 3, 0.01, (value) =>
+          onParamsChange({ ...params, fadeDownDuration: value }), 's'
+        )}
+        {sliderField('Fade up (s)', params.fadeUpDuration, 0.05, 2, 0.01, (value) =>
+          onParamsChange({ ...params, fadeUpDuration: value }), 's'
+        )}
+        {sliderField('BGM tail after master (s)', params.bgmTailAfterMaster, 0, 30, 1, (value) =>
+          onParamsChange({ ...params, bgmTailAfterMaster: value }), 's'
+        )}
+      </div>
+
+      {/* Cleanup */}
       <div className="space-y-3 border-t border-border pt-4">
         <span className="text-[11px] font-medium text-foreground uppercase tracking-wider">Limpeza</span>
         {sliderField('Denoise amount', profile.cleanup.denoiseAmount, 0, 100, 1, (value) =>
@@ -106,6 +143,7 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
         )}
       </div>
 
+      {/* Dereverb & smart mute */}
       <div className="space-y-3 border-t border-border pt-4">
         <div className="space-y-1">
           <span className="text-[11px] text-muted-foreground">Dereverb WPE</span>
@@ -132,6 +170,25 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
         </div>
       </div>
 
+      {/* Export quality */}
+      <div className="space-y-3 border-t border-border pt-4">
+        <span className="text-[11px] font-medium text-foreground uppercase tracking-wider">Qualidade do Export</span>
+        <div className="grid grid-cols-4 gap-1">
+          {[128, 192, 256, 320].map(br => (
+            <button
+              key={br}
+              onClick={() => onParamsChange({ ...params, outputBitrate: br })}
+              className={`rounded px-2 py-1.5 text-[10px] font-mono transition-colors ${
+                params.outputBitrate === br ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              {br}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] text-muted-foreground">kbps — maior = melhor qualidade, arquivo maior</p>
+      </div>
+
       {profile.uiMode === 'advanced' && (
         <div className="space-y-4 border-t border-border pt-4">
           <div className="space-y-3">
@@ -142,10 +199,10 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
               onProfileChange({ ...profile, tone: { ...profile.tone, dePlosiveAmount: value } })
             )}
             {sliderField('Track target LUFS', params.trackTargetLufs, -24, -14, 0.5, (value) =>
-              onParamsChange({ ...params, trackTargetLufs: value })
+              onParamsChange({ ...params, trackTargetLufs: value }), 'LUFS'
             )}
             {sliderField('Final target LUFS', params.masterTargetLufs, -20, -12, 0.5, (value) =>
-              onParamsChange({ ...params, masterTargetLufs: value })
+              onParamsChange({ ...params, masterTargetLufs: value }), 'LUFS'
             )}
           </div>
 
