@@ -201,11 +201,12 @@ export default function Releases() {
       const q = search.toLowerCase();
       const matchSearch = !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
       const matchGenre = !genreFilter || (r.genres || []).includes(genreFilter);
+      const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : r.country === countryFilter;
       let matchDate = true;
       if (dateRange) {
         matchDate = r.release_date >= dateRange[0] && r.release_date <= dateRange[1];
       }
-      return matchSearch && matchGenre && matchDate;
+      return matchSearch && matchGenre && matchCountry && matchDate;
     });
     result.sort((a, b) => {
       let cmp = 0;
@@ -216,7 +217,43 @@ export default function Releases() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return result;
-  }, [releases, search, genreFilter, quickFilter, sortField, sortDir]);
+  }, [releases, search, genreFilter, countryFilter, quickFilter, sortField, sortDir]);
+
+  // Auto-enrich countries for releases without country
+  const enrichCountries = useCallback(async () => {
+    const missing = releases.filter(r => !r.country);
+    if (missing.length === 0) return;
+    setEnrichingCountries(true);
+    try {
+      const uniqueArtists = [...new Set(missing.map(r => r.artist))];
+      const batchSize = 30;
+      for (let i = 0; i < uniqueArtists.length; i += batchSize) {
+        const batch = uniqueArtists.slice(i, i + batchSize);
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-country`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+          body: JSON.stringify({ artists: batch }),
+        });
+        if (!resp.ok) continue;
+        const { results } = await resp.json();
+        if (!results) continue;
+        for (const r of missing) {
+          const country = results[r.artist.toLowerCase()];
+          if (country) {
+            await supabase.from('releases' as any).update({ country } as any).eq('id', r.id);
+            updateRelease(r.id, { country });
+          }
+        }
+      }
+      toast.success('Países atualizados');
+      loadReleases();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao buscar países');
+    } finally {
+      setEnrichingCountries(false);
+    }
+  }, [releases, updateRelease, loadReleases]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
