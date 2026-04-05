@@ -232,6 +232,8 @@ export default function Pautas() {
     toast.success('Semana removida');
   };
 
+  const [loadingAnniversaries, setLoadingAnniversaries] = useState(false);
+
   const getRawInputs = (pauta: Pauta) => (pauta.raw_inputs_json || {}) as Record<string, any>;
 
   const updateRawInput = (pautaId: string, key: string, value: any) => {
@@ -240,6 +242,46 @@ export default function Pautas() {
     const inputs = getRawInputs(pauta);
     updatePauta(pautaId, { raw_inputs_json: { ...inputs, [key]: value } });
   };
+
+  const handleAutoFillAnniversaries = useCallback(async () => {
+    if (!selectedWeek) return;
+    setLoadingAnniversaries(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-anniversaries', {
+        body: { week_start: selectedWeek.start_date, years_back: 40 },
+      });
+      if (error) throw new Error(error.message || 'Erro ao buscar aniversários');
+      const annMap: Record<string, { artist: string; album: string; yearsAgo: number; year: number }[]> = data?.anniversaries || {};
+
+      let filled = 0;
+      for (const pauta of weekPautas) {
+        const slot = getPautaSlot(pauta);
+        if (slot === 'sunday') continue;
+        const dateStr = pauta.publication_date;
+        const anns = annMap[dateStr];
+        if (!anns || anns.length === 0) continue;
+
+        // Pick the most notable: prefer milestone years (multiples of 5/10), then oldest
+        const milestones = anns.filter(a => a.yearsAgo % 10 === 0);
+        const fives = anns.filter(a => a.yearsAgo % 5 === 0);
+        const best = milestones[0] || fives[0] || anns[0];
+
+        const text = `Aniversário de ${best.yearsAgo} anos de "${best.album}" (${best.artist}, ${best.year})`;
+        updateRawInput(pauta.id, 'anniversary', text);
+        filled++;
+      }
+
+      if (filled > 0) {
+        toast.success(`${filled} aniversários preenchidos automaticamente`);
+      } else {
+        toast.info('Nenhum aniversário encontrado para esta semana');
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setLoadingAnniversaries(false);
+    }
+  }, [selectedWeek, weekPautas, updateRawInput]);
 
   const handleSectionChange = (pautaId: string, key: keyof PautaSections, value: string) => {
     const pauta = pautas.find(p => p.id === pautaId);
