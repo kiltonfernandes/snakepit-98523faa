@@ -347,7 +347,7 @@ export default function CalendarView() {
         </div>
       </div>
 
-      <Card className="border-border/60">
+      <Card className="border-border/60 hover:shadow-lg transition-all duration-200">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="icon" onClick={prev}>

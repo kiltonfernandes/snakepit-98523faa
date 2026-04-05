@@ -177,7 +177,7 @@ export default function Dashboard() {
         const isYearOpen = expandedYears.has(y);
 
         return (
-          <Card key={y}>
+          <Card key={y} className="hover:shadow-lg transition-all duration-200">
             <button
               className="w-full flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors text-left"
               onClick={() => toggleYear(y)}
