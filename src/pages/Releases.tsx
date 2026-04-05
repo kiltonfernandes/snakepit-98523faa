@@ -16,6 +16,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
 import { countryFlag, normalizeCountryCode } from '@/lib/country-utils';
+import { NORMALIZED_GENRES } from '@/lib/constants';
 import * as CountryFlags from 'country-flag-icons/react/3x2';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
