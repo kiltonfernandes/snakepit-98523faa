@@ -43,6 +43,94 @@ export default function Settings() {
   const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('tone');
 
+  // Templates state
+  const [templates, setTemplates] = useState<PautaTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<PautaTemplate | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+
+  const SECTION_OPTIONS: { key: string; label: string }[] = [
+    { key: 'anniversary', label: 'Aniversário' },
+    { key: 'review', label: 'Review' },
+    { key: 'news', label: 'Notícias' },
+    { key: 'releases', label: 'Lançamentos' },
+    { key: 'interview', label: 'Entrevista' },
+    { key: 'list', label: 'Lista' },
+  ];
+
+  const loadTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    const { data } = await supabase.from('pauta_templates' as any).select('*').order('created_at', { ascending: true });
+    setTemplates((data as any[] || []).map((t: any) => ({
+      ...t,
+      description: t.description || '',
+      sections_config: (typeof t.sections_config === 'string' ? JSON.parse(t.sections_config) : t.sections_config) || [],
+      segway_intro: t.segway_intro || '',
+      segway_outro: t.segway_outro || '',
+    })));
+    setTemplatesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'templates') loadTemplates();
+  }, [activeTab, loadTemplates]);
+
+  const openNewTemplate = () => {
+    setEditingTemplate({
+      id: `tpl_${Date.now()}`,
+      name: '',
+      description: '',
+      sections_config: SECTION_OPTIONS.map(s => ({ key: s.key, label: s.label, enabled: false, core_prompt: '' })),
+      segway_intro: '',
+      segway_outro: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    setTemplateDialogOpen(true);
+  };
+
+  const openEditTemplate = (t: PautaTemplate) => {
+    // Ensure all section options exist
+    const existing = new Set(t.sections_config.map(s => s.key));
+    const merged = [...t.sections_config];
+    SECTION_OPTIONS.forEach(opt => {
+      if (!existing.has(opt.key)) merged.push({ key: opt.key, label: opt.label, enabled: false, core_prompt: '' });
+    });
+    setEditingTemplate({ ...t, sections_config: merged });
+    setTemplateDialogOpen(true);
+  };
+
+  const saveTemplate = async () => {
+    if (!editingTemplate || !editingTemplate.name.trim()) {
+      toast.error('Nome do template é obrigatório');
+      return;
+    }
+    const payload = {
+      id: editingTemplate.id,
+      name: editingTemplate.name,
+      description: editingTemplate.description,
+      sections_config: JSON.stringify(editingTemplate.sections_config),
+      segway_intro: editingTemplate.segway_intro,
+      segway_outro: editingTemplate.segway_outro,
+      updated_at: new Date().toISOString(),
+    };
+    const exists = templates.some(t => t.id === editingTemplate.id);
+    if (exists) {
+      await supabase.from('pauta_templates' as any).update(payload as any).eq('id', editingTemplate.id);
+    } else {
+      await supabase.from('pauta_templates' as any).insert({ ...payload, created_at: new Date().toISOString() } as any);
+    }
+    toast.success('Template salvo');
+    setTemplateDialogOpen(false);
+    loadTemplates();
+  };
+
+  const deleteTemplate = async (id: string) => {
+    await supabase.from('pauta_templates' as any).delete().eq('id', id);
+    toast.success('Template removido');
+    loadTemplates();
+  };
+
   useEffect(() => {
     if (activeTab !== 'tokens') return;
     setAiUsageLoading(true);
