@@ -123,7 +123,7 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
         const genreLine = lines[i + 1];
         genreLine.split(',').forEach(g => {
           const trimmed = g.trim();
-          if (trimmed) genres.push(trimmed);
+          if (trimmed && !/^\d+(\.\d+)?$/.test(trimmed)) genres.push(trimmed);
         });
         i++;
       }
