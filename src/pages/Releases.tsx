@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2 } from 'lucide-react';
+import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2, RefreshCw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -122,7 +123,7 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
         const genreLine = lines[i + 1];
         genreLine.split(',').forEach(g => {
           const trimmed = g.trim();
-          if (trimmed) genres.push(trimmed);
+          if (trimmed && !/^\d+(\.\d+)?$/.test(trimmed)) genres.push(trimmed);
         });
         i++;
       }
@@ -170,6 +171,9 @@ export default function Releases() {
   const [pasteText, setPasteText] = useState('');
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [pasting, setPasting] = useState(false);
+  // Delete confirmation state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
 
   const allCountries = useMemo(() => {
     const set = new Set<string>();
@@ -179,7 +183,9 @@ export default function Releases() {
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    releases.forEach(r => (r.genres || []).forEach(g => set.add(g)));
+    releases.forEach(r => (r.genres || []).forEach(g => {
+      if (g && !/^\d+(\.\d+)?$/.test(g.trim())) set.add(g);
+    }));
     return Array.from(set).sort();
   }, [releases]);
 
@@ -208,46 +214,60 @@ export default function Releases() {
   }, [releases, search, genreFilter, countryFilter, quickFilter, sortField, sortDir]);
 
   // Repatriation: enrich countries with progress modal
-  const enrichCountries = useCallback(async () => {
-    const missing = releases.filter(r => !r.country);
-    if (missing.length === 0) {
+  const enrichCountries = useCallback(async (forceAll = false) => {
+    const targets = forceAll ? releases : releases.filter(r => !r.country);
+    if (targets.length === 0) {
       toast.info('Todos os releases já possuem país');
       return;
     }
 
-    const uniqueArtists = [...new Set(missing.map(r => r.artist))];
-    const items: GenerationItem[] = uniqueArtists.map(a => ({
-      id: a,
-      label: a,
+    // Group by unique artist, but send full release data for context
+    const artistMap = new Map<string, typeof targets[0]>();
+    for (const r of targets) {
+      if (!artistMap.has(r.artist)) artistMap.set(r.artist, r);
+    }
+    const uniqueEntries = Array.from(artistMap.values());
+
+    const items: GenerationItem[] = uniqueEntries.map(r => ({
+      id: r.artist,
+      label: r.artist,
       status: 'pending' as const,
     }));
     setRepatriateItems(items);
-    setRepatriateLogs([`Iniciando repatriação de ${uniqueArtists.length} artistas...`]);
+    setRepatriateLogs([`Iniciando repatriação de ${uniqueEntries.length} artistas${forceAll ? ' (todos)' : ''}...`]);
     setRepatriateModalOpen(true);
     setEnrichingCountries(true);
 
     try {
       const batchSize = 30;
-      for (let i = 0; i < uniqueArtists.length; i += batchSize) {
-        const batch = uniqueArtists.slice(i, i + batchSize);
+      for (let i = 0; i < uniqueEntries.length; i += batchSize) {
+        const batch = uniqueEntries.slice(i, i + batchSize);
+        const batchArtists = batch.map(r => r.artist);
         
         // Mark batch as generating
         setRepatriateItems(prev => prev.map(item =>
-          batch.includes(item.id) ? { ...item, status: 'generating' } : item
+          batchArtists.includes(item.id) ? { ...item, status: 'generating' } : item
         ));
-        setRepatriateLogs(prev => [...prev, `Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueArtists.length / batchSize)} (${batch.length} artistas)...`]);
+        setRepatriateLogs(prev => [...prev, `Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueEntries.length / batchSize)} (${batch.length} artistas)...`]);
 
         try {
           const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-country`;
           const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-            body: JSON.stringify({ artists: batch }),
+            body: JSON.stringify({
+              releases: batch.map(r => ({
+                artist: r.artist,
+                album: r.album,
+                release_date: r.release_date,
+                genres: r.genres || [],
+              })),
+            }),
           });
 
           if (!resp.ok) {
             setRepatriateItems(prev => prev.map(item =>
-              batch.includes(item.id) ? { ...item, status: 'error', error: `HTTP ${resp.status}` } : item
+              batchArtists.includes(item.id) ? { ...item, status: 'error', error: `HTTP ${resp.status}` } : item
             ));
             setRepatriateLogs(prev => [...prev, `✗ Erro no lote: HTTP ${resp.status}`]);
             continue;
@@ -256,40 +276,40 @@ export default function Releases() {
           const { results } = await resp.json();
           if (!results) {
             setRepatriateItems(prev => prev.map(item =>
-              batch.includes(item.id) ? { ...item, status: 'error', error: 'Sem resultados' } : item
+              batchArtists.includes(item.id) ? { ...item, status: 'error', error: 'Sem resultados' } : item
             ));
             continue;
           }
 
-          for (const artist of batch) {
-            const country = results[artist.toLowerCase()];
+          for (const entry of batch) {
+            const country = results[entry.artist.toLowerCase()];
             if (country) {
               // Update all releases by this artist
-              const artistReleases = missing.filter(r => r.artist === artist);
+              const artistReleases = targets.filter(r => r.artist === entry.artist);
               for (const r of artistReleases) {
                 await supabase.from('releases' as any).update({ country } as any).eq('id', r.id);
                 updateRelease(r.id, { country });
               }
               setRepatriateItems(prev => prev.map(item =>
-                item.id === artist ? { ...item, status: 'done' } : item
+                item.id === entry.artist ? { ...item, status: 'done' } : item
               ));
-              setRepatriateLogs(prev => [...prev, `✓ ${artist} → ${countryFlag(country)} ${country}`]);
+              setRepatriateLogs(prev => [...prev, `✓ ${entry.artist} → ${countryFlag(country)} ${country}`]);
             } else {
               setRepatriateItems(prev => prev.map(item =>
-                item.id === artist ? { ...item, status: 'done' } : item
+                item.id === entry.artist ? { ...item, status: 'done' } : item
               ));
-              setRepatriateLogs(prev => [...prev, `— ${artist}: não encontrado`]);
+              setRepatriateLogs(prev => [...prev, `— ${entry.artist}: não encontrado`]);
             }
           }
         } catch (err: any) {
           setRepatriateItems(prev => prev.map(item =>
-            batch.includes(item.id) ? { ...item, status: 'error', error: err.message } : item
+            batchArtists.includes(item.id) ? { ...item, status: 'error', error: err.message } : item
           ));
           setRepatriateLogs(prev => [...prev, `✗ Erro: ${err.message}`]);
         }
 
         // Small delay between batches
-        if (i + batchSize < uniqueArtists.length) {
+        if (i + batchSize < uniqueEntries.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
@@ -404,9 +424,9 @@ export default function Releases() {
             valid++; validReleases.push(item);
           });
 
-          if (validReleases.length > 0) {
+        if (validReleases.length > 0) {
             importReleases(validReleases);
-            setTimeout(() => enrichCountries(), 1500);
+            setTimeout(() => enrichCountries(false), 1500);
           }
           setImportSummary({ valid, duplicates, invalid, errors });
           setImportDialogOpen(true);
@@ -455,7 +475,7 @@ export default function Releases() {
 
       if (validReleases.length > 0) {
         importReleases(validReleases);
-        setTimeout(() => enrichCountries(), 1500);
+        setTimeout(() => enrichCountries(false), 1500);
       }
       setImportSummary({ valid, duplicates, invalid, errors });
       setImportDialogOpen(true);
@@ -564,11 +584,30 @@ export default function Releases() {
 
         {/* Enrich countries */}
         {releases.some(r => !r.country) && (
-          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={enrichCountries} disabled={enrichingCountries}>
+          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => enrichCountries(false)} disabled={enrichingCountries}>
             {enrichingCountries ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
             Repatriar ({releases.filter(r => !r.country).length})
           </Button>
         )}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={enrichingCountries}>
+              <RefreshCw className="h-3 w-3" /> Repatriar Todos
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Repatriar todos os releases?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai buscar o país de origem de todos os {releases.length} releases, sobrescrevendo países já preenchidos. O processo pode demorar alguns minutos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => enrichCountries(true)}>Repatriar Todos</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* View mode toggle */}
         <div className="flex items-center rounded-md border border-border overflow-hidden">
@@ -601,7 +640,7 @@ export default function Releases() {
           </SelectContent>
         </Select>
         {selectedIds.size > 0 && (
-          <Button variant="destructive" size="sm" className="gap-2" onClick={handleBulkDelete}>
+          <Button variant="destructive" size="sm" className="gap-2" onClick={() => setBulkDeleteConfirmOpen(true)}>
             <Trash2 className="h-4 w-4" /> Excluir ({selectedIds.size})
           </Button>
         )}
@@ -662,7 +701,7 @@ export default function Releases() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); deleteRelease(r.id); }}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}>
                         <Trash2 className="h-3.5 w-3.5 text-destructive" />
                       </Button>
                     </TableCell>
@@ -929,6 +968,49 @@ export default function Releases() {
         items={repatriateItems}
         logs={repatriateLogs}
       />
+
+      {/* Delete single confirmation */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação é irreversível. O release será removido permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+              if (deleteConfirmId) {
+                deleteRelease(deleteConfirmId);
+                setDeleteConfirmId(null);
+                toast.success('Lançamento removido');
+              }
+            }}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedIds.size} lançamentos?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação é irreversível. Todos os {selectedIds.size} releases selecionados serão removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+              selectedIds.forEach(id => deleteRelease(id));
+              setSelectedIds(new Set());
+              setBulkDeleteConfirmOpen(false);
+              toast.success(`${selectedIds.size} lançamentos removidos`);
+            }}>Excluir Todos</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

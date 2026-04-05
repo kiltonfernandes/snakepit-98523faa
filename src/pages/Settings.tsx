@@ -126,9 +126,13 @@ export default function Settings() {
     loadTemplates();
   };
 
-  const deleteTemplate = async (id: string) => {
-    await supabase.from('pauta_templates' as any).delete().eq('id', id);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+
+  const confirmDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+    await supabase.from('pauta_templates' as any).delete().eq('id', deleteTemplateId);
     toast.success('Template removido');
+    setDeleteTemplateId(null);
     loadTemplates();
   };
 
@@ -402,7 +406,7 @@ export default function Settings() {
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditTemplate(t)}>
                               <Edit className="h-3.5 w-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteTemplate(t.id)}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => setDeleteTemplateId(t.id)}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
@@ -775,6 +779,24 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Template delete confirmation */}
+      <AlertDialog open={!!deleteTemplateId} onOpenChange={(open) => !open && setDeleteTemplateId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir template?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação é irreversível. O template será removido permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDeleteTemplate}>
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   );
 }
