@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle, ChevronDown, ChevronRight as ChevronRightIcon, BarChart3, TrendingUp, TrendingDown, Globe, Music, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
-import { DAY_SLOTS } from '@/lib/constants';
+import { DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
 import { EpisodeCompletionIndicators, EditorialWeek } from '@/lib/types';
+import { normalizeCountryCode } from '@/lib/country-utils';
+import * as CountryFlags from 'country-flag-icons/react/3x2';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 
