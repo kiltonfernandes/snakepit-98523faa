@@ -21,7 +21,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
-import { getSectionsForDay, DAY_SLOTS } from '@/lib/constants';
+import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
 import { Pauta, PautaSections, DaySlot, Release } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, type PromptBuildContext } from '@/lib/prompt-builder';
 import { parsePautaResponse } from '@/lib/response-parser';
@@ -56,10 +56,7 @@ function getISOWeekLabel(dateStr: string): string {
   return `${format(monday, 'dd/MM')} – ${format(sunday, 'dd/MM')}`;
 }
 
-const NORMALIZED_GENRES = [
-  'Heavy Metal', 'Thrash Metal', 'Death Metal', 'Black Metal', 'Power Metal',
-  'Doom Metal', 'Progressive Metal', 'Groove Metal', 'Metalcore', 'Melodic Death Metal', 'Symphonic Metal',
-] as const;
+// NORMALIZED_GENRES imported from constants
 
 function normalizeGenre(genre: string): string {
   const lower = genre.toLowerCase().trim();

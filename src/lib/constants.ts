@@ -27,6 +27,11 @@ export const ALL_SECTIONS = [
   ...SATURDAY_SECTIONS,
 ] as const;
 
+export const NORMALIZED_GENRES = [
+  'Heavy Metal', 'Thrash Metal', 'Death Metal', 'Black Metal', 'Power Metal',
+  'Doom Metal', 'Progressive Metal', 'Groove Metal', 'Metalcore', 'Melodic Death Metal', 'Symphonic Metal',
+] as const;
+
 export function getSectionsForDay(day: DaySlot) {
   if (day === 'saturday') return SATURDAY_SECTIONS;
   return WEEKDAY_SECTIONS;

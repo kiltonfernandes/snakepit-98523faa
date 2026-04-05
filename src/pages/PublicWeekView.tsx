@@ -96,6 +96,25 @@ export default function PublicWeekView() {
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
 
+  // Fallback: if no materials, render from pautas directly
+  const sortedPautas = [...pautas].sort((a, b) => {
+    const dayA = new Date(a.publication_date + 'T12:00:00').getDay();
+    const dayB = new Date(b.publication_date + 'T12:00:00').getDay();
+    const orderMap: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 0: 6 };
+    return (orderMap[dayA] ?? 9) - (orderMap[dayB] ?? 9);
+  });
+
+  const daySlotFromDate = (dateStr: string): string => {
+    const wd = new Date(dateStr + 'T12:00:00').getDay();
+    const map: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+    return map[wd] || 'monday';
+  };
+
+  const useMaterials = sortedMats.length > 0;
+  const tabs = useMaterials
+    ? sortedMats.map(m => ({ key: m.slot_key, date: m.episode_date }))
+    : sortedPautas.map(p => ({ key: daySlotFromDate(p.publication_date), date: p.publication_date }));
+
   const weekStart = new Date(week.start_date + 'T12:00:00');
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
@@ -110,22 +129,21 @@ export default function PublicWeekView() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
-        {sortedMats.length === 0 ? (
+        {tabs.length === 0 ? (
           <p className="text-center text-[hsl(270,10%,55%)]">Nenhum episódio disponível para esta semana.</p>
         ) : (
-          <Tabs defaultValue={sortedMats[0]?.slot_key} className="w-full">
+          <Tabs defaultValue={tabs[0]?.key} className="w-full">
             <TabsList className="w-full flex flex-wrap bg-[hsl(270,25%,12%)] border border-[hsl(270,15%,20%)] rounded-lg p-1 mb-6">
-              {sortedMats.map(mat => (
-                <TabsTrigger key={mat.slot_key} value={mat.slot_key} className="flex-1 text-xs data-[state=active]:bg-[hsl(280,40%,55%)] data-[state=active]:text-white">
-                  {DAY_LABELS[mat.slot_key]?.slice(0, 3) || mat.slot_key}
+              {tabs.map(t => (
+                <TabsTrigger key={t.key} value={t.key} className="flex-1 text-xs data-[state=active]:bg-[hsl(280,40%,55%)] data-[state=active]:text-white">
+                  {DAY_LABELS[t.key]?.slice(0, 3) || t.key}
                 </TabsTrigger>
               ))}
             </TabsList>
 
-            {sortedMats.map(mat => {
+            {useMaterials ? sortedMats.map(mat => {
               const pauta = pautas.find(p => p.publication_date === mat.episode_date);
               const sections = (pauta?.sections_json || {}) as Record<string, string>;
-              const inputs = (pauta?.raw_inputs_json || {}) as Record<string, any>;
               const links = (pauta?.discovered_links_json || []) as string[];
               const title = getTitle(mat);
               const d = new Date(mat.episode_date + 'T12:00:00');
@@ -184,6 +202,49 @@ export default function PublicWeekView() {
                         </div>
                       )}
                     </div>
+                  </div>
+                </TabsContent>
+              );
+            }) : sortedPautas.map(p => {
+              const slot = daySlotFromDate(p.publication_date);
+              const sections = (p.sections_json || {}) as Record<string, string>;
+              const links = (p.discovered_links_json || []) as string[];
+              const d = new Date(p.publication_date + 'T12:00:00');
+
+              return (
+                <TabsContent key={slot} value={slot}>
+                  <div className="space-y-6">
+                    <div>
+                      <Badge variant="secondary" className="text-xs mb-2">{DAY_LABELS[slot]}</Badge>
+                      <p className="text-sm text-[hsl(270,10%,55%)] mt-1">
+                        {d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                      </p>
+                    </div>
+
+                    {Object.entries(sections).filter(([, v]) => v?.trim()).map(([key, content]) => (
+                      <Card key={key} className="bg-[hsl(270,25%,12%)] border-[hsl(270,15%,20%)]">
+                        <CardContent className="p-5">
+                          <h3 className="text-sm font-bold uppercase tracking-wider text-[hsl(280,40%,55%)] mb-3">{key.replace(/_/g, ' ')}</h3>
+                          <div className="text-sm leading-relaxed whitespace-pre-wrap text-[hsl(270,10%,80%)]">{content}</div>
+                        </CardContent>
+                      </Card>
+                    ))}
+
+                    {links.length > 0 && (
+                      <Card className="bg-[hsl(270,25%,12%)] border-[hsl(270,15%,20%)]">
+                        <CardContent className="p-5">
+                          <h3 className="text-sm font-bold uppercase tracking-wider text-[hsl(280,40%,55%)] mb-3">Links</h3>
+                          <div className="space-y-1.5">
+                            {links.map((url, i) => (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-xs text-[hsl(280,40%,65%)] hover:text-[hsl(280,40%,75%)] transition-colors truncate">
+                                <ExternalLink className="h-3 w-3 shrink-0" />
+                                <span className="truncate">{url}</span>
+                              </a>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
                   </div>
                 </TabsContent>
               );

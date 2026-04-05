@@ -16,6 +16,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
 import { countryFlag, normalizeCountryCode } from '@/lib/country-utils';
+import { NORMALIZED_GENRES } from '@/lib/constants';
 import * as CountryFlags from 'country-flag-icons/react/3x2';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
@@ -185,9 +186,16 @@ export default function Releases() {
   }, []);
 
   const allCountries = useMemo(() => {
-    const set = new Set<string>();
-    releases.forEach(r => { if (r.country) set.add(r.country); });
-    return Array.from(set).sort();
+    const map = new Map<string, string>(); // code → original label
+    releases.forEach(r => {
+      if (r.country) {
+        const code = normalizeCountryCode(r.country);
+        if (code && !map.has(code)) map.set(code, r.country);
+      }
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([code, label]) => ({ code, label }));
   }, [releases]);
 
   const allGenres = useMemo(() => {
@@ -203,8 +211,10 @@ export default function Releases() {
     let result = releases.filter(r => {
       const q = search.toLowerCase();
       const matchSearch = !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
-      const matchGenre = !genreFilter || (r.genres || []).includes(genreFilter);
-      const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : r.country === countryFilter;
+      const matchGenre = !genreFilter || (genreFilter.startsWith('~')
+        ? (r.genres || []).some(g => g.toLowerCase().includes(genreFilter.slice(1).toLowerCase()))
+        : (r.genres || []).includes(genreFilter));
+      const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : normalizeCountryCode(r.country) === countryFilter;
       let matchDate = true;
       if (dateRange) {
         matchDate = r.release_date >= dateRange[0] && r.release_date <= dateRange[1];
@@ -586,7 +596,7 @@ export default function Releases() {
           <SelectContent>
             <SelectItem value="__all__">Todos os países</SelectItem>
             <SelectItem value="__empty__">Sem país</SelectItem>
-            {allCountries.map(c => <SelectItem key={c} value={c}><span className="inline-flex items-center gap-2">{renderFlag(c)}<span>{c}</span></span></SelectItem>)}
+            {allCountries.map(c => <SelectItem key={c.code} value={c.code}><span className="inline-flex items-center gap-2">{renderFlag(c.code)}<span>{c.label}</span></span></SelectItem>)}
           </SelectContent>
         </Select>
         {countryFilter && <Button variant="ghost" size="sm" onClick={() => setCountryFilter(null)}>Limpar</Button>}
@@ -856,9 +866,21 @@ export default function Releases() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Filtrar por Gênero</DialogTitle>
-            <DialogDescription>Selecione um gênero para filtrar os lançamentos.</DialogDescription>
+            <DialogDescription>Selecione um gênero principal ou específico.</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[300px]">
+          {/* Main genre quick tags */}
+          <div className="flex flex-wrap gap-1.5 pb-2 border-b border-border">
+            {NORMALIZED_GENRES.map(ng => {
+              const isActive = genreFilter === `~${ng}`;
+              return (
+                <Button key={ng} size="sm" variant={isActive ? 'default' : 'secondary'} className="text-xs h-7 px-2.5 font-medium"
+                  onClick={() => { setGenreFilter(isActive ? null : `~${ng}`); if (!isActive) setGenreDialogOpen(false); }}>
+                  {ng}
+                </Button>
+              );
+            })}
+          </div>
+          <ScrollArea className="h-[250px]">
             <div className="flex flex-wrap gap-2">
               {allGenres.map(g => (
                 <Button key={g} size="sm" variant={genreFilter === g ? 'default' : 'outline'} className="text-xs"
