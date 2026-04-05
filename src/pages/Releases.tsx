@@ -185,9 +185,16 @@ export default function Releases() {
   }, []);
 
   const allCountries = useMemo(() => {
-    const set = new Set<string>();
-    releases.forEach(r => { if (r.country) set.add(r.country); });
-    return Array.from(set).sort();
+    const map = new Map<string, string>(); // code → original label
+    releases.forEach(r => {
+      if (r.country) {
+        const code = normalizeCountryCode(r.country);
+        if (code && !map.has(code)) map.set(code, r.country);
+      }
+    });
+    return Array.from(map.entries())
+      .sort((a, b) => a[1].localeCompare(b[1]))
+      .map(([code, label]) => ({ code, label }));
   }, [releases]);
 
   const allGenres = useMemo(() => {
