@@ -71,7 +71,7 @@ export function normalizeCountryCode(country: string | null | undefined): string
 export function countryFlag(country: string | null | undefined): string {
   const code = normalizeCountryCode(country);
   if (!code) return '';
-  return code;
+  return String.fromCodePoint(...code.split('').map((char) => 127397 + char.charCodeAt(0)));
 }
 
 export function artistWithFlag(artist: string, country: string | null | undefined): string {

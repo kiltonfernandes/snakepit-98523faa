@@ -16,7 +16,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
 import { countryFlag, normalizeCountryCode } from '@/lib/country-utils';
-import { FlagIcon } from 'country-flag-icons/react/3x2';
+import * as CountryFlags from 'country-flag-icons/react/3x2';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -179,7 +179,9 @@ export default function Releases() {
   const renderFlag = useCallback((country: string | null | undefined, className = 'h-4 w-5 rounded-[2px] overflow-hidden') => {
     const code = normalizeCountryCode(country);
     if (!code) return <Globe className="h-4 w-4 text-muted-foreground/30" />;
-    return <FlagIcon code={code} className={className} title={country ?? code} />;
+    const FlagComponent = CountryFlags[code as keyof typeof CountryFlags] as React.ComponentType<React.SVGProps<SVGSVGElement>> | undefined;
+    if (!FlagComponent) return <Globe className="h-4 w-4 text-muted-foreground/30" />;
+    return <FlagComponent className={className} title={country ?? code} />;
   }, []);
 
   const allCountries = useMemo(() => {
@@ -752,7 +754,10 @@ export default function Releases() {
                       <CardContent className="p-3 flex items-start gap-3">
                         {/* Flag + date column */}
                         <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
-                          {flagCode ? <FlagIcon code={flagCode} className="h-4 w-5 rounded-[2px] overflow-hidden" title={r.country ?? flagCode} /> : <Globe className="h-4 w-4 text-muted-foreground/30" />}
+                          {flagCode ? (() => {
+                            const FlagComponent = CountryFlags[flagCode as keyof typeof CountryFlags] as React.ComponentType<React.SVGProps<SVGSVGElement>> | undefined;
+                            return FlagComponent ? <FlagComponent className="h-4 w-5 rounded-[2px] overflow-hidden" title={r.country ?? flagCode} /> : <Globe className="h-4 w-4 text-muted-foreground/30" />;
+                          })() : <Globe className="h-4 w-4 text-muted-foreground/30" />}
                           <span className="text-[9px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
                         </div>
 
