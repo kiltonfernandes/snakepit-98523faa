@@ -491,7 +491,28 @@ export default function Releases() {
         <Button variant={genreFilter ? 'default' : 'outline'} size="sm" className="gap-2" onClick={() => setGenreDialogOpen(true)}>
           <Filter className="h-4 w-4" /> {genreFilter || 'Gênero'}
         </Button>
-        {genreFilter && <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar filtro</Button>}
+        {genreFilter && <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar</Button>}
+
+        {/* Country filter */}
+        <Select value={countryFilter ?? '__all__'} onValueChange={v => setCountryFilter(v === '__all__' ? null : v)}>
+          <SelectTrigger className="w-[150px] h-8 text-xs">
+            <Globe className="h-3 w-3 mr-1" /><SelectValue placeholder="País" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos os países</SelectItem>
+            <SelectItem value="__empty__">Sem país</SelectItem>
+            {allCountries.map(c => <SelectItem key={c} value={c}>{countryFlag(c)} {c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {countryFilter && <Button variant="ghost" size="sm" onClick={() => setCountryFilter(null)}>Limpar</Button>}
+
+        {/* Enrich countries */}
+        {releases.some(r => !r.country) && (
+          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={enrichCountries} disabled={enrichingCountries}>
+            {enrichingCountries ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+            Buscar países
+          </Button>
+        )}
 
         {/* View mode toggle */}
         <div className="flex items-center rounded-md border border-border overflow-hidden">
