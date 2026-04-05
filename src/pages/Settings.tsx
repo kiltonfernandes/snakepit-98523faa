@@ -126,9 +126,13 @@ export default function Settings() {
     loadTemplates();
   };
 
-  const deleteTemplate = async (id: string) => {
-    await supabase.from('pauta_templates' as any).delete().eq('id', id);
+  const [deleteTemplateId, setDeleteTemplateId] = useState<string | null>(null);
+
+  const confirmDeleteTemplate = async () => {
+    if (!deleteTemplateId) return;
+    await supabase.from('pauta_templates' as any).delete().eq('id', deleteTemplateId);
     toast.success('Template removido');
+    setDeleteTemplateId(null);
     loadTemplates();
   };
 
