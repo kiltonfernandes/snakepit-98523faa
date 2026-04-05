@@ -664,21 +664,20 @@ export default function Releases() {
                         </div>
 
                         {/* Genres */}
-                        <div className="flex gap-1.5 flex-wrap px-4 pb-3">
-                          {(r.genres || []).slice(0, 3).map(g => (
-                            <Badge key={g} variant="secondary" className="text-[10px] h-5 rounded-full px-2 gap-1">
-                              <span className="text-primary">●</span> {g}
+                        <div className="flex gap-1.5 flex-wrap px-3 pb-2">
+                          {(r.genres || []).slice(0, 2).map(g => (
+                            <Badge key={g} variant="secondary" className="text-[9px] h-4 rounded-full px-1.5">
+                              {g}
                             </Badge>
                           ))}
                         </div>
 
-                        {/* Platform buttons */}
-                        <div className="flex items-center gap-1 px-4 pb-3 flex-wrap">
+                        {/* Platform links */}
+                        <div className="flex items-center gap-1 px-3 pb-3 flex-wrap mt-auto">
                           {([
-                            { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300 border-red-400/30' },
-                            { key: 'spotify' as const, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300 border-emerald-400/30' },
-                            { key: 'deezer' as const, label: 'Deezer', color: 'text-purple-400 hover:text-purple-300 border-purple-400/30' },
-                            { key: 'metal_archives' as const, label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300 border-orange-400/30' },
+                            { key: 'youtube' as const, label: 'YT', color: 'text-red-400 hover:text-red-300 border-red-400/30' },
+                            { key: 'spotify' as const, label: 'SP', color: 'text-emerald-400 hover:text-emerald-300 border-emerald-400/30' },
+                            { key: 'metal_archives' as const, label: 'MA', color: 'text-orange-400 hover:text-orange-300 border-orange-400/30' },
                           ]).map(p => (
                             <a
                               key={p.key}
@@ -686,15 +685,15 @@ export default function Releases() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={e => e.stopPropagation()}
-                              className={`inline-flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5 transition-colors ${p.color}`}
+                              className={`inline-flex items-center gap-1 text-[9px] border rounded-full px-1.5 py-0.5 transition-colors ${p.color}`}
                             >
-                              <ExternalLink className="h-2.5 w-2.5" />
                               {p.label}
                             </a>
                           ))}
                         </div>
                       </CardContent>
                     </Card>
+                    </motion.div>
                   );
                 })}
               </div>
