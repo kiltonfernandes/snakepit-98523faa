@@ -13,6 +13,7 @@ import Materials from "./pages/Materials";
 import Rivaldo from "./pages/Rivaldo";
 import CalendarView from "./pages/CalendarView";
 import Settings from "./pages/Settings";
+import PublicWeekView from "./pages/PublicWeekView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -35,6 +36,7 @@ const App = () => (
             <Route path="/calendar" element={<CalendarView />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
+          <Route path="/week/:weekId" element={<PublicWeekView />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
