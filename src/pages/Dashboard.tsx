@@ -10,20 +10,17 @@ import { useApp } from '@/contexts/AppContext';
 import { DAY_SLOTS } from '@/lib/constants';
 import { EpisodeCompletionIndicators, EditorialWeek } from '@/lib/types';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
+import { motion, AnimatePresence } from 'framer-motion';
 
-function getWeekNumber(dateStr: string): number {
-  const d = new Date(dateStr + 'T12:00:00');
-  const start = new Date(d.getFullYear(), 0, 1);
-  const diff = d.getTime() - start.getTime();
-  return Math.ceil((diff / 86400000 + start.getDay() + 1) / 7);
-}
+const MONTHS_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const { releases, weeks, pautas, materials } = useApp();
   const [expandedWeek, setExpandedWeek] = useState<string | null>(weeks[0]?.id || null);
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]));
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([`${new Date().getFullYear()}-${new Date().getMonth()}`]));
 
-  // Exclude sunday from dashboard indicators
   const DASHBOARD_SLOTS = DAY_SLOTS.filter(d => d.key !== 'sunday');
 
   function getWeekIndicators(week: EditorialWeek) {
@@ -63,21 +60,40 @@ export default function Dashboard() {
     return total > 0 ? Math.round((done / total) * 100) : 0;
   }
 
-  // Group weeks by year
-  const weeksByYear = useMemo(() => {
-    const map: Record<number, EditorialWeek[]> = {};
+  // Group weeks by year > month
+  const tree = useMemo(() => {
+    const yearMap: Record<number, Record<number, EditorialWeek[]>> = {};
     weeks.forEach(w => {
-      const year = new Date(w.start_date + 'T12:00:00').getFullYear();
-      if (!map[year]) map[year] = [];
-      map[year].push(w);
+      const d = new Date(w.start_date + 'T12:00:00');
+      const y = d.getFullYear();
+      const m = d.getMonth();
+      if (!yearMap[y]) yearMap[y] = {};
+      if (!yearMap[y][m]) yearMap[y][m] = [];
+      yearMap[y][m].push(w);
     });
-    return Object.entries(map).sort(([a], [b]) => Number(b) - Number(a));
+    return Object.entries(yearMap)
+      .sort(([a], [b]) => Number(b) - Number(a))
+      .map(([year, months]) => ({
+        year: Number(year),
+        months: Object.entries(months)
+          .sort(([a], [b]) => Number(b) - Number(a))
+          .map(([month, weeks]) => ({
+            month: Number(month),
+            weeks: weeks.sort((a, b) => b.start_date.localeCompare(a.start_date)),
+          })),
+      }));
   }, [weeks]);
 
   const yearProgress = (yearWeeks: EditorialWeek[]): number => {
     if (yearWeeks.length === 0) return 0;
     const total = yearWeeks.reduce((s, w) => s + weekProgress(w), 0);
     return Math.round(total / yearWeeks.length);
+  };
+
+  const monthProgress = (monthWeeks: EditorialWeek[]): number => {
+    if (monthWeeks.length === 0) return 0;
+    const total = monthWeeks.reduce((s, w) => s + weekProgress(w), 0);
+    return Math.round(total / monthWeeks.length);
   };
 
   const Dot = ({ active }: { active: boolean }) => (
@@ -90,6 +106,22 @@ export default function Dashboard() {
     if (pct >= 80) return 'bg-emerald-500';
     if (pct >= 40) return 'bg-yellow-500';
     return 'bg-red-500';
+  };
+
+  const toggleYear = (y: number) => {
+    setExpandedYears(prev => {
+      const next = new Set(prev);
+      if (next.has(y)) next.delete(y); else next.add(y);
+      return next;
+    });
+  };
+
+  const toggleMonth = (key: string) => {
+    setExpandedMonths(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
   };
 
   const currentWeek = weeks[0];
@@ -111,7 +143,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div className="flex items-center gap-4">
         <img src={heavynautaLogo} alt="Heavynauta" className="h-12 w-12 rounded-xl object-cover" />
         <div>
@@ -123,96 +154,128 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(s => (
-          <Card key={s.label} className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(s.route)}>
-            <CardContent className="flex items-center justify-between p-4">
-              <div>
-                <p className="text-xs text-muted-foreground">{s.label}</p>
-                <p className="text-2xl font-bold mt-1">{s.value}</p>
-              </div>
-              <s.icon className="h-5 w-5 text-muted-foreground/50" />
-            </CardContent>
-          </Card>
+        {stats.map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(s.route)}>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                  <p className="text-2xl font-bold mt-1">{s.value}</p>
+                </div>
+                <s.icon className="h-5 w-5 text-muted-foreground/50" />
+              </CardContent>
+            </Card>
+          </motion.div>
         ))}
       </div>
 
-      {/* Year-level aggregation */}
-      {weeksByYear.map(([year, yearWeeks]) => {
-        const yPct = yearProgress(yearWeeks);
+      {/* Hierarchical tree: Year > Month > Week > Day */}
+      {tree.map(({ year: y, months }) => {
+        const allYearWeeks = months.flatMap(m => m.weeks);
+        const yPct = yearProgress(allYearWeeks);
+        const isYearOpen = expandedYears.has(y);
+
         return (
-          <Card key={year}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className={`h-3 w-3 rounded-full ${trafficLight(yPct)}`} />
-                  <CardTitle className="text-base">{year}</CardTitle>
-                  <Badge variant="secondary" className="text-xs">{yearWeeks.length} semanas</Badge>
-                </div>
-                <span className="text-sm font-mono text-muted-foreground">{yPct}%</span>
-              </div>
-              <Progress value={yPct} className="h-1.5 mt-2" />
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {yearWeeks.map(week => {
-                const wPct = weekProgress(week);
-                const isExpanded = expandedWeek === week.id;
-                const weekNum = getWeekNumber(week.start_date);
-                const dayIndicators = getWeekIndicators(week);
+          <Card key={y}>
+            <button
+              className="w-full flex items-center gap-3 p-4 hover:bg-muted/30 transition-colors text-left"
+              onClick={() => toggleYear(y)}
+            >
+              {isYearOpen ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRightIcon className="h-4 w-4 text-muted-foreground shrink-0" />}
+              <span className={`h-3 w-3 rounded-full ${trafficLight(yPct)}`} />
+              <span className="text-base font-bold">{y}</span>
+              <Badge variant="secondary" className="text-xs">{allYearWeeks.length} semanas</Badge>
+              <div className="flex-1 mx-3"><Progress value={yPct} className="h-1.5" /></div>
+              <span className="text-sm font-mono text-muted-foreground">{yPct}%</span>
+            </button>
 
-                return (
-                  <div key={week.id} className="rounded-lg border border-border/50 overflow-hidden">
-                    {/* Week row */}
-                    <button
-                      className="w-full flex items-center gap-3 p-3 hover:bg-muted/30 transition-colors text-left"
-                      onClick={() => setExpandedWeek(isExpanded ? null : week.id)}
-                    >
-                      {isExpanded
-                        ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />
-                        : <ChevronRightIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                      }
-                      <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${trafficLight(wPct)}`} />
-                      <span className="text-sm font-medium">
-                        {(() => {
-                          const mon = new Date(week.start_date + 'T12:00:00');
-                          const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
-                          return `Semana ${format(mon, 'dd.MM')} a ${format(sun, 'dd.MM')}`;
-                        })()}
-                      </span>
-                      <div className="flex-1 mx-3">
-                        <Progress value={wPct} className="h-1.5" />
-                      </div>
-                      <span className="text-xs font-mono text-muted-foreground w-10 text-right">{wPct}%</span>
-                      <Badge variant="secondary" className="text-[10px] ml-1">{week.status}</Badge>
-                    </button>
+            <AnimatePresence>
+              {isYearOpen && (
+                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                  <div className="px-4 pb-4 space-y-2">
+                    {months.map(({ month: m, weeks: mWeeks }) => {
+                      const mKey = `${y}-${m}`;
+                      const mPct = monthProgress(mWeeks);
+                      const isMonthOpen = expandedMonths.has(mKey);
 
-                    {/* Episode details */}
-                    {isExpanded && (
-                      <div className="border-t border-border/30 bg-muted/10 p-3">
-                        {/* Header row */}
-                        <div className="grid grid-cols-[100px_repeat(5,1fr)_60px] gap-1 text-[10px] text-muted-foreground font-medium mb-1.5 px-1">
-                          <span>Episódio</span>
-                          {INDICATOR_LABELS.map(l => <span key={l} className="text-center">{l}</span>)}
-                          <span className="text-right">Score</span>
+                      return (
+                        <div key={mKey} className="rounded-lg border border-border/50 overflow-hidden">
+                          <button
+                            className="w-full flex items-center gap-3 p-3 hover:bg-muted/20 transition-colors text-left"
+                            onClick={() => toggleMonth(mKey)}
+                          >
+                            {isMonthOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRightIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                            <span className={`h-2.5 w-2.5 rounded-full ${trafficLight(mPct)}`} />
+                            <span className="text-sm font-medium">{MONTHS_PT[m]}</span>
+                            <Badge variant="secondary" className="text-[10px]">{mWeeks.length} sem</Badge>
+                            <div className="flex-1 mx-3"><Progress value={mPct} className="h-1" /></div>
+                            <span className="text-xs font-mono text-muted-foreground">{mPct}%</span>
+                          </button>
+
+                          <AnimatePresence>
+                            {isMonthOpen && (
+                              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                                <div className="px-3 pb-3 space-y-1.5">
+                                  {mWeeks.map(week => {
+                                    const wPct = weekProgress(week);
+                                    const isExpanded = expandedWeek === week.id;
+                                    const dayIndicators = getWeekIndicators(week);
+
+                                    return (
+                                      <div key={week.id} className="rounded-md border border-border/30 overflow-hidden">
+                                        <button
+                                          className="w-full flex items-center gap-3 p-2.5 hover:bg-muted/20 transition-colors text-left"
+                                          onClick={() => setExpandedWeek(isExpanded ? null : week.id)}
+                                        >
+                                          {isExpanded ? <ChevronDown className="h-3 w-3 text-muted-foreground shrink-0" /> : <ChevronRightIcon className="h-3 w-3 text-muted-foreground shrink-0" />}
+                                          <span className={`h-2 w-2 rounded-full shrink-0 ${trafficLight(wPct)}`} />
+                                          <span className="text-xs font-medium">
+                                            {(() => {
+                                              const mon = new Date(week.start_date + 'T12:00:00');
+                                              const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+                                              return `${format(mon, 'dd.MM')} – ${format(sun, 'dd.MM')}`;
+                                            })()}
+                                          </span>
+                                          <div className="flex-1 mx-2"><Progress value={wPct} className="h-1" /></div>
+                                          <span className="text-[10px] font-mono text-muted-foreground w-8 text-right">{wPct}%</span>
+                                          <Badge variant="secondary" className="text-[9px] ml-1">{week.status}</Badge>
+                                        </button>
+
+                                        {isExpanded && (
+                                          <div className="border-t border-border/30 bg-muted/10 p-2.5">
+                                            <div className="grid grid-cols-[100px_repeat(5,1fr)_60px] gap-1 text-[10px] text-muted-foreground font-medium mb-1 px-1">
+                                              <span>Episódio</span>
+                                              {INDICATOR_LABELS.map(l => <span key={l} className="text-center">{l}</span>)}
+                                              <span className="text-right">Score</span>
+                                            </div>
+                                            {dayIndicators.map(({ day, indicators, count }) => (
+                                              <div key={day.key} className="grid grid-cols-[100px_repeat(5,1fr)_60px] gap-1 items-center py-1 px-1 rounded hover:bg-muted/20">
+                                                <span className="text-xs font-medium">{day.label}</span>
+                                                <span className="flex justify-center"><Dot active={indicators.pauta} /></span>
+                                                <span className="flex justify-center"><Dot active={indicators.title} /></span>
+                                                <span className="flex justify-center"><Dot active={indicators.description} /></span>
+                                                <span className="flex justify-center"><Dot active={indicators.cover} /></span>
+                                                <span className="flex justify-center"><Dot active={indicators.scheduling} /></span>
+                                                <span className="text-right text-[10px] font-mono text-muted-foreground">{count}/5</span>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
                         </div>
-                        {dayIndicators.map(({ day, indicators, count }) => (
-                          <div key={day.key} className="grid grid-cols-[100px_repeat(5,1fr)_60px] gap-1 items-center py-1 px-1 rounded hover:bg-muted/20">
-                            <span className="text-xs font-medium">{day.label}</span>
-                            <span className="flex justify-center"><Dot active={indicators.pauta} /></span>
-                            <span className="flex justify-center"><Dot active={indicators.title} /></span>
-                            <span className="flex justify-center"><Dot active={indicators.description} /></span>
-                            <span className="flex justify-center"><Dot active={indicators.cover} /></span>
-                            <span className="flex justify-center"><Dot active={indicators.scheduling} /></span>
-                            <span className="text-right text-[10px] font-mono text-muted-foreground">{count}/5</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </CardContent>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </Card>
         );
       })}
@@ -226,7 +289,6 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Quick actions */}
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => navigate('/pautas')} className="gap-2">
           Abrir Workspace <ArrowRight className="h-4 w-4" />

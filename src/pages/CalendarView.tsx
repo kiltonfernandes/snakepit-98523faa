@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -10,7 +10,10 @@ import {
   Eye,
   EyeOff,
   FileText,
+  Image,
   Link as LinkIcon,
+  Share2,
+  Sparkles,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -20,18 +23,23 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useApp } from '@/contexts/AppContext';
-import { EpisodeMaterial, Release } from '@/lib/types';
+import { EpisodeMaterial, Release, Pauta } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { getSectionsForDay } from '@/lib/constants';
+import { resolveAllLinks } from '@/lib/dynamic-links';
 
-const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+// Week starts on Monday
+const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 function getDaysInMonth(year: number, month: number) {
   const firstDay = new Date(year, month, 1).getDay();
+  // Adjust for Monday start: Mon=0, Tue=1, ..., Sun=6
+  const adjustedFirst = firstDay === 0 ? 6 : firstDay - 1;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days: (number | null)[] = [];
-  for (let i = 0; i < firstDay; i++) days.push(null);
+  for (let i = 0; i < adjustedFirst; i++) days.push(null);
   for (let i = 1; i <= daysInMonth; i++) days.push(i);
   return days;
 }
@@ -48,8 +56,15 @@ function getWeekDays(date: Date): Date[] {
   });
 }
 
+// Map getDay() (0=Sun) to DAYS_OF_WEEK index (0=Mon)
+function dayOfWeekLabel(d: Date): string {
+  const dow = d.getDay();
+  const idx = dow === 0 ? 6 : dow - 1;
+  return DAYS_OF_WEEK[idx];
+}
+
 export default function CalendarView() {
-  const { materials, pautas, releases, updateMaterial, updateRelease, dataReady } = useApp();
+  const { materials, pautas, releases, updateMaterial, updateRelease, loadMaterialCover, dataReady, weeks } = useApp();
   const navigate = useNavigate();
   const [date, setDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
@@ -61,10 +76,27 @@ export default function CalendarView() {
   const [showReleases, setShowReleases] = useState(false);
   const [showPautas, setShowPautas] = useState(true);
   const [editForm, setEditForm] = useState({ artist: '', album: '', release_date: '', comments: '' });
+  const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
 
   const year = date.getFullYear();
   const month = date.getMonth();
   const today = new Date();
+
+  // Load cover thumbnails lazily
+  useEffect(() => {
+    if (!dataReady) return;
+    const matsWithCover = materials.filter(m => m.cover_url && !coverThumbnails[m.id]);
+    matsWithCover.forEach(m => {
+      if (m.cover_url?.startsWith('data:')) {
+        setCoverThumbnails(prev => ({ ...prev, [m.id]: m.cover_url! }));
+      } else {
+        loadMaterialCover(m.id).then(url => {
+          if (url) setCoverThumbnails(prev => ({ ...prev, [m.id]: url }));
+        });
+      }
+    });
+  }, [materials, dataReady]);
 
   const prev = () => {
     if (viewMode === 'month') setDate(new Date(year, month - 1, 1));
@@ -178,6 +210,16 @@ export default function CalendarView() {
     a.click();
   };
 
+  const handleCopyShareLink = () => {
+    if (!selectedMaterial) return;
+    const week = weeks.find(w => w.id === selectedMaterial.week_id);
+    if (week) {
+      const link = `${window.location.origin}/week/${week.id}`;
+      navigator.clipboard.writeText(link);
+      toast.success('Link compartilhável copiado');
+    }
+  };
+
   const pautaStatusColor = (status: string) => {
     if (status === 'finalized') return 'bg-primary';
     if (status === 'generated' || status === 'needs_review') return 'bg-accent';
@@ -245,15 +287,23 @@ export default function CalendarView() {
                   {(() => {
                     const mat = materials.find(m => m.episode_date === item.data.publication_date);
                     const title = mat ? getSelectedTitle(mat) : '';
-                    return title ? (
-                      <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>
-                    ) : null;
+                    const thumbUrl = mat ? coverThumbnails[mat.id] : undefined;
+                    return (
+                      <div className="flex items-start gap-1.5">
+                        {thumbUrl && (
+                          <img src={thumbUrl} alt="" className="h-7 w-7 rounded-sm object-cover shrink-0" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          {title && <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>}
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(item.data.status)}`} />
+                            <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(item.data.status)}</span>
+                            <FileText className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
+                          </div>
+                        </div>
+                      </div>
+                    );
                   })()}
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(item.data.status)}`} />
-                    <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(item.data.status)}</span>
-                    <FileText className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
-                  </div>
                 </div>
               ) : item.type === 'release' ? (
                 <div className="flex items-center gap-2">
@@ -268,7 +318,6 @@ export default function CalendarView() {
                     </Badge>
                     <span className="truncate text-[10px] font-medium text-foreground">{getSelectedTitle(item.data)}</span>
                   </div>
-                  <p className="truncate text-[10px] text-muted-foreground">Abrir título, HTML, capa e link Spotify</p>
                 </div>
               )}
             </button>
@@ -343,7 +392,7 @@ export default function CalendarView() {
                 return (
                   <div key={i}>
                     <div className={`mb-1.5 rounded-md py-1.5 text-center text-[11px] font-semibold ${isToday ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
-                      {DAYS_OF_WEEK[wd.getDay()]} {wd.getDate()}
+                      {dayOfWeekLabel(wd)} {wd.getDate()}
                     </div>
                     <DayCell dateObj={wd} isToday={isToday} className="min-h-[220px]" />
                   </div>
@@ -367,11 +416,12 @@ export default function CalendarView() {
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-muted-foreground/40" /> Rascunho</span>
       </div>
 
+      {/* Episode package modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>Pacote do episódio</DialogTitle>
-            <DialogDescription>Copie título e HTML, baixe a capa e atualize o link do Spotify em um modal mais amplo.</DialogDescription>
+            <DialogDescription>Copie título e HTML, baixe a capa e atualize o link do Spotify.</DialogDescription>
           </DialogHeader>
           {selectedMaterial && (
             <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
@@ -434,7 +484,7 @@ export default function CalendarView() {
                 <section className="space-y-3 rounded-xl border border-border bg-card p-4">
                   <div>
                     <h3 className="text-sm font-semibold">Capa do episódio</h3>
-                    <p className="text-xs text-muted-foreground">Baixe a arte já criada ou volte para o workspace para refazer.</p>
+                    <p className="text-xs text-muted-foreground">Baixe a arte ou gere uma nova capa.</p>
                   </div>
                   {selectedMaterial.cover_url ? (
                     <img src={selectedMaterial.cover_url} alt={`Capa do episódio ${getSelectedTitle(selectedMaterial)}`} className="aspect-square w-full rounded-lg border border-border object-cover" />
@@ -443,13 +493,31 @@ export default function CalendarView() {
                       Nenhuma capa gerada para este episódio.
                     </div>
                   )}
-                  <Button variant="outline" className="w-full gap-2" onClick={handleDownloadCover} disabled={!selectedMaterial.cover_url}>
-                    <Download className="h-4 w-4" /> Baixar capa
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 gap-2" onClick={handleDownloadCover} disabled={!selectedMaterial.cover_url}>
+                      <Download className="h-4 w-4" /> Baixar capa
+                    </Button>
+                    <Button variant="outline" className="flex-1 gap-2" onClick={() => {
+                      setModalOpen(false);
+                      navigate('/materials');
+                    }}>
+                      <Sparkles className="h-4 w-4" /> Gerar capa
+                    </Button>
+                  </div>
                 </section>
 
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold">Ações rápidas</h3>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {
+                    const pauta = pautas.find(p => p.publication_date === selectedMaterial.episode_date);
+                    if (pauta) setPreviewPauta(pauta);
+                    else toast.info('Nenhuma pauta para este episódio');
+                  }}>
+                    <Eye className="h-4 w-4" /> Visualizar pauta
+                  </Button>
+                  <Button variant="outline" className="w-full justify-start gap-2" onClick={handleCopyShareLink}>
+                    <Share2 className="h-4 w-4" /> Copiar link compartilhável
+                  </Button>
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={goToWorkspace}>
                     <FileText className="h-4 w-4" /> Abrir workspace
                   </Button>
@@ -469,6 +537,67 @@ export default function CalendarView() {
         </DialogContent>
       </Dialog>
 
+      {/* Pauta preview dialog */}
+      <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Visualização da Pauta</DialogTitle>
+            <DialogDescription>Preview da pauta</DialogDescription>
+          </DialogHeader>
+          {previewPauta && (() => {
+            const d = new Date(previewPauta.publication_date + 'T12:00:00');
+            const wd = d.getDay();
+            const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+            const slot = (slotMap[wd] || 'monday') as any;
+            const sections = getSectionsForDay(slot);
+            const data = (previewPauta.sections_json || {}) as Record<string, string>;
+            const inputs = (previewPauta.raw_inputs_json || {}) as Record<string, any>;
+
+            return (
+              <div className="space-y-8 p-4">
+                <header className="border-b border-white/20 pb-4 text-center">
+                  <h1 className="text-2xl font-bold text-white">SNAKEPIT</h1>
+                  <h2 className="mt-2 text-lg font-semibold text-white/80">
+                    {d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                  </h2>
+                </header>
+
+                {sections.map((sec) => {
+                  const content = data[sec.key]?.trim() || null;
+                  let contextNote = '';
+                  if (sec.key === 'anniversary' && inputs.anniversary) contextNote = `📅 ${inputs.anniversary}`;
+                  if (sec.key === 'review_rafa') {
+                    const rel = releases.find(r => r.id === inputs.review_rafa_id);
+                    if (rel) contextNote = `🎵 ${rel.artist} — ${rel.album}`;
+                  }
+                  if (sec.key === 'review_kilton') {
+                    const rel = releases.find(r => r.id === inputs.review_kilton_id);
+                    if (rel) contextNote = `🎵 ${rel.artist} — ${rel.album}`;
+                  }
+                  if (sec.key === 'news' && inputs.news_link) contextNote = `🔗 ${inputs.news_link}`;
+
+                  return (
+                    <article key={sec.key} className="border-t border-white/10 pt-4">
+                      <h3 className="mb-2 text-lg font-bold uppercase tracking-wider text-white">{sec.label}</h3>
+                      {contextNote && <p className="mb-2 text-sm italic text-white/50">{contextNote}</p>}
+                      {content ? (
+                        <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
+                      ) : (
+                        <p className="text-base italic text-white/30">Seção não preenchida</p>
+                      )}
+                    </article>
+                  );
+                })}
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewPauta(null)}>Fechar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Release edit dialog */}
       <Dialog open={releaseModalOpen} onOpenChange={setReleaseModalOpen}>
         <DialogContent>
           <DialogHeader>
