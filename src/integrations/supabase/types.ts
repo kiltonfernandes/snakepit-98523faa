@@ -387,6 +387,7 @@ export type Database = {
           artist: string
           bandcamp_url: string | null
           comments: string | null
+          country: string | null
           created_at: string
           deezer_url: string | null
           id: string
@@ -403,6 +404,7 @@ export type Database = {
           artist: string
           bandcamp_url?: string | null
           comments?: string | null
+          country?: string | null
           created_at?: string
           deezer_url?: string | null
           id: string
@@ -419,6 +421,7 @@ export type Database = {
           artist?: string
           bandcamp_url?: string | null
           comments?: string | null
+          country?: string | null
           created_at?: string
           deezer_url?: string | null
           id?: string

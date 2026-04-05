@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle } from 'lucide-react';
@@ -33,12 +33,14 @@ function getPautaSlot(pauta: Pauta): DaySlot {
   return slotMap[wd] || 'monday';
 }
 
+// D-90 to D-1: releases from 90 days before publication to the day before
 function getEligibleReviews(releases: Release[], publicationDate: string): Release[] {
   const pub = new Date(publicationDate + 'T12:00:00');
-  const dPlus1 = new Date(pub); dPlus1.setDate(pub.getDate() + 1);
+  const dMinus90 = new Date(pub); dMinus90.setDate(pub.getDate() - 90);
+  const dMinus1 = new Date(pub); dMinus1.setDate(pub.getDate() - 1);
   return releases.filter(r => {
     const rd = new Date(r.release_date + 'T12:00:00');
-    return rd >= dPlus1;
+    return rd >= dMinus90 && rd <= dMinus1;
   });
 }
 
@@ -62,11 +64,9 @@ function normalizeGenre(genre: string): string {
   const lower = genre.toLowerCase().trim();
   for (const ng of NORMALIZED_GENRES) {
     if (lower === ng.toLowerCase()) return ng;
-    // partial matching: "melodic death" -> "Melodic Death Metal", "prog metal" -> "Progressive Metal"
     const ngLower = ng.toLowerCase();
     if (lower.includes(ngLower.replace(' metal', '')) && ngLower.includes('metal')) return ng;
   }
-  // Fuzzy: check if genre contains key words
   if (lower.includes('thrash')) return 'Thrash Metal';
   if (lower.includes('death') && lower.includes('melod')) return 'Melodic Death Metal';
   if (lower.includes('death')) return 'Death Metal';
@@ -78,7 +78,7 @@ function normalizeGenre(genre: string): string {
   if (lower.includes('core') || lower.includes('deathcore') || lower.includes('metalcore')) return 'Metalcore';
   if (lower.includes('symphonic')) return 'Symphonic Metal';
   if (lower.includes('heavy') || lower.includes('nwobhm') || lower.includes('traditional')) return 'Heavy Metal';
-  return 'Heavy Metal'; // default fallback
+  return 'Heavy Metal';
 }
 
 function getFirstNormalizedGenre(release: Release): string {
@@ -120,13 +120,36 @@ function getEligibleSaturdayReleases(releases: Release[], publicationDate: strin
   });
 }
 
-// Flow step definitions matching section order
+// Flow step definitions - added saturday_releases step
 const FLOW_STEPS = [
   { key: 'anniversary', label: 'Aniversários', inputKey: 'anniversary' },
   { key: 'review_rafa', label: 'Review Rafa', inputKey: 'review_rafa_id', isReview: true },
   { key: 'news', label: 'Notícias', inputKey: 'news_link' },
   { key: 'review_kilton', label: 'Review Kilton', inputKey: 'review_kilton_id', isReview: true },
+  { key: 'saturday_releases', label: 'Lançamentos Sábado', inputKey: 'selected_release_ids' },
 ] as const;
+
+// Auto-finalize check
+function shouldAutoFinalize(pauta: Pauta, releases: Release[]): boolean {
+  if (pauta.status === 'finalized') return false;
+  const slot = getPautaSlot(pauta);
+  const sections = getSectionsForDay(slot);
+  const data = (pauta.sections_json || {}) as Record<string, string>;
+  const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
+
+  // All sections must have content
+  const allSectionsFilled = sections.every(s => data[s.key]?.trim());
+  if (!allSectionsFilled) return false;
+
+  if (slot === 'saturday' || slot === 'sunday') return allSectionsFilled;
+
+  // Weekday: anniversary + news filled, and at least one review
+  const hasAnniversary = !!inputs.anniversary?.trim();
+  const hasNews = !!inputs.news_link?.trim();
+  const hasReview = !!inputs.review_rafa_id || !!inputs.review_kilton_id;
+
+  return hasAnniversary && hasNews && hasReview;
+}
 
 export default function Pautas() {
   const { weeks, addWeek, deleteWeek, pautas, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
@@ -167,6 +190,18 @@ export default function Pautas() {
     releases,
     bannedTerms,
   }), [settings, releases, bannedTerms]);
+
+  // Auto-finalize check on pauta changes
+  useEffect(() => {
+    if (!selectedWeek) return;
+    for (const pauta of weekPautas) {
+      if (shouldAutoFinalize(pauta, releases)) {
+        updatePauta(pauta.id, { status: 'finalized', finalized_at: new Date().toISOString() });
+        recalcWeekStatus(selectedWeek.id);
+        toast.success(`Pauta ${pauta.publication_date} auto-finalizada`);
+      }
+    }
+  }, [weekPautas.map(p => JSON.stringify({ s: p.sections_json, i: p.raw_inputs_json, st: p.status })).join(',')]);
 
   const handleCreateWeek = () => {
     if (!newWeekDate) return;
@@ -259,7 +294,6 @@ export default function Pautas() {
     });
   };
 
-  // ─── Generate with AI (streaming) ───
   const streamAI = useCallback(async (prompt: string, onChunk: (full: string) => void): Promise<string> => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
     const resp = await fetch(url, {
@@ -332,7 +366,6 @@ export default function Pautas() {
     }
   }, [activePauta, activeSection, promptScope, streamAI]);
 
-  // ─── Apply response using ResponseParser ───
   const [parseError, setParseError] = useState<string | null>(null);
 
   const handleApplyResponse = () => {
@@ -552,7 +585,6 @@ export default function Pautas() {
     logActivity('Salvar todos inputs', `Semana: ${selectedWeek?.start_date}`);
   };
 
-  // ─── Flow: auto-generate all prompts with granular progress ───
   const handleFlowAutoGenerateInner = useCallback(async (regenerateAll: boolean) => {
     if (!selectedWeek || weekPautas.length === 0) return;
     setFlowGenerating(true);
@@ -562,7 +594,6 @@ export default function Pautas() {
       return slot !== 'sunday';
     });
 
-    // Initialize progress map
     const initialProgress: Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>> = {};
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
@@ -579,7 +610,6 @@ export default function Pautas() {
       const sections = getSectionsForDay(slot);
       const existingSections = (pauta.sections_json || {}) as Record<string, string>;
 
-      // In non-regenerate mode, skip days where all sections are filled
       const allFilled = sections.every(s => existingSections[s.key]?.trim());
       if (!regenerateAll && allFilled) {
         setFlowProgress(prev => {
@@ -591,7 +621,6 @@ export default function Pautas() {
         continue;
       }
 
-      // Mark all sections of this day as generating
       setFlowProgress(prev => {
         const next = { ...prev };
         next[slot] = { ...next[slot] };
@@ -618,7 +647,6 @@ export default function Pautas() {
             rendered_markdown: sections.map(s => `## ${s.label}\n\n${updated[s.key] || 'N/A'}`).join('\n\n'),
             rendered_text: sections.map(s => `${s.label}:\n${updated[s.key] || 'N/A'}`).join('\n\n'),
           });
-          // Mark sections as done
           setFlowProgress(prev => {
             const next = { ...prev };
             next[slot] = { ...next[slot] };
@@ -659,13 +687,15 @@ export default function Pautas() {
     setFlowStep(0);
   };
 
-  // Flow steps: each section across all weekday pautas
   const flowWeekdayPautas = weekPautas.filter(p => {
     const slot = getPautaSlot(p);
     return slot !== 'sunday' && slot !== 'saturday';
   }).sort((a, b) => a.publication_date.localeCompare(b.publication_date));
 
-  const flowTotalSteps = FLOW_STEPS.length + 1; // +1 for final action screen
+  // Saturday pauta for the flow saturday_releases step
+  const flowSaturdayPauta = weekPautas.find(p => getPautaSlot(p) === 'saturday');
+
+  const flowTotalSteps = FLOW_STEPS.length + 1;
 
   const ReleasePicker = ({ pauta, inputKey, label }: { pauta: Pauta; inputKey: string; label: string }) => {
     const [search, setSearch] = useState('');
@@ -734,7 +764,7 @@ export default function Pautas() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground p-3 text-center italic">
-                  {eligible.length === 0 ? 'Nenhum release a partir de D+1' : 'Nenhum resultado'}
+                  {eligible.length === 0 ? 'Nenhum release na janela D-90 a D-1' : 'Nenhum resultado'}
                 </p>
               )}
             </ScrollArea>
@@ -813,10 +843,8 @@ export default function Pautas() {
     ? (activeSection ? generatePrompt(activePauta, activeSection) : (activeSection === null && !activePauta ? generateWeekPrompt() : generatePrompt(activePauta)))
     : '';
 
-  // ─── Flow step renderer ───
   const renderFlowStep = () => {
     if (flowStep >= FLOW_STEPS.length) {
-      // Final step: action buttons + progress tracker
       const hasProgress = Object.keys(flowProgress).length > 0;
       const totalSections = Object.values(flowProgress).reduce((acc, day) => acc + Object.keys(day).length, 0);
       const doneSections = Object.values(flowProgress).reduce((acc, day) => acc + Object.values(day).filter(s => s === 'done').length, 0);
@@ -831,7 +859,6 @@ export default function Pautas() {
             </p>
           </div>
 
-          {/* Progress tracker */}
           {hasProgress && (
             <div className="w-full max-w-2xl space-y-3">
               <Progress value={progressPct} className="h-2.5" />
@@ -886,6 +913,37 @@ export default function Pautas() {
     }
 
     const step = FLOW_STEPS[flowStep];
+
+    // Saturday releases step - show SaturdayReleasePicker for the saturday pauta
+    if (step.key === 'saturday_releases') {
+      if (!flowSaturdayPauta) {
+        return (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground">Nenhuma pauta de sábado encontrada nesta semana.</p>
+          </div>
+        );
+      }
+      return (
+        <div className="space-y-6">
+          <div className="text-center space-y-1">
+            <h3 className="text-lg font-bold">{step.label}</h3>
+            <p className="text-sm text-muted-foreground">Selecione os lançamentos que serão destaque no episódio de sábado</p>
+          </div>
+          <div className="max-w-2xl mx-auto">
+            <Card className="border-border/50">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-xs">Sáb</Badge>
+                  <span className="font-medium text-sm">Sábado</span>
+                  <span className="text-xs text-muted-foreground">{flowSaturdayPauta.publication_date}</span>
+                </div>
+                <SaturdayReleasePicker pauta={flowSaturdayPauta} />
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="space-y-6">
@@ -1094,7 +1152,6 @@ export default function Pautas() {
                         <StatusBadge status={pauta.status} />
                       </div>
 
-                      {/* Anniversary + direction */}
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
                           <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Aniversário do Dia</Label>
@@ -1117,7 +1174,6 @@ export default function Pautas() {
                         onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
                       />
 
-                      {/* Weekday-specific: interleaved review/news + directions */}
                       {slot !== 'saturday' && slot !== 'sunday' && (
                         <>
                           <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
@@ -1164,7 +1220,6 @@ export default function Pautas() {
                         </>
                       )}
 
-                      {/* Saturday: release picker */}
                       {slot === 'saturday' && (
                         <>
                           <SaturdayReleasePicker pauta={pauta} />
@@ -1177,7 +1232,6 @@ export default function Pautas() {
                         </>
                       )}
 
-                      {/* Sunday: compilation summary */}
                       {slot === 'sunday' && (
                         <div className="p-2 rounded bg-muted/30 text-xs text-muted-foreground">
                           <p className="font-medium mb-1">Compilação Semanal</p>
@@ -1287,7 +1341,6 @@ export default function Pautas() {
 
             <TabsContent value="flow">
               <div className="space-y-6">
-                {/* Flow navigation bar */}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {FLOW_STEPS.map((step, i) => (
@@ -1338,7 +1391,6 @@ export default function Pautas() {
         </Card>
       )}
 
-      {/* Create Week Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1375,7 +1427,6 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Week Confirm */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -1389,7 +1440,6 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-      {/* Prompt Protocol Dialog */}
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1444,7 +1494,6 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-      {/* Pauta Preview Dialog */}
       <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
           <DialogHeader className="sr-only">
@@ -1464,7 +1513,7 @@ export default function Pautas() {
             return (
               <div className="space-y-10 p-4">
                 <header className="border-b border-white/20 pb-6 text-center">
-                  <h1 className="m-0 text-3xl font-bold tracking-tight text-white">🐍 SNAKEPIT</h1>
+                  <h1 className="m-0 text-3xl font-bold tracking-tight text-white">SNAKEPIT</h1>
                   <h2 className="mt-3 text-xl font-semibold text-white/80">
                     {dayInfo?.label} — {new Date(previewPauta.publication_date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
                   </h2>
@@ -1613,7 +1662,6 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-      {/* Export Dialog */}
       <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
         <DialogContent>
           <DialogHeader>
