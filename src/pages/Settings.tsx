@@ -694,6 +694,86 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Template editor dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingTemplate && templates.some(t => t.id === editingTemplate.id) ? 'Editar Template' : 'Novo Template'}</DialogTitle>
+            <DialogDescription>Configure nome, seções ativas e core prompts do template.</DialogDescription>
+          </DialogHeader>
+          {editingTemplate && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Nome</Label>
+                  <Input value={editingTemplate.name} onChange={e => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : prev)} placeholder="Ex: Notícias, Entrevista, Lista..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Descrição</Label>
+                  <Input value={editingTemplate.description} onChange={e => setEditingTemplate(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Breve descrição..." />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Segway Intro</Label>
+                  <Textarea value={editingTemplate.segway_intro} onChange={e => setEditingTemplate(prev => prev ? { ...prev, segway_intro: e.target.value } : prev)} placeholder="Texto de abertura do episódio..." rows={2} className="text-xs" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Segway Outro</Label>
+                  <Textarea value={editingTemplate.segway_outro} onChange={e => setEditingTemplate(prev => prev ? { ...prev, segway_outro: e.target.value } : prev)} placeholder="Texto de fechamento do episódio..." rows={2} className="text-xs" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-xs font-medium">Seções</Label>
+                {editingTemplate.sections_config.map((sec, idx) => (
+                  <div key={sec.key} className={`rounded-lg border p-3 space-y-2 transition-colors ${sec.enabled ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/10'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Switch checked={sec.enabled} onCheckedChange={(checked) => {
+                          setEditingTemplate(prev => {
+                            if (!prev) return prev;
+                            const next = [...prev.sections_config];
+                            next[idx] = { ...next[idx], enabled: checked };
+                            return { ...prev, sections_config: next };
+                          });
+                        }} />
+                        <span className={`text-sm font-medium ${sec.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>{sec.label}</span>
+                        <Badge variant="outline" className="text-[9px]">{sec.key}</Badge>
+                      </div>
+                    </div>
+                    {sec.enabled && (
+                      <div className="space-y-1 pl-12">
+                        <Label className="text-[10px] text-muted-foreground">Core Prompt (instrução específica para esta seção)</Label>
+                        <Textarea
+                          value={sec.core_prompt}
+                          onChange={e => {
+                            setEditingTemplate(prev => {
+                              if (!prev) return prev;
+                              const next = [...prev.sections_config];
+                              next[idx] = { ...next[idx], core_prompt: e.target.value };
+                              return { ...prev, sections_config: next };
+                            });
+                          }}
+                          placeholder="Instruções adicionais para IA ao gerar esta seção..."
+                          rows={3}
+                          className="text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={saveTemplate} className="gap-2"><Save className="h-3.5 w-3.5" /> Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
