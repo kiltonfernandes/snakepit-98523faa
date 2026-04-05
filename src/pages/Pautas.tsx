@@ -360,12 +360,23 @@ export default function Pautas() {
     setPromptResponse('');
     setParseError(null);
 
+    // Open progress modal
+    const label = promptScope === 'week' ? 'Semana completa' : `Pauta ${activePauta.publication_date}${activeSection ? ` — ${activeSection}` : ''}`;
+    setProgressItems([{ id: 'gen', label, status: 'generating' }]);
+    setProgressLogs([`Gerando: ${label}`]);
+    setProgressTitle('Gerando com IA...');
+    setProgressModalOpen(true);
+
     try {
       await streamAI(prompt, (full) => setPromptResponse(full));
+      setProgressItems([{ id: 'gen', label, status: 'done' }]);
+      setProgressLogs(prev => [...prev, '✓ Resposta gerada']);
       toast.success('Resposta gerada com IA');
       logActivity('IA gerou resposta', `scope: ${promptScope}, pauta: ${activePauta.publication_date}`);
     } catch (e: any) {
       console.error('AI generation error:', e);
+      setProgressItems([{ id: 'gen', label, status: 'error', error: e.message }]);
+      setProgressLogs(prev => [...prev, `✗ Erro: ${e.message}`]);
       toast.error(e.message || 'Erro ao gerar com IA');
     } finally {
       setGenerating(false);
