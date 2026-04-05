@@ -17,6 +17,8 @@ import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
+import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
+import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
 
 const TONE_PRESETS = [
