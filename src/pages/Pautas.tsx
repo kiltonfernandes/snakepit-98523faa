@@ -641,6 +641,8 @@ export default function Pautas() {
           for (const sec of sections) next[slot][sec.key] = 'done';
           return next;
         });
+        setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `✓ ${DAY_SLOTS.find(d => d.key === slot)?.label}: já preenchido`]);
         continue;
       }
 
