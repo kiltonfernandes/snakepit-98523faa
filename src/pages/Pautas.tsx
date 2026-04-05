@@ -612,6 +612,7 @@ export default function Pautas() {
     });
 
     const initialProgress: Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>> = {};
+    const flowItems: GenerationItem[] = [];
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
       const sections = getSectionsForDay(slot);
@@ -619,8 +620,13 @@ export default function Pautas() {
       for (const sec of sections) {
         initialProgress[slot][sec.key] = 'pending';
       }
+      flowItems.push({ id: slot, label: `${DAY_SLOTS.find(d => d.key === slot)?.label || slot}`, status: 'pending' });
     }
     setFlowProgress(initialProgress);
+    setProgressItems(flowItems);
+    setProgressLogs(['Iniciando flow automático...']);
+    setProgressTitle('Flow automático de pautas...');
+    setProgressModalOpen(true);
 
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
