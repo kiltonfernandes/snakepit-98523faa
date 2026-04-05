@@ -56,10 +56,7 @@ function getISOWeekLabel(dateStr: string): string {
   return `${format(monday, 'dd/MM')} – ${format(sunday, 'dd/MM')}`;
 }
 
-const NORMALIZED_GENRES = [
-  'Heavy Metal', 'Thrash Metal', 'Death Metal', 'Black Metal', 'Power Metal',
-  'Doom Metal', 'Progressive Metal', 'Groove Metal', 'Metalcore', 'Melodic Death Metal', 'Symphonic Metal',
-] as const;
+// NORMALIZED_GENRES imported from constants
 
 function normalizeGenre(genre: string): string {
   const lower = genre.toLowerCase().trim();
