@@ -968,6 +968,49 @@ export default function Releases() {
         items={repatriateItems}
         logs={repatriateLogs}
       />
+
+      {/* Delete single confirmation */}
+      <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir lançamento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação é irreversível. O release será removido permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+              if (deleteConfirmId) {
+                deleteRelease(deleteConfirmId);
+                setDeleteConfirmId(null);
+                toast.success('Lançamento removido');
+              }
+            }}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={bulkDeleteConfirmOpen} onOpenChange={setBulkDeleteConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir {selectedIds.size} lançamentos?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação é irreversível. Todos os {selectedIds.size} releases selecionados serão removidos.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => {
+              selectedIds.forEach(id => deleteRelease(id));
+              setSelectedIds(new Set());
+              setBulkDeleteConfirmOpen(false);
+              toast.success(`${selectedIds.size} lançamentos removidos`);
+            }}>Excluir Todos</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
