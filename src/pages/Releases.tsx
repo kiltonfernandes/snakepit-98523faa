@@ -640,7 +640,7 @@ export default function Releases() {
           </SelectContent>
         </Select>
         {selectedIds.size > 0 && (
-          <Button variant="destructive" size="sm" className="gap-2" onClick={handleBulkDelete}>
+          <Button variant="destructive" size="sm" className="gap-2" onClick={() => setBulkDeleteConfirmOpen(true)}>
             <Trash2 className="h-4 w-4" /> Excluir ({selectedIds.size})
           </Button>
         )}
