@@ -1250,6 +1250,14 @@ export default function Materials() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GenerationProgressModal
+        open={progressModalOpen}
+        onOpenChange={setProgressModalOpen}
+        title={progressTitle}
+        items={progressItems}
+        logs={progressLogs}
+      />
     </div>
   );
 }
