@@ -509,8 +509,9 @@ export default function CalendarView() {
                       <Download className="h-4 w-4" /> Baixar capa
                     </Button>
                     <Button variant="outline" className="flex-1 gap-2" onClick={() => {
-                      setModalOpen(false);
-                      navigate('/materials');
+                      const title = getSelectedTitle(selectedMaterial);
+                      setCoverImageUrl('');
+                      setCoverDialogOpen(true);
                     }}>
                       <Sparkles className="h-4 w-4" /> Gerar capa
                     </Button>
