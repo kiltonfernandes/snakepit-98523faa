@@ -593,7 +593,7 @@ export default function Releases() {
           <SelectContent>
             <SelectItem value="__all__">Todos os países</SelectItem>
             <SelectItem value="__empty__">Sem país</SelectItem>
-            {allCountries.map(c => <SelectItem key={c} value={c}><span className="inline-flex items-center gap-2">{renderFlag(c)}<span>{c}</span></span></SelectItem>)}
+            {allCountries.map(c => <SelectItem key={c.code} value={c.code}><span className="inline-flex items-center gap-2">{renderFlag(c.code)}<span>{c.label}</span></span></SelectItem>)}
           </SelectContent>
         </Select>
         {countryFilter && <Button variant="ghost" size="sm" onClick={() => setCountryFilter(null)}>Limpar</Button>}
