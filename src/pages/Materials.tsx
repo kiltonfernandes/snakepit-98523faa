@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Palette, Sparkles, Image, ExternalLink, Download, Copy, RefreshCw, Loader2 } from 'lucide-react';
+import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
