@@ -1701,6 +1701,15 @@ export default function Pautas() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Generation progress modal */}
+      <GenerationProgressModal
+        open={progressModalOpen}
+        onOpenChange={setProgressModalOpen}
+        title={progressTitle}
+        items={progressItems}
+        logs={progressLogs}
+      />
     </div>
   );
 }
