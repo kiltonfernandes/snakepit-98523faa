@@ -67,6 +67,10 @@ export default function Materials() {
   const [generatingDescriptions, setGeneratingDescriptions] = useState<Set<string>>(new Set());
   const [generatingAllTitles, setGeneratingAllTitles] = useState(false);
   const [generatingAllDescriptions, setGeneratingAllDescriptions] = useState(false);
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [progressItems, setProgressItems] = useState<GenerationItem[]>([]);
+  const [progressLogs, setProgressLogs] = useState<string[]>([]);
+  const [progressTitle, setProgressTitle] = useState('');
 
   // Default to the latest week that has pautas
   const selectedWeek = weeks.find((w) => w.id === selectedWeekId)
