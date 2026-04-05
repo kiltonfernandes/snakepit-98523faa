@@ -9,9 +9,17 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
-    const { artists } = await req.json();
-    if (!Array.isArray(artists) || artists.length === 0) {
-      return new Response(JSON.stringify({ error: "artists array required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const body = await req.json();
+    
+    // Support both legacy { artists } and new { releases } format
+    let entries: { artist: string; album?: string; release_date?: string; genres?: string[] }[] = [];
+    
+    if (Array.isArray(body.releases) && body.releases.length > 0) {
+      entries = body.releases;
+    } else if (Array.isArray(body.artists) && body.artists.length > 0) {
+      entries = body.artists.map((a: string) => ({ artist: a }));
+    } else {
+      return new Response(JSON.stringify({ error: "releases or artists array required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
@@ -19,12 +27,21 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "API key not configured" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const prompt = `For each of the following metal/rock bands, respond with ONLY the country of origin. If you're not sure, respond with "Unknown".
+    const lines = entries.map(e => {
+      let line = `- ${e.artist}`;
+      if (e.album) line += ` — "${e.album}"`;
+      if (e.genres && e.genres.length > 0) line += ` (${e.genres.join(', ')})`;
+      if (e.release_date) line += ` [${e.release_date}]`;
+      return line;
+    });
+
+    const prompt = `For each of the following metal/rock bands, respond with ONLY the country of origin. Use the album, genre, and date as additional context to identify the correct band if there are multiple bands with the same name. If you're not sure, respond with "Unknown".
 
 Format: one line per band, exactly "BandName: Country"
+Use full country names in English (e.g. "United States", "Sweden", "Brazil").
 
 Bands:
-${artists.map(a => `- ${a}`).join('\n')}`;
+${lines.join('\n')}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -53,8 +70,8 @@ ${artists.map(a => `- ${a}`).join('\n')}`;
     for (const line of text.split("\n")) {
       const match = line.match(/^(.+?):\s*(.+)$/);
       if (match) {
-        const artist = match[1].trim().replace(/^-\s*/, "");
-        const country = match[2].trim();
+        const artist = match[1].trim().replace(/^-\s*/, "").replace(/\*+/g, "");
+        const country = match[2].trim().replace(/\*+/g, "");
         if (country.toLowerCase() !== "unknown") {
           results[artist.toLowerCase()] = country;
         }
