@@ -590,7 +590,7 @@ export default function Releases() {
                     <TableCell onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" />
                     </TableCell>
-                    <TableCell className="font-medium" onClick={() => openEdit(r)}>{r.artist}</TableCell>
+                    <TableCell className="font-medium" onClick={() => openEdit(r)}>{countryFlag(r.country)} {r.artist}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>{r.album}</TableCell>
                     <TableCell className="text-muted-foreground text-sm" onClick={() => openEdit(r)}>{r.release_date}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>
