@@ -171,6 +171,9 @@ export default function Releases() {
   const [pasteText, setPasteText] = useState('');
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [pasting, setPasting] = useState(false);
+  // Delete confirmation state
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
 
   const allCountries = useMemo(() => {
     const set = new Set<string>();
