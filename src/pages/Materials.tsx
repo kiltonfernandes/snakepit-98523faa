@@ -288,8 +288,10 @@ export default function Materials() {
       focusInstruction = '- O título deve ser 100% focado no texto da NOTÍCIA PRINCIPAL do episódio';
     }
 
-    return `🔥 Títulos otimizados para YOUTUBE/PODCAST\n\n${instructions}\n\nCONTEXTO DO EPISÓDIO:\nDia: ${context.dayLabel}\nData: ${mat.episode_date}\n${context.summary}\n\nREGRAS OBRIGATÓRIAS:\n- responder SEMPRE em português do Brasil\n- não usar code block\n- não explicar o raciocínio\n- os títulos devem soar fortes, editoriais e prontos para publicação\n${focusInstruction}\n\nFORMATO DE RESPOSTA EXATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
+    return `🔥 Títulos otimizados para YOUTUBE/PODCAST\n\n${instructions}\n\nCONTEXTO DO EPISÓDIO:\nDia: ${context.dayLabel}\nData: ${mat.episode_date}\n${context.summary}\n\nREGRAS OBRIGATÓRIAS:\n- responder SEMPRE em português do Brasil\n- não usar code block\n- não explicar o raciocínio\n- os títulos devem soar fortes, editoriais e prontos para publicação\n- NÃO use emojis nos títulos, nunca\n${focusInstruction}\n\nFORMATO DE RESPOSTA EXATO:\nTITULO_1_CLICKBAIT: [texto]\nTITULO_2_CURIOSIDADE: [texto]\nTITULO_3_IMPACTO: [texto]`;
   };
+
+  const stripEmojis = (text: string) => text.replace(/[\p{Emoji_Presentation}\p{Extended_Pictographic}]/gu, '').trim();
 
   const parseTitleResponse = (rawText: string): TitleOption[] => {
     const fullText = cleanAiResponse(rawText);
@@ -303,7 +305,7 @@ export default function Materials() {
     for (const { pattern, style } of styles) {
       const match = fullText.match(pattern);
       if (match?.[1]?.trim()) {
-        options.push({ text: match[1].trim(), style });
+        options.push({ text: stripEmojis(match[1].trim()), style });
       }
     }
 
@@ -316,7 +318,7 @@ export default function Materials() {
       .slice(0, 3);
 
     return lines.map((line, index) => ({
-      text: line,
+      text: stripEmojis(line),
       style: (['clickbait', 'curiosidade', 'impacto'][index] || 'clickbait') as TitleOption['style'],
     }));
   };

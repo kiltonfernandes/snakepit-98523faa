@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2 } from 'lucide-react';
+import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2 } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -14,7 +14,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
+import { countryFlag } from '@/lib/country-utils';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { motion } from 'framer-motion';
 
 const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '' };
 
@@ -158,9 +161,10 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
 }
 
 export default function Releases() {
-  const { releases, addRelease, updateRelease, deleteRelease, importReleases } = useApp();
+  const { releases, addRelease, updateRelease, deleteRelease, importReleases, loadReleases } = useApp();
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
+  const [countryFilter, setCountryFilter] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [genreDialogOpen, setGenreDialogOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -172,11 +176,18 @@ export default function Releases() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [enrichingCountries, setEnrichingCountries] = useState(false);
 
   // Bulk paste state
   const [pasteText, setPasteText] = useState('');
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [pasting, setPasting] = useState(false);
+
+  const allCountries = useMemo(() => {
+    const set = new Set<string>();
+    releases.forEach(r => { if (r.country) set.add(r.country); });
+    return Array.from(set).sort();
+  }, [releases]);
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
@@ -190,11 +201,12 @@ export default function Releases() {
       const q = search.toLowerCase();
       const matchSearch = !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
       const matchGenre = !genreFilter || (r.genres || []).includes(genreFilter);
+      const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : r.country === countryFilter;
       let matchDate = true;
       if (dateRange) {
         matchDate = r.release_date >= dateRange[0] && r.release_date <= dateRange[1];
       }
-      return matchSearch && matchGenre && matchDate;
+      return matchSearch && matchGenre && matchCountry && matchDate;
     });
     result.sort((a, b) => {
       let cmp = 0;
@@ -205,7 +217,43 @@ export default function Releases() {
       return sortDir === 'desc' ? -cmp : cmp;
     });
     return result;
-  }, [releases, search, genreFilter, quickFilter, sortField, sortDir]);
+  }, [releases, search, genreFilter, countryFilter, quickFilter, sortField, sortDir]);
+
+  // Auto-enrich countries for releases without country
+  const enrichCountries = useCallback(async () => {
+    const missing = releases.filter(r => !r.country);
+    if (missing.length === 0) return;
+    setEnrichingCountries(true);
+    try {
+      const uniqueArtists = [...new Set(missing.map(r => r.artist))];
+      const batchSize = 30;
+      for (let i = 0; i < uniqueArtists.length; i += batchSize) {
+        const batch = uniqueArtists.slice(i, i + batchSize);
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-country`;
+        const resp = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+          body: JSON.stringify({ artists: batch }),
+        });
+        if (!resp.ok) continue;
+        const { results } = await resp.json();
+        if (!results) continue;
+        for (const r of missing) {
+          const country = results[r.artist.toLowerCase()];
+          if (country) {
+            await supabase.from('releases' as any).update({ country } as any).eq('id', r.id);
+            updateRelease(r.id, { country });
+          }
+        }
+      }
+      toast.success('Países atualizados');
+      loadReleases();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao buscar países');
+    } finally {
+      setEnrichingCountries(false);
+    }
+  }, [releases, updateRelease, loadReleases]);
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -306,7 +354,7 @@ export default function Releases() {
             valid++; validReleases.push(item);
           });
 
-          if (validReleases.length > 0) importReleases(validReleases);
+          if (validReleases.length > 0) { importReleases(validReleases); setTimeout(() => enrichCountries(), 1500); }
           setImportSummary({ valid, duplicates, invalid, errors });
           setImportDialogOpen(true);
         } catch {
@@ -352,7 +400,7 @@ export default function Releases() {
         validReleases.push(item);
       });
 
-      if (validReleases.length > 0) importReleases(validReleases);
+      if (validReleases.length > 0) { importReleases(validReleases); setTimeout(() => enrichCountries(), 1500); }
       setImportSummary({ valid, duplicates, invalid, errors });
       setImportDialogOpen(true);
       setPasteDialogOpen(false);
@@ -443,7 +491,28 @@ export default function Releases() {
         <Button variant={genreFilter ? 'default' : 'outline'} size="sm" className="gap-2" onClick={() => setGenreDialogOpen(true)}>
           <Filter className="h-4 w-4" /> {genreFilter || 'Gênero'}
         </Button>
-        {genreFilter && <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar filtro</Button>}
+        {genreFilter && <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar</Button>}
+
+        {/* Country filter */}
+        <Select value={countryFilter ?? '__all__'} onValueChange={v => setCountryFilter(v === '__all__' ? null : v)}>
+          <SelectTrigger className="w-[150px] h-8 text-xs">
+            <Globe className="h-3 w-3 mr-1" /><SelectValue placeholder="País" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">Todos os países</SelectItem>
+            <SelectItem value="__empty__">Sem país</SelectItem>
+            {allCountries.map(c => <SelectItem key={c} value={c}>{countryFlag(c)} {c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {countryFilter && <Button variant="ghost" size="sm" onClick={() => setCountryFilter(null)}>Limpar</Button>}
+
+        {/* Enrich countries */}
+        {releases.some(r => !r.country) && (
+          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={enrichCountries} disabled={enrichingCountries}>
+            {enrichingCountries ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
+            Buscar países
+          </Button>
+        )}
 
         {/* View mode toggle */}
         <div className="flex items-center rounded-md border border-border overflow-hidden">
@@ -521,7 +590,7 @@ export default function Releases() {
                     <TableCell onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" />
                     </TableCell>
-                    <TableCell className="font-medium" onClick={() => openEdit(r)}>{r.artist}</TableCell>
+                    <TableCell className="font-medium" onClick={() => openEdit(r)}>{countryFlag(r.country)} {r.artist}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>{r.album}</TableCell>
                     <TableCell className="text-muted-foreground text-sm" onClick={() => openEdit(r)}>{r.release_date}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>
@@ -569,16 +638,17 @@ export default function Releases() {
                 <span className="text-[10px] text-muted-foreground/60">({rels.length})</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {rels.map(r => {
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {rels.map((r, idx) => {
                   const links = resolveAllLinks(r);
+                  const flag = countryFlag(r.country);
                   return (
-                    <Card key={r.id} className="cursor-pointer hover:border-primary/30 transition-all group overflow-hidden" onClick={() => openEdit(r)}>
-                      <CardContent className="p-0">
-                        {/* Top bar: date + type badge */}
-                        <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-                          <span className="text-xs text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
-                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary/70">Studio</Badge>
+                    <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.02 }}>
+                    <Card className="cursor-pointer hover:border-primary/30 transition-all group overflow-hidden aspect-square flex flex-col" onClick={() => openEdit(r)}>
+                      <CardContent className="p-0 flex flex-col flex-1">
+                        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                          <span className="text-[10px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
+                          {flag && <span className="text-sm">{flag}</span>}
                           <div className="flex-1" />
                           <input
                             type="checkbox"
@@ -588,29 +658,26 @@ export default function Releases() {
                             onClick={(e) => e.stopPropagation()}
                           />
                         </div>
-
-                        {/* Main content */}
-                        <div className="px-4 pb-2">
+                        <div className="px-3 pb-2 flex-1 flex flex-col justify-center">
                           <h3 className="font-bold text-sm leading-tight">{r.artist}</h3>
-                          <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{r.album}</p>
+                          <p className="text-xs text-muted-foreground italic mt-0.5 line-clamp-2">{r.album}</p>
                         </div>
 
                         {/* Genres */}
-                        <div className="flex gap-1.5 flex-wrap px-4 pb-3">
-                          {(r.genres || []).slice(0, 3).map(g => (
-                            <Badge key={g} variant="secondary" className="text-[10px] h-5 rounded-full px-2 gap-1">
-                              <span className="text-primary">●</span> {g}
+                        <div className="flex gap-1.5 flex-wrap px-3 pb-2">
+                          {(r.genres || []).slice(0, 2).map(g => (
+                            <Badge key={g} variant="secondary" className="text-[9px] h-4 rounded-full px-1.5">
+                              {g}
                             </Badge>
                           ))}
                         </div>
 
-                        {/* Platform buttons */}
-                        <div className="flex items-center gap-1 px-4 pb-3 flex-wrap">
+                        {/* Platform links */}
+                        <div className="flex items-center gap-1 px-3 pb-3 flex-wrap mt-auto">
                           {([
-                            { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300 border-red-400/30' },
-                            { key: 'spotify' as const, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300 border-emerald-400/30' },
-                            { key: 'deezer' as const, label: 'Deezer', color: 'text-purple-400 hover:text-purple-300 border-purple-400/30' },
-                            { key: 'metal_archives' as const, label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300 border-orange-400/30' },
+                            { key: 'youtube' as const, label: 'YT', color: 'text-red-400 hover:text-red-300 border-red-400/30' },
+                            { key: 'spotify' as const, label: 'SP', color: 'text-emerald-400 hover:text-emerald-300 border-emerald-400/30' },
+                            { key: 'metal_archives' as const, label: 'MA', color: 'text-orange-400 hover:text-orange-300 border-orange-400/30' },
                           ]).map(p => (
                             <a
                               key={p.key}
@@ -618,15 +685,15 @@ export default function Releases() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={e => e.stopPropagation()}
-                              className={`inline-flex items-center gap-1 text-[10px] border rounded-full px-2 py-0.5 transition-colors ${p.color}`}
+                              className={`inline-flex items-center gap-1 text-[9px] border rounded-full px-1.5 py-0.5 transition-colors ${p.color}`}
                             >
-                              <ExternalLink className="h-2.5 w-2.5" />
                               {p.label}
                             </a>
                           ))}
                         </div>
                       </CardContent>
                     </Card>
+                    </motion.div>
                   );
                 })}
               </div>
