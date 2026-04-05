@@ -83,6 +83,13 @@ export default function CalendarView() {
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
 
+  // Cover generation inline state
+  const [coverDialogOpen, setCoverDialogOpen] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState('');
+  const [coverGenerating, setCoverGenerating] = useState(false);
+  const [coverProgressItems, setCoverProgressItems] = useState<GenerationItem[]>([]);
+  const [coverProgressOpen, setCoverProgressOpen] = useState(false);
+
   const year = date.getFullYear();
   const month = date.getMonth();
   const today = new Date();
