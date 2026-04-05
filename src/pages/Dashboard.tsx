@@ -363,6 +363,53 @@ export default function Dashboard() {
         </Card>
       )}
 
+      {/* Release analytics summary */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-primary" /> Resumo de Lançamentos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Média/Mês</p>
+                <p className="text-lg font-bold">{releaseStats.avgPerMonth}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              <Music className="h-4 w-4 text-primary shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Top Gênero</p>
+                <p className="text-sm font-bold truncate">{releaseStats.topGenre ? `${releaseStats.topGenre[0]} (${releaseStats.topGenre[1]})` : '—'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              {releaseStats.topCountryCode && renderSmallFlag(releaseStats.topCountryCode)}
+              {!releaseStats.topCountryCode && <Globe className="h-4 w-4 text-muted-foreground/50 shrink-0" />}
+              <div>
+                <p className="text-xs text-muted-foreground">Top País</p>
+                <p className="text-sm font-bold truncate">{releaseStats.topCountry ? `${releaseStats.topCountry[1].label} (${releaseStats.topCountry[1].count})` : '—'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              <Flame className="h-4 w-4 text-orange-400 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Cenas Ativas</p>
+                <p className="text-lg font-bold">{releaseStats.sceneCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button variant="outline" size="sm" className="gap-2 text-xs" onClick={() => navigate('/analytics')}>
+              <BarChart3 className="h-3 w-3" /> Dashboard Completo
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => navigate('/pautas')} className="gap-2">
           Abrir Workspace <ArrowRight className="h-4 w-4" />

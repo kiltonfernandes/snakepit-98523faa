@@ -35,6 +35,7 @@ const App = () => (
             <Route path="/materials" element={<Materials />} />
             <Route path="/rivaldo" element={<Rivaldo />} />
             <Route path="/calendar" element={<CalendarView />} />
+            <Route path="/analytics" element={<ReleaseAnalytics />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="/week/:weekId" element={<PublicWeekView />} />

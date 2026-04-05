@@ -25,6 +25,7 @@ const navItems = [
   { title: 'Materiais', url: '/materials', icon: Palette },
   { title: 'Rivaldo', url: '/rivaldo', icon: Mic },
   { title: 'Calendário', url: '/calendar', icon: Calendar },
+  { title: 'Analytics', url: '/analytics', icon: BarChart3 },
   { title: 'Configurações', url: '/settings', icon: Settings },
 ];
 
