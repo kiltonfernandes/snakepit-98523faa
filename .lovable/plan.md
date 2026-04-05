@@ -1,124 +1,77 @@
 
 
-# Plano de Ajustes — Rodada de Polimento
+# Plano de Ajustes — Rodada de Polimento #2
 
-## 1. Hover e animações em TODOS os cards do app
-**Arquivos:** `Releases.tsx`, `CalendarView.tsx`, `Dashboard.tsx`, `Materials.tsx`, `Pautas.tsx`, `Settings.tsx`
+## 1. Fix: Emoji de bandeira não aparecendo nos cards
+**Arquivo:** `src/lib/country-utils.ts`
 
-Adicionar `hover:scale-[1.02] hover:shadow-lg hover:border-primary/40 transition-all duration-200` em todos os `Card` interativos. Nos cards com `motion.div`, adicionar `whileHover={{ scale: 1.02 }}`.
+O LLM retorna nomes completos de países (ex: "Poland", "United States") mas o `countryFlag` faz lookup case-sensitive. Adicionar normalização case-insensitive no lookup — criar um mapa auxiliar lowercased. Também expandir a lista com variações comuns (ex: "The Netherlands", "Türkiye", etc.).
 
-## 2. Botão "Source" no modal de Colar Lançamentos
+## 2. Repatriar com mais dados + botão "Repatriar Todos"
+**Arquivos:** `supabase/functions/lookup-country/index.ts`, `src/pages/Releases.tsx`
+
+**Edge function**: Aceitar payload enriquecido `{ releases: [{ artist, album, release_date, genres }] }` em vez de apenas `{ artists }`. Ajustar o prompt do LLM para incluir álbum, data e gênero como contexto de busca.
+
+**Frontend**:
+- Ajustar `enrichCountries` para enviar dados completos do release
+- Adicionar botão "Repatriar Todos" com modal de confirmação (`AlertDialog`). Se confirmado, reprocessa TODOS os releases (com e sem país), sobrescrevendo.
+- O botão existente "Repatriar (N)" continua processando apenas os sem país.
+
+## 3. Fix: Ratings aparecendo como gêneros
 **Arquivo:** `src/pages/Releases.tsx`
 
-No `pasteDialogOpen` dialog, adicionar botão com ícone `ExternalLink` e label "Source" que abre `https://metalstorm.net/events/new_releases.php?upcoming=1&invisible=1` em nova aba. Posicionar ao lado do texto explicativo do formato.
+No `parseStructuredReleases`, linha ~123, adicionar filtro para ignorar valores puramente numéricos na parsing de gêneros:
+```
+if (trimmed && !/^\d+(\.\d+)?$/.test(trimmed)) genres.push(trimmed);
+```
 
-## 3. Campo País no formulário de edição individual
-**Arquivo:** `src/pages/Releases.tsx`
+Também rodar uma limpeza one-time via `allGenres` para filtrar gêneros que parecem números.
 
-Adicionar campo `country` ao `emptyForm` e ao formulário de edição (tab "Informações"), com `Input` para texto livre. Exibir bandeira emoji ao lado. Garantir que `handleSave` persiste o campo `country`. Adicionar bandeira nos headers da tabela e em todos os locais que exibem releases.
+## 4. Fix: Modal de progresso não refletindo progresso granular
+**Arquivos:** `src/pages/Pautas.tsx`, `src/pages/Materials.tsx`
 
-## 4. Cards de releases mais compactos
-**Arquivo:** `src/pages/Releases.tsx`
+O modal de progresso em Pautas já está integrado mas precisa refletir melhor o progresso do flow. No `handleFlowAutoGenerateInner`, cada dia deve atualizar o status individualmente no `progressItems` ao iniciar e ao concluir. Verificar que o state update é feito com a função de callback correta (`setProgressItems`).
 
-Remover `aspect-square` dos cards. Criar um design compacto horizontal:
-- Layout: ícone bandeira + artista/álbum em coluna + data + badges de gênero + links de plataforma
-- Proporção retangular (tipo card de lista), altura ~120px
-- Grid: `sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4`
-- Mantém checkbox no hover e seleção
+Em Materials, garantir que geração individual (não bulk) também abre o modal com 1 item.
 
-## 5. Fix enriquecimento de países + modal de progresso
-**Arquivos:** `src/pages/Releases.tsx`, `supabase/functions/lookup-country/index.ts`
+## 5. Confirmação em TODOS os deletes
+**Arquivos:** `src/pages/Releases.tsx`, `src/pages/Pautas.tsx`, `src/pages/Settings.tsx`, `src/pages/Dashboard.tsx`
 
-**Edge function**: Corrigir URL para `https://ai.gateway.lovable.dev/v1/chat/completions` (atualmente usa `https://api.lovable.dev/v1/chat/completions` que pode não funcionar).
+Criar componente reutilizável `ConfirmDeleteDialog` ou usar `AlertDialog` inline em cada ponto de delete:
+- Releases: delete individual (linha 665), bulk delete (linha 604)
+- Pautas: delete semana (já tem `deleteConfirmOpen`)
+- Dashboard: qualquer delete de semana
+- Settings: "Delete all" no activity log
 
-**Frontend**: Após importar, chamar `enrichCountries` com modal de progresso:
-- Novo estado `repatriateModal` com items (um por release sem país)
-- Processar em batches de 30 artistas, atualizando o progresso por batch
-- Exibir: `X/Y releases repatriados`
-- Usar `GenerationProgressModal` existente para mostrar progresso
+## 6. Escolher template ao criar pauta
+**Arquivo:** `src/pages/Pautas.tsx`
 
-## 6. Modal de progresso granular em TODOS os botões "Gerar"
-**Arquivos:** `src/pages/Pautas.tsx`, `src/pages/Materials.tsx`, `src/pages/CalendarView.tsx`
+No `handleCreateWeek` e na criação de pautas individuais, adicionar step para selecionar template. Ao criar as pautas da semana, associar `template_id` a cada pauta baseado no dia da semana e template escolhido.
 
-O `GenerationProgressModal` já existe e está integrado em Materials (bulk titles/descriptions). Falta integrar em:
-- **Pautas**: `handleGenerateAI` (geração individual), `handleFlowAutoGenerateInner` (flow)
-- **Materials**: geração individual de título e descrição (não apenas bulk)
-- **Calendário**: botão "Gerar capa" no modal do episódio
-
-Cada ação que chama IA deve abrir o modal com 1+ items mostrando status.
-
-## 7. Botão "Gerar capa" no Calendário abre modal de geração
+## 7. Calendário: botão "+" para criar pauta com flow completo
 **Arquivo:** `src/pages/CalendarView.tsx`
 
-Atualmente o botão "Gerar capa" navega para `/materials`. Mudar para abrir um dialog inline no próprio calendário com:
-- Input de URL da imagem
-- Busca sugerida (query baseada no título do episódio)
-- Botão "Buscar Imagens" (abre Google Images)
-- Botão "Gerar Capa" que chama a mesma lógica de `generateCover` de Materials
+Adicionar botão "+" no card de cada dia que:
+1. Abre modal de seleção de template
+2. Cria a pauta com template escolhido
+3. Inicia flow inline: gerar pauta → gerar título → gerar descrição → gerar capa
+4. Cada step usa o `GenerationProgressModal`
 
-Isso requer extrair a lógica de geração de capa (`generateCover`, `fetchCanvasSafeImageUrl`, `drawWrappedText`) para um módulo compartilhado ou importar de Materials.
+Requer: carregar templates do Supabase no CalendarView e integrar lógica de geração (streamAI do Pautas + geração de títulos/descrições do Materials + cover do cover-generator).
 
-## 8. Sistema de Templates de Pauta escalável
-**Arquivos novos + migration SQL + alterações em múltiplos arquivos**
-
-### Arquitetura:
-
-**Migration SQL**: Nova tabela `pauta_templates`:
-```sql
-CREATE TABLE pauta_templates (
-  id text PRIMARY KEY,
-  name text NOT NULL,
-  description text DEFAULT '',
-  sections_config jsonb NOT NULL DEFAULT '[]',
-  segway_intro text DEFAULT '',
-  segway_outro text DEFAULT '',
-  created_at text DEFAULT to_char(now(), ...),
-  updated_at text DEFAULT to_char(now(), ...)
-);
-```
-
-`sections_config` é um array de objetos:
-```json
-[
-  { "key": "anniversary", "label": "Aniversário", "enabled": true, "core_prompt": "..." },
-  { "key": "review", "label": "Review", "enabled": true, "core_prompt": "..." },
-  { "key": "news", "label": "Notícias", "enabled": true, "core_prompt": "..." },
-  { "key": "releases", "label": "Lançamentos", "enabled": false },
-  { "key": "interview", "label": "Entrevista", "enabled": false },
-  { "key": "list", "label": "Lista", "enabled": false }
-]
-```
-
-**Tabela pautas**: Adicionar coluna `template_id text DEFAULT NULL` referenciando o template usado.
-
-**Settings**: Nova sub-aba "Templates de Pauta" com:
-- Lista de templates existentes (CRUD)
-- Editor de template: nome, descrição, segways, e toggle + prompt editor por seção
-- Seções disponíveis: review, lançamentos, aniversário, notícia, entrevista, lista
-
-**Propagação no app**:
-- `src/lib/constants.ts`: `getSectionsForDay` passa a considerar o template da pauta
-- `src/lib/types.ts`: Adicionar interface `PautaTemplate`
-- `Pautas.tsx`: Ao criar pauta, permitir escolher template. Seções dinâmicas baseadas no template
-- `Materials.tsx`: Gerar conteúdo baseado nas seções do template
-- `Dashboard.tsx`, `CalendarView.tsx`, `Rivaldo.tsx`: Compatíveis com seções dinâmicas
-
-### Templates default (seed):
-- **Notícias** (Seg-Sex): anniversary + review + news
-- **Sábado**: anniversary + releases
-- Nenhum template adicional criado — o usuário cria os seus
+---
 
 ## Ordem de Implementação
-1. Fix edge function URL + enriquecimento de países (#5)
-2. Cards compactos + campo país no form (#3, #4)
-3. Botão Source no modal de paste (#2)
-4. Hover/animações globais (#1)
-5. Modal progresso em todos os "Gerar" (#6)
-6. Gerar capa inline no calendário (#7)
-7. Sistema de templates de pauta (#8) — maior complexidade
+1. Fix bandeira emoji (#1) — rápido
+2. Fix ratings como gêneros (#3) — rápido
+3. Confirmação em deletes (#5) — médio
+4. Repatriar com dados enriquecidos + "Repatriar Todos" (#2) — médio
+5. Fix modal progresso (#4) — médio
+6. Escolher template ao criar pauta (#6) — médio
+7. Botão "+" no calendário com flow (#7) — complexo
 
 ## Detalhes Técnicos
-- Item #5 requer deploy da edge function com URL corrigida
-- Item #7 requer extrair lógica de cover para módulo compartilhado (`src/lib/cover-generator.ts`)
-- Item #8 requer migration SQL + seed de templates default + refactor de `getSectionsForDay`
+- Item #2 requer redeploy da edge function `lookup-country` com novo schema de input
+- Item #7 é o mais complexo — requer importar lógica de streamAI, geração de títulos e cover no CalendarView ou extrair para hooks compartilhados
+- Item #3 é um fix no parser que resolve o bug visível no filtro de gêneros
 
