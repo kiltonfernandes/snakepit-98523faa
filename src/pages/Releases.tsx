@@ -15,7 +15,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
-import { countryFlag } from '@/lib/country-utils';
+import { countryFlag, normalizeCountryCode } from '@/lib/country-utils';
+import { FlagIcon } from 'country-flag-icons/react/3x2';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -175,6 +176,12 @@ export default function Releases() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
 
+  const renderFlag = useCallback((country: string | null | undefined, className = 'h-4 w-5 rounded-[2px] overflow-hidden') => {
+    const code = normalizeCountryCode(country);
+    if (!code) return <Globe className="h-4 w-4 text-muted-foreground/30" />;
+    return <FlagIcon code={code} className={className} title={country ?? code} />;
+  }, []);
+
   const allCountries = useMemo(() => {
     const set = new Set<string>();
     releases.forEach(r => { if (r.country) set.add(r.country); });
@@ -293,7 +300,7 @@ export default function Releases() {
               setRepatriateItems(prev => prev.map(item =>
                 item.id === entry.artist ? { ...item, status: 'done' } : item
               ));
-              setRepatriateLogs(prev => [...prev, `✓ ${entry.artist} → ${countryFlag(country)} ${country}`]);
+               setRepatriateLogs(prev => [...prev, `✓ ${entry.artist} → ${countryFlag(country)} ${country}`]);
             } else {
               setRepatriateItems(prev => prev.map(item =>
                 item.id === entry.artist ? { ...item, status: 'done' } : item
@@ -577,7 +584,7 @@ export default function Releases() {
           <SelectContent>
             <SelectItem value="__all__">Todos os países</SelectItem>
             <SelectItem value="__empty__">Sem país</SelectItem>
-            {allCountries.map(c => <SelectItem key={c} value={c}>{countryFlag(c)} {c}</SelectItem>)}
+            {allCountries.map(c => <SelectItem key={c} value={c}><span className="inline-flex items-center gap-2">{renderFlag(c)}<span>{c}</span></span></SelectItem>)}
           </SelectContent>
         </Select>
         {countryFilter && <Button variant="ghost" size="sm" onClick={() => setCountryFilter(null)}>Limpar</Button>}
@@ -686,10 +693,10 @@ export default function Releases() {
                     <TableCell onClick={e => e.stopPropagation()}>
                       <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" />
                     </TableCell>
-                    <TableCell className="font-medium" onClick={() => openEdit(r)}>{countryFlag(r.country)} {r.artist}</TableCell>
+                    <TableCell className="font-medium" onClick={() => openEdit(r)}><span className="inline-flex items-center gap-2">{renderFlag(r.country)}<span>{r.artist}</span></span></TableCell>
                     <TableCell onClick={() => openEdit(r)}>{r.album}</TableCell>
                     <TableCell className="text-muted-foreground text-sm" onClick={() => openEdit(r)}>{r.release_date}</TableCell>
-                    <TableCell className="text-sm" onClick={() => openEdit(r)}>{r.country ? `${countryFlag(r.country)} ${r.country}` : <span className="text-muted-foreground/40">—</span>}</TableCell>
+                    <TableCell className="text-sm" onClick={() => openEdit(r)}>{r.country ? <span className="inline-flex items-center gap-2">{renderFlag(r.country)}<span>{r.country}</span></span> : <span className="text-muted-foreground/40">—</span>}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>
                       <div className="flex gap-1 flex-wrap">
                         {(r.genres || []).slice(0, 3).map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
@@ -738,14 +745,14 @@ export default function Releases() {
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {rels.map((r, idx) => {
                   const links = resolveAllLinks(r);
-                  const flag = countryFlag(r.country);
+                  const flagCode = normalizeCountryCode(r.country);
                   return (
                     <motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.015 }} whileHover={{ scale: 1.02 }}>
                     <Card className="cursor-pointer hover:border-primary/40 hover:shadow-lg transition-all duration-200 group overflow-hidden" onClick={() => openEdit(r)}>
                       <CardContent className="p-3 flex items-start gap-3">
                         {/* Flag + date column */}
                         <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
-                          {flag ? <span className="text-lg leading-none">{flag}</span> : <Globe className="h-4 w-4 text-muted-foreground/30" />}
+                          {flagCode ? <FlagIcon code={flagCode} className="h-4 w-5 rounded-[2px] overflow-hidden" title={r.country ?? flagCode} /> : <Globe className="h-4 w-4 text-muted-foreground/30" />}
                           <span className="text-[9px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
                         </div>
 
@@ -906,7 +913,7 @@ export default function Releases() {
                 <div className="space-y-1.5">
                   <Label>País de Origem</Label>
                   <div className="flex items-center gap-2">
-                    {form.country && <span className="text-lg">{countryFlag(form.country)}</span>}
+                    {form.country && renderFlag(form.country, 'h-5 w-6 rounded-[2px] overflow-hidden')}
                     <Input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} placeholder="Ex: United States, Brazil..." className="flex-1" />
                   </div>
                 </div>
