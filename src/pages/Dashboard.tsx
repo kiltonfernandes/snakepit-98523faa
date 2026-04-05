@@ -4,11 +4,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle, ChevronDown, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle, ChevronDown, ChevronRight as ChevronRightIcon, BarChart3, TrendingUp, TrendingDown, Globe, Music, Flame } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
-import { DAY_SLOTS } from '@/lib/constants';
+import { DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
 import { EpisodeCompletionIndicators, EditorialWeek } from '@/lib/types';
+import { normalizeCountryCode } from '@/lib/country-utils';
+import * as CountryFlags from 'country-flag-icons/react/3x2';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -131,6 +133,78 @@ export default function Dashboard() {
   const weekMatsWithTitle = currentWeek ? materials.filter(m => m.week_id === currentWeek.id && m.selected_title_index != null).length : 0;
   const weekTotalMats = currentWeek ? materials.filter(m => m.week_id === currentWeek.id).length : weekEpisodeCount;
   const weekScheduled = currentWeek ? materials.filter(m => m.week_id === currentWeek.id && m.spotify_link).length : 0;
+
+  // === Quick release analytics ===
+  const renderSmallFlag = (code: string, className = 'h-3.5 w-4.5 rounded-[2px] overflow-hidden') => {
+    const FC = CountryFlags[code as keyof typeof CountryFlags] as unknown as ((props: { className?: string }) => JSX.Element) | undefined;
+    return FC ? <FC className={className} /> : null;
+  };
+
+  function normalizeGenreToMain(genre: string): string | null {
+    const lower = genre.toLowerCase().trim();
+    for (const ng of NORMALIZED_GENRES) {
+      const ngLower = ng.toLowerCase();
+      if (lower === ngLower || (lower.includes(ngLower.replace(' metal', '')) && ngLower.includes('metal'))) return ng;
+    }
+    if (lower.includes('thrash')) return 'Thrash Metal';
+    if (lower.includes('death') && lower.includes('melod')) return 'Melodic Death Metal';
+    if (lower.includes('death')) return 'Death Metal';
+    if (lower.includes('black')) return 'Black Metal';
+    if (lower.includes('power')) return 'Power Metal';
+    if (lower.includes('doom') || lower.includes('stoner') || lower.includes('sludge')) return 'Doom Metal';
+    if (lower.includes('prog')) return 'Progressive Metal';
+    if (lower.includes('groove')) return 'Groove Metal';
+    if (lower.includes('core')) return 'Metalcore';
+    if (lower.includes('symphonic')) return 'Symphonic Metal';
+    if (lower.includes('heavy')) return 'Heavy Metal';
+    return null;
+  }
+
+  const releaseStats = useMemo(() => {
+    const byMonth: Record<string, number> = {};
+    const byGenre: Record<string, number> = {};
+    const byCountry: Record<string, { count: number; label: string }> = {};
+    const sceneMap: Record<string, number> = {};
+    const MONTHS_PT_S = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    releases.forEach(r => {
+      const d = new Date(r.release_date + 'T12:00:00');
+      const mKey = `${MONTHS_PT_S[d.getMonth()]} ${d.getFullYear()}`;
+      byMonth[mKey] = (byMonth[mKey] || 0) + 1;
+
+      const code = normalizeCountryCode(r.country);
+      if (code) {
+        if (!byCountry[code]) byCountry[code] = { count: 0, label: r.country || code };
+        byCountry[code].count++;
+      }
+
+      const seen = new Set<string>();
+      (r.genres || []).forEach(g => {
+        const main = normalizeGenreToMain(g);
+        if (main && !seen.has(main)) {
+          seen.add(main);
+          byGenre[main] = (byGenre[main] || 0) + 1;
+          if (code) sceneMap[`${code}:${main}`] = (sceneMap[`${code}:${main}`] || 0) + 1;
+        }
+      });
+    });
+
+    const monthEntries = Object.entries(byMonth);
+    const genreEntries = Object.entries(byGenre).sort(([, a], [, b]) => b - a);
+    const countryEntries = Object.entries(byCountry).sort(([, a], [, b]) => b.count - a.count);
+    const sceneCount = Object.keys(sceneMap).length;
+    const topScene = Object.entries(sceneMap).sort(([, a], [, b]) => b - a)[0];
+
+    return {
+      avgPerMonth: monthEntries.length > 0 ? (releases.length / monthEntries.length).toFixed(1) : '0',
+      topMonth: monthEntries.length > 0 ? monthEntries.reduce((a, b) => b[1] > a[1] ? b : a) : null,
+      topGenre: genreEntries[0] || null,
+      topCountry: countryEntries[0] || null,
+      topCountryCode: countryEntries[0]?.[0] || null,
+      sceneCount,
+      topScene: topScene ? { key: topScene[0], count: topScene[1] } : null,
+    };
+  }, [releases]);
 
   const stats = [
     { label: 'Lançamentos', value: String(releases.length), icon: Disc, route: '/releases' },
@@ -288,6 +362,53 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       )}
+
+      {/* Release analytics summary */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <BarChart3 className="h-4 w-4 text-primary" /> Resumo de Lançamentos
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              <TrendingUp className="h-4 w-4 text-emerald-400 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Média/Mês</p>
+                <p className="text-lg font-bold">{releaseStats.avgPerMonth}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              <Music className="h-4 w-4 text-primary shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Top Gênero</p>
+                <p className="text-sm font-bold truncate">{releaseStats.topGenre ? `${releaseStats.topGenre[0]} (${releaseStats.topGenre[1]})` : '—'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              {releaseStats.topCountryCode && renderSmallFlag(releaseStats.topCountryCode)}
+              {!releaseStats.topCountryCode && <Globe className="h-4 w-4 text-muted-foreground/50 shrink-0" />}
+              <div>
+                <p className="text-xs text-muted-foreground">Top País</p>
+                <p className="text-sm font-bold truncate">{releaseStats.topCountry ? `${releaseStats.topCountry[1].label} (${releaseStats.topCountry[1].count})` : '—'}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-muted/20">
+              <Flame className="h-4 w-4 text-orange-400 shrink-0" />
+              <div>
+                <p className="text-xs text-muted-foreground">Cenas Ativas</p>
+                <p className="text-lg font-bold">{releaseStats.sceneCount}</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button variant="outline" size="sm" className="gap-2 text-xs" onClick={() => navigate('/analytics')}>
+              <BarChart3 className="h-3 w-3" /> Dashboard Completo
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => navigate('/pautas')} className="gap-2">

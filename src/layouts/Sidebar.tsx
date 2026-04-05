@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings
+  LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings, BarChart3
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
@@ -25,6 +25,7 @@ const navItems = [
   { title: 'Materiais', url: '/materials', icon: Palette },
   { title: 'Rivaldo', url: '/rivaldo', icon: Mic },
   { title: 'Calendário', url: '/calendar', icon: Calendar },
+  { title: 'Analytics', url: '/analytics', icon: BarChart3 },
   { title: 'Configurações', url: '/settings', icon: Settings },
 ];
 
