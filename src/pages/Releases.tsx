@@ -211,46 +211,60 @@ export default function Releases() {
   }, [releases, search, genreFilter, countryFilter, quickFilter, sortField, sortDir]);
 
   // Repatriation: enrich countries with progress modal
-  const enrichCountries = useCallback(async () => {
-    const missing = releases.filter(r => !r.country);
-    if (missing.length === 0) {
+  const enrichCountries = useCallback(async (forceAll = false) => {
+    const targets = forceAll ? releases : releases.filter(r => !r.country);
+    if (targets.length === 0) {
       toast.info('Todos os releases já possuem país');
       return;
     }
 
-    const uniqueArtists = [...new Set(missing.map(r => r.artist))];
-    const items: GenerationItem[] = uniqueArtists.map(a => ({
-      id: a,
-      label: a,
+    // Group by unique artist, but send full release data for context
+    const artistMap = new Map<string, typeof targets[0]>();
+    for (const r of targets) {
+      if (!artistMap.has(r.artist)) artistMap.set(r.artist, r);
+    }
+    const uniqueEntries = Array.from(artistMap.values());
+
+    const items: GenerationItem[] = uniqueEntries.map(r => ({
+      id: r.artist,
+      label: r.artist,
       status: 'pending' as const,
     }));
     setRepatriateItems(items);
-    setRepatriateLogs([`Iniciando repatriação de ${uniqueArtists.length} artistas...`]);
+    setRepatriateLogs([`Iniciando repatriação de ${uniqueEntries.length} artistas${forceAll ? ' (todos)' : ''}...`]);
     setRepatriateModalOpen(true);
     setEnrichingCountries(true);
 
     try {
       const batchSize = 30;
-      for (let i = 0; i < uniqueArtists.length; i += batchSize) {
-        const batch = uniqueArtists.slice(i, i + batchSize);
+      for (let i = 0; i < uniqueEntries.length; i += batchSize) {
+        const batch = uniqueEntries.slice(i, i + batchSize);
+        const batchArtists = batch.map(r => r.artist);
         
         // Mark batch as generating
         setRepatriateItems(prev => prev.map(item =>
-          batch.includes(item.id) ? { ...item, status: 'generating' } : item
+          batchArtists.includes(item.id) ? { ...item, status: 'generating' } : item
         ));
-        setRepatriateLogs(prev => [...prev, `Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueArtists.length / batchSize)} (${batch.length} artistas)...`]);
+        setRepatriateLogs(prev => [...prev, `Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueEntries.length / batchSize)} (${batch.length} artistas)...`]);
 
         try {
           const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-country`;
           const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-            body: JSON.stringify({ artists: batch }),
+            body: JSON.stringify({
+              releases: batch.map(r => ({
+                artist: r.artist,
+                album: r.album,
+                release_date: r.release_date,
+                genres: r.genres || [],
+              })),
+            }),
           });
 
           if (!resp.ok) {
             setRepatriateItems(prev => prev.map(item =>
-              batch.includes(item.id) ? { ...item, status: 'error', error: `HTTP ${resp.status}` } : item
+              batchArtists.includes(item.id) ? { ...item, status: 'error', error: `HTTP ${resp.status}` } : item
             ));
             setRepatriateLogs(prev => [...prev, `✗ Erro no lote: HTTP ${resp.status}`]);
             continue;
@@ -259,40 +273,40 @@ export default function Releases() {
           const { results } = await resp.json();
           if (!results) {
             setRepatriateItems(prev => prev.map(item =>
-              batch.includes(item.id) ? { ...item, status: 'error', error: 'Sem resultados' } : item
+              batchArtists.includes(item.id) ? { ...item, status: 'error', error: 'Sem resultados' } : item
             ));
             continue;
           }
 
-          for (const artist of batch) {
-            const country = results[artist.toLowerCase()];
+          for (const entry of batch) {
+            const country = results[entry.artist.toLowerCase()];
             if (country) {
               // Update all releases by this artist
-              const artistReleases = missing.filter(r => r.artist === artist);
+              const artistReleases = targets.filter(r => r.artist === entry.artist);
               for (const r of artistReleases) {
                 await supabase.from('releases' as any).update({ country } as any).eq('id', r.id);
                 updateRelease(r.id, { country });
               }
               setRepatriateItems(prev => prev.map(item =>
-                item.id === artist ? { ...item, status: 'done' } : item
+                item.id === entry.artist ? { ...item, status: 'done' } : item
               ));
-              setRepatriateLogs(prev => [...prev, `✓ ${artist} → ${countryFlag(country)} ${country}`]);
+              setRepatriateLogs(prev => [...prev, `✓ ${entry.artist} → ${countryFlag(country)} ${country}`]);
             } else {
               setRepatriateItems(prev => prev.map(item =>
-                item.id === artist ? { ...item, status: 'done' } : item
+                item.id === entry.artist ? { ...item, status: 'done' } : item
               ));
-              setRepatriateLogs(prev => [...prev, `— ${artist}: não encontrado`]);
+              setRepatriateLogs(prev => [...prev, `— ${entry.artist}: não encontrado`]);
             }
           }
         } catch (err: any) {
           setRepatriateItems(prev => prev.map(item =>
-            batch.includes(item.id) ? { ...item, status: 'error', error: err.message } : item
+            batchArtists.includes(item.id) ? { ...item, status: 'error', error: err.message } : item
           ));
           setRepatriateLogs(prev => [...prev, `✗ Erro: ${err.message}`]);
         }
 
         // Small delay between batches
-        if (i + batchSize < uniqueArtists.length) {
+        if (i + batchSize < uniqueEntries.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
