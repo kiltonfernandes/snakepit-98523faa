@@ -180,7 +180,9 @@ export default function Releases() {
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
-    releases.forEach(r => (r.genres || []).forEach(g => set.add(g)));
+    releases.forEach(r => (r.genres || []).forEach(g => {
+      if (g && !/^\d+(\.\d+)?$/.test(g.trim())) set.add(g);
+    }));
     return Array.from(set).sort();
   }, [releases]);
 
