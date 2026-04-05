@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle } from 'lucide-react';
+import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
@@ -173,6 +174,11 @@ export default function Pautas() {
   const [flowGenerating, setFlowGenerating] = useState(false);
   const [flowProgress, setFlowProgress] = useState<Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>>>({});
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  // Progress modal state
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [progressItems, setProgressItems] = useState<GenerationItem[]>([]);
+  const [progressLogs, setProgressLogs] = useState<string[]>([]);
+  const [progressTitle, setProgressTitle] = useState('Gerando conteúdo...');
   const [weekCarouselStart, setWeekCarouselStart] = useState(() => {
     const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
     const todayStr = new Date().toISOString().slice(0, 10);
@@ -354,12 +360,23 @@ export default function Pautas() {
     setPromptResponse('');
     setParseError(null);
 
+    // Open progress modal
+    const label = promptScope === 'week' ? 'Semana completa' : `Pauta ${activePauta.publication_date}${activeSection ? ` — ${activeSection}` : ''}`;
+    setProgressItems([{ id: 'gen', label, status: 'generating' }]);
+    setProgressLogs([`Gerando: ${label}`]);
+    setProgressTitle('Gerando com IA...');
+    setProgressModalOpen(true);
+
     try {
       await streamAI(prompt, (full) => setPromptResponse(full));
+      setProgressItems([{ id: 'gen', label, status: 'done' }]);
+      setProgressLogs(prev => [...prev, '✓ Resposta gerada']);
       toast.success('Resposta gerada com IA');
       logActivity('IA gerou resposta', `scope: ${promptScope}, pauta: ${activePauta.publication_date}`);
     } catch (e: any) {
       console.error('AI generation error:', e);
+      setProgressItems([{ id: 'gen', label, status: 'error', error: e.message }]);
+      setProgressLogs(prev => [...prev, `✗ Erro: ${e.message}`]);
       toast.error(e.message || 'Erro ao gerar com IA');
     } finally {
       setGenerating(false);
@@ -595,6 +612,7 @@ export default function Pautas() {
     });
 
     const initialProgress: Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>> = {};
+    const flowItems: GenerationItem[] = [];
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
       const sections = getSectionsForDay(slot);
@@ -602,8 +620,13 @@ export default function Pautas() {
       for (const sec of sections) {
         initialProgress[slot][sec.key] = 'pending';
       }
+      flowItems.push({ id: slot, label: `${DAY_SLOTS.find(d => d.key === slot)?.label || slot}`, status: 'pending' });
     }
     setFlowProgress(initialProgress);
+    setProgressItems(flowItems);
+    setProgressLogs(['Iniciando flow automático...']);
+    setProgressTitle('Flow automático de pautas...');
+    setProgressModalOpen(true);
 
     for (const pauta of weekdayPautas) {
       const slot = getPautaSlot(pauta);
@@ -618,6 +641,8 @@ export default function Pautas() {
           for (const sec of sections) next[slot][sec.key] = 'done';
           return next;
         });
+        setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `✓ ${DAY_SLOTS.find(d => d.key === slot)?.label}: já preenchido`]);
         continue;
       }
 
@@ -1684,6 +1709,15 @@ export default function Pautas() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Generation progress modal */}
+      <GenerationProgressModal
+        open={progressModalOpen}
+        onOpenChange={setProgressModalOpen}
+        title={progressTitle}
+        items={progressItems}
+        logs={progressLogs}
+      />
     </div>
   );
 }

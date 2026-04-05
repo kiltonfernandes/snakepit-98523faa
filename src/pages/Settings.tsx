@@ -1,11 +1,12 @@
-import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu, Music } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu, Music, LayoutTemplate, Save, ToggleLeft, ToggleRight, Edit, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -17,6 +18,8 @@ import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
+import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
+import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
 
 const TONE_PRESETS = [
@@ -40,6 +43,94 @@ export default function Settings() {
   const [aiUsage, setAiUsage] = useState<{ scope: string; tokens_input: number; tokens_output: number; estimated_cost: number; created_at: string; episode_date: string | null; week_id: string | null }[]>([]);
   const [aiUsageLoading, setAiUsageLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('tone');
+
+  // Templates state
+  const [templates, setTemplates] = useState<PautaTemplate[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<PautaTemplate | null>(null);
+  const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+
+  const SECTION_OPTIONS: { key: string; label: string }[] = [
+    { key: 'anniversary', label: 'Aniversário' },
+    { key: 'review', label: 'Review' },
+    { key: 'news', label: 'Notícias' },
+    { key: 'releases', label: 'Lançamentos' },
+    { key: 'interview', label: 'Entrevista' },
+    { key: 'list', label: 'Lista' },
+  ];
+
+  const loadTemplates = useCallback(async () => {
+    setTemplatesLoading(true);
+    const { data } = await supabase.from('pauta_templates' as any).select('*').order('created_at', { ascending: true });
+    setTemplates((data as any[] || []).map((t: any) => ({
+      ...t,
+      description: t.description || '',
+      sections_config: (typeof t.sections_config === 'string' ? JSON.parse(t.sections_config) : t.sections_config) || [],
+      segway_intro: t.segway_intro || '',
+      segway_outro: t.segway_outro || '',
+    })));
+    setTemplatesLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'templates') loadTemplates();
+  }, [activeTab, loadTemplates]);
+
+  const openNewTemplate = () => {
+    setEditingTemplate({
+      id: `tpl_${Date.now()}`,
+      name: '',
+      description: '',
+      sections_config: SECTION_OPTIONS.map(s => ({ key: s.key, label: s.label, enabled: false, core_prompt: '' })),
+      segway_intro: '',
+      segway_outro: '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+    setTemplateDialogOpen(true);
+  };
+
+  const openEditTemplate = (t: PautaTemplate) => {
+    // Ensure all section options exist
+    const existing = new Set(t.sections_config.map(s => s.key));
+    const merged = [...t.sections_config];
+    SECTION_OPTIONS.forEach(opt => {
+      if (!existing.has(opt.key)) merged.push({ key: opt.key, label: opt.label, enabled: false, core_prompt: '' });
+    });
+    setEditingTemplate({ ...t, sections_config: merged });
+    setTemplateDialogOpen(true);
+  };
+
+  const saveTemplate = async () => {
+    if (!editingTemplate || !editingTemplate.name.trim()) {
+      toast.error('Nome do template é obrigatório');
+      return;
+    }
+    const payload = {
+      id: editingTemplate.id,
+      name: editingTemplate.name,
+      description: editingTemplate.description,
+      sections_config: JSON.stringify(editingTemplate.sections_config),
+      segway_intro: editingTemplate.segway_intro,
+      segway_outro: editingTemplate.segway_outro,
+      updated_at: new Date().toISOString(),
+    };
+    const exists = templates.some(t => t.id === editingTemplate.id);
+    if (exists) {
+      await supabase.from('pauta_templates' as any).update(payload as any).eq('id', editingTemplate.id);
+    } else {
+      await supabase.from('pauta_templates' as any).insert({ ...payload, created_at: new Date().toISOString() } as any);
+    }
+    toast.success('Template salvo');
+    setTemplateDialogOpen(false);
+    loadTemplates();
+  };
+
+  const deleteTemplate = async (id: string) => {
+    await supabase.from('pauta_templates' as any).delete().eq('id', id);
+    toast.success('Template removido');
+    loadTemplates();
+  };
 
   useEffect(() => {
     if (activeTab !== 'tokens') return;
@@ -144,8 +235,9 @@ export default function Settings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="tone" className="gap-1.5 text-xs"><Thermometer className="h-3.5 w-3.5" /> Tom & Prompts</TabsTrigger>
+          <TabsTrigger value="templates" className="gap-1.5 text-xs"><LayoutTemplate className="h-3.5 w-3.5" /> Templates</TabsTrigger>
           <TabsTrigger value="banned" className="gap-1.5 text-xs"><Ban className="h-3.5 w-3.5" /> Termos Banidos</TabsTrigger>
           <TabsTrigger value="logs" className="gap-1.5 text-xs"><Activity className="h-3.5 w-3.5" /> Logs</TabsTrigger>
           <TabsTrigger value="tokens" className="gap-1.5 text-xs"><Cpu className="h-3.5 w-3.5" /> IA & Tokens</TabsTrigger>
@@ -257,6 +349,68 @@ export default function Settings() {
                     {labPrompt}
                   </pre>
                 </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* TAB: Templates de Pauta */}
+        <TabsContent value="templates">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <LayoutTemplate className="h-4 w-4" /> Templates de Pauta
+                    </CardTitle>
+                    <CardDescription>Defina templates reutilizáveis com seções e prompts customizados</CardDescription>
+                  </div>
+                  <Button size="sm" className="gap-2" onClick={openNewTemplate}>
+                    <Plus className="h-3.5 w-3.5" /> Novo Template
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {templatesLoading ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhum template criado. Crie o primeiro!
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {templates.map(t => {
+                      const enabledSections = (t.sections_config || []).filter((s: any) => s.enabled);
+                      return (
+                        <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium text-sm">{t.name}</h4>
+                              <Badge variant="secondary" className="text-[9px]">{enabledSections.length} seções</Badge>
+                            </div>
+                            {t.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.description}</p>}
+                            <div className="flex gap-1 mt-1.5 flex-wrap">
+                              {enabledSections.map((s: PautaTemplateSectionConfig) => (
+                                <Badge key={s.key} variant="outline" className="text-[8px] h-[18px]">{s.label}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-3">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditTemplate(t)}>
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteTemplate(t.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
@@ -538,6 +692,86 @@ export default function Settings() {
               setDescTemplateOpen(false);
               toast.success('Template de descrição salvo');
             }}>Salvar Template</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Template editor dialog */}
+      <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingTemplate && templates.some(t => t.id === editingTemplate.id) ? 'Editar Template' : 'Novo Template'}</DialogTitle>
+            <DialogDescription>Configure nome, seções ativas e core prompts do template.</DialogDescription>
+          </DialogHeader>
+          {editingTemplate && (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Nome</Label>
+                  <Input value={editingTemplate.name} onChange={e => setEditingTemplate(prev => prev ? { ...prev, name: e.target.value } : prev)} placeholder="Ex: Notícias, Entrevista, Lista..." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Descrição</Label>
+                  <Input value={editingTemplate.description} onChange={e => setEditingTemplate(prev => prev ? { ...prev, description: e.target.value } : prev)} placeholder="Breve descrição..." />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Segway Intro</Label>
+                  <Textarea value={editingTemplate.segway_intro} onChange={e => setEditingTemplate(prev => prev ? { ...prev, segway_intro: e.target.value } : prev)} placeholder="Texto de abertura do episódio..." rows={2} className="text-xs" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Segway Outro</Label>
+                  <Textarea value={editingTemplate.segway_outro} onChange={e => setEditingTemplate(prev => prev ? { ...prev, segway_outro: e.target.value } : prev)} placeholder="Texto de fechamento do episódio..." rows={2} className="text-xs" />
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-xs font-medium">Seções</Label>
+                {editingTemplate.sections_config.map((sec, idx) => (
+                  <div key={sec.key} className={`rounded-lg border p-3 space-y-2 transition-colors ${sec.enabled ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/10'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Switch checked={sec.enabled} onCheckedChange={(checked) => {
+                          setEditingTemplate(prev => {
+                            if (!prev) return prev;
+                            const next = [...prev.sections_config];
+                            next[idx] = { ...next[idx], enabled: checked };
+                            return { ...prev, sections_config: next };
+                          });
+                        }} />
+                        <span className={`text-sm font-medium ${sec.enabled ? 'text-foreground' : 'text-muted-foreground'}`}>{sec.label}</span>
+                        <Badge variant="outline" className="text-[9px]">{sec.key}</Badge>
+                      </div>
+                    </div>
+                    {sec.enabled && (
+                      <div className="space-y-1 pl-12">
+                        <Label className="text-[10px] text-muted-foreground">Core Prompt (instrução específica para esta seção)</Label>
+                        <Textarea
+                          value={sec.core_prompt}
+                          onChange={e => {
+                            setEditingTemplate(prev => {
+                              if (!prev) return prev;
+                              const next = [...prev.sections_config];
+                              next[idx] = { ...next[idx], core_prompt: e.target.value };
+                              return { ...prev, sections_config: next };
+                            });
+                          }}
+                          placeholder="Instruções adicionais para IA ao gerar esta seção..."
+                          rows={3}
+                          className="text-xs"
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={saveTemplate} className="gap-2"><Save className="h-3.5 w-3.5" /> Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
