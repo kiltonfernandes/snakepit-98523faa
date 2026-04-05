@@ -646,6 +646,10 @@ export default function Pautas() {
         continue;
       }
 
+      // Mark day as generating in progress modal
+      setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'generating' } : i));
+      setProgressLogs(prev => [...prev, `🔄 Gerando: ${DAY_SLOTS.find(d => d.key === slot)?.label || slot}...`]);
+
       setFlowProgress(prev => {
         const next = { ...prev };
         next[slot] = { ...next[slot] };
@@ -678,6 +682,8 @@ export default function Pautas() {
             for (const sec of sections) next[slot][sec.key] = 'done';
             return next;
           });
+          setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
+          setProgressLogs(prev => [...prev, `✓ ${DAY_SLOTS.find(d => d.key === slot)?.label || slot} concluído`]);
         } else {
           setFlowProgress(prev => {
             const next = { ...prev };
@@ -685,6 +691,8 @@ export default function Pautas() {
             for (const sec of sections) next[slot][sec.key] = 'error';
             return next;
           });
+          setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'error', error: result.error } : i));
+          setProgressLogs(prev => [...prev, `✗ ${DAY_SLOTS.find(d => d.key === slot)?.label}: ${result.error}`]);
           toast.error(`Falha: ${slot} — ${result.error}`);
         }
       } catch (e: any) {
@@ -694,6 +702,8 @@ export default function Pautas() {
           for (const sec of sections) next[slot][sec.key] = 'error';
           return next;
         });
+        setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'error', error: e.message } : i));
+        setProgressLogs(prev => [...prev, `✗ Erro: ${e.message}`]);
         toast.error(`Erro: ${e.message}`);
       }
     }
