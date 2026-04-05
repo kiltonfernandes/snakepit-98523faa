@@ -134,6 +134,78 @@ export default function Dashboard() {
   const weekTotalMats = currentWeek ? materials.filter(m => m.week_id === currentWeek.id).length : weekEpisodeCount;
   const weekScheduled = currentWeek ? materials.filter(m => m.week_id === currentWeek.id && m.spotify_link).length : 0;
 
+  // === Quick release analytics ===
+  const renderSmallFlag = (code: string, className = 'h-3.5 w-4.5 rounded-[2px] overflow-hidden') => {
+    const FC = CountryFlags[code as keyof typeof CountryFlags] as unknown as ((props: { className?: string }) => JSX.Element) | undefined;
+    return FC ? <FC className={className} /> : null;
+  };
+
+  function normalizeGenreToMain(genre: string): string | null {
+    const lower = genre.toLowerCase().trim();
+    for (const ng of NORMALIZED_GENRES) {
+      const ngLower = ng.toLowerCase();
+      if (lower === ngLower || (lower.includes(ngLower.replace(' metal', '')) && ngLower.includes('metal'))) return ng;
+    }
+    if (lower.includes('thrash')) return 'Thrash Metal';
+    if (lower.includes('death') && lower.includes('melod')) return 'Melodic Death Metal';
+    if (lower.includes('death')) return 'Death Metal';
+    if (lower.includes('black')) return 'Black Metal';
+    if (lower.includes('power')) return 'Power Metal';
+    if (lower.includes('doom') || lower.includes('stoner') || lower.includes('sludge')) return 'Doom Metal';
+    if (lower.includes('prog')) return 'Progressive Metal';
+    if (lower.includes('groove')) return 'Groove Metal';
+    if (lower.includes('core')) return 'Metalcore';
+    if (lower.includes('symphonic')) return 'Symphonic Metal';
+    if (lower.includes('heavy')) return 'Heavy Metal';
+    return null;
+  }
+
+  const releaseStats = useMemo(() => {
+    const byMonth: Record<string, number> = {};
+    const byGenre: Record<string, number> = {};
+    const byCountry: Record<string, { count: number; label: string }> = {};
+    const sceneMap: Record<string, number> = {};
+    const MONTHS_PT_S = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+    releases.forEach(r => {
+      const d = new Date(r.release_date + 'T12:00:00');
+      const mKey = `${MONTHS_PT_S[d.getMonth()]} ${d.getFullYear()}`;
+      byMonth[mKey] = (byMonth[mKey] || 0) + 1;
+
+      const code = normalizeCountryCode(r.country);
+      if (code) {
+        if (!byCountry[code]) byCountry[code] = { count: 0, label: r.country || code };
+        byCountry[code].count++;
+      }
+
+      const seen = new Set<string>();
+      (r.genres || []).forEach(g => {
+        const main = normalizeGenreToMain(g);
+        if (main && !seen.has(main)) {
+          seen.add(main);
+          byGenre[main] = (byGenre[main] || 0) + 1;
+          if (code) sceneMap[`${code}:${main}`] = (sceneMap[`${code}:${main}`] || 0) + 1;
+        }
+      });
+    });
+
+    const monthEntries = Object.entries(byMonth);
+    const genreEntries = Object.entries(byGenre).sort(([, a], [, b]) => b - a);
+    const countryEntries = Object.entries(byCountry).sort(([, a], [, b]) => b.count - a.count);
+    const sceneCount = Object.keys(sceneMap).length;
+    const topScene = Object.entries(sceneMap).sort(([, a], [, b]) => b - a)[0];
+
+    return {
+      avgPerMonth: monthEntries.length > 0 ? (releases.length / monthEntries.length).toFixed(1) : '0',
+      topMonth: monthEntries.length > 0 ? monthEntries.reduce((a, b) => b[1] > a[1] ? b : a) : null,
+      topGenre: genreEntries[0] || null,
+      topCountry: countryEntries[0] || null,
+      topCountryCode: countryEntries[0]?.[0] || null,
+      sceneCount,
+      topScene: topScene ? { key: topScene[0], count: topScene[1] } : null,
+    };
+  }, [releases]);
+
   const stats = [
     { label: 'Lançamentos', value: String(releases.length), icon: Disc, route: '/releases' },
     { label: 'Pautas', value: `${weekFinalizedPautas}/${weekTotalPautas || weekEpisodeCount}`, icon: FileText, route: '/pautas' },
