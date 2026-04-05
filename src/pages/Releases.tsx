@@ -863,9 +863,21 @@ export default function Releases() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Filtrar por Gênero</DialogTitle>
-            <DialogDescription>Selecione um gênero para filtrar os lançamentos.</DialogDescription>
+            <DialogDescription>Selecione um gênero principal ou específico.</DialogDescription>
           </DialogHeader>
-          <ScrollArea className="h-[300px]">
+          {/* Main genre quick tags */}
+          <div className="flex flex-wrap gap-1.5 pb-2 border-b border-border">
+            {NORMALIZED_GENRES.map(ng => {
+              const isActive = genreFilter === `~${ng}`;
+              return (
+                <Button key={ng} size="sm" variant={isActive ? 'default' : 'secondary'} className="text-xs h-7 px-2.5 font-medium"
+                  onClick={() => { setGenreFilter(isActive ? null : `~${ng}`); if (!isActive) setGenreDialogOpen(false); }}>
+                  {ng}
+                </Button>
+              );
+            })}
+          </div>
+          <ScrollArea className="h-[250px]">
             <div className="flex flex-wrap gap-2">
               {allGenres.map(g => (
                 <Button key={g} size="sm" variant={genreFilter === g ? 'default' : 'outline'} className="text-xs"
