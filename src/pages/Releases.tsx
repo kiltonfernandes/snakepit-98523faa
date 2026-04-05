@@ -472,7 +472,7 @@ export default function Releases() {
 
       if (validReleases.length > 0) {
         importReleases(validReleases);
-        setTimeout(() => enrichCountries(), 1500);
+        setTimeout(() => enrichCountries(false), 1500);
       }
       setImportSummary({ valid, duplicates, invalid, errors });
       setImportDialogOpen(true);
