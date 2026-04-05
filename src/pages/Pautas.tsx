@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle, Wand2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -231,6 +232,8 @@ export default function Pautas() {
     toast.success('Semana removida');
   };
 
+  const [loadingAnniversaries, setLoadingAnniversaries] = useState(false);
+
   const getRawInputs = (pauta: Pauta) => (pauta.raw_inputs_json || {}) as Record<string, any>;
 
   const updateRawInput = (pautaId: string, key: string, value: any) => {
@@ -239,6 +242,46 @@ export default function Pautas() {
     const inputs = getRawInputs(pauta);
     updatePauta(pautaId, { raw_inputs_json: { ...inputs, [key]: value } });
   };
+
+  const handleAutoFillAnniversaries = useCallback(async () => {
+    if (!selectedWeek) return;
+    setLoadingAnniversaries(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-anniversaries', {
+        body: { week_start: selectedWeek.start_date, years_back: 40 },
+      });
+      if (error) throw new Error(error.message || 'Erro ao buscar aniversários');
+      const annMap: Record<string, { artist: string; album: string; yearsAgo: number; year: number }[]> = data?.anniversaries || {};
+
+      let filled = 0;
+      for (const pauta of weekPautas) {
+        const slot = getPautaSlot(pauta);
+        if (slot === 'sunday') continue;
+        const dateStr = pauta.publication_date;
+        const anns = annMap[dateStr];
+        if (!anns || anns.length === 0) continue;
+
+        // Pick the most notable: prefer milestone years (multiples of 5/10), then oldest
+        const milestones = anns.filter(a => a.yearsAgo % 10 === 0);
+        const fives = anns.filter(a => a.yearsAgo % 5 === 0);
+        const best = milestones[0] || fives[0] || anns[0];
+
+        const text = `Aniversário de ${best.yearsAgo} anos de "${best.album}" (${best.artist}, ${best.year})`;
+        updateRawInput(pauta.id, 'anniversary', text);
+        filled++;
+      }
+
+      if (filled > 0) {
+        toast.success(`${filled} aniversários preenchidos automaticamente`);
+      } else {
+        toast.info('Nenhum aniversário encontrado para esta semana');
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setLoadingAnniversaries(false);
+    }
+  }, [selectedWeek, weekPautas, updateRawInput]);
 
   const handleSectionChange = (pautaId: string, key: keyof PautaSections, value: string) => {
     const pauta = pautas.find(p => p.id === pautaId);
@@ -982,6 +1025,11 @@ export default function Pautas() {
         <div className="text-center space-y-1">
           <h3 className="text-lg font-bold">{step.label}</h3>
           <p className="text-sm text-muted-foreground">Preencha os dados de {step.label.toLowerCase()} para todos os dias da semana</p>
+          {step.key === 'anniversary' && (
+            <Button size="sm" variant="outline" className="gap-2 mt-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
+              {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando na Wikipedia...</> : <><Wand2 className="h-3.5 w-3.5" /> Preencher Automaticamente</>}
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1160,9 +1208,14 @@ export default function Pautas() {
                 <TabsTrigger value="flow">Flow</TabsTrigger>
               </TabsList>
               {activeTab === 'inputs' && (
-                <Button size="sm" className="gap-2" onClick={handleSaveAll}>
-                  <Save className="h-3.5 w-3.5" /> Salvar Todos
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
+                    {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Wand2 className="h-3.5 w-3.5" /> Auto Aniversários</>}
+                  </Button>
+                  <Button size="sm" className="gap-2" onClick={handleSaveAll}>
+                    <Save className="h-3.5 w-3.5" /> Salvar Todos
+                  </Button>
+                </div>
               )}
             </div>
 
