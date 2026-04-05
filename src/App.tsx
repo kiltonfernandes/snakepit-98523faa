@@ -13,6 +13,7 @@ import Materials from "./pages/Materials";
 import Rivaldo from "./pages/Rivaldo";
 import CalendarView from "./pages/CalendarView";
 import Settings from "./pages/Settings";
+import ReleaseAnalytics from "./pages/ReleaseAnalytics";
 import PublicWeekView from "./pages/PublicWeekView";
 import NotFound from "./pages/NotFound";
 
