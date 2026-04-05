@@ -353,6 +353,68 @@ export default function Settings() {
           </motion.div>
         </TabsContent>
 
+        {/* TAB: Templates de Pauta */}
+        <TabsContent value="templates">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <LayoutTemplate className="h-4 w-4" /> Templates de Pauta
+                    </CardTitle>
+                    <CardDescription>Defina templates reutilizáveis com seções e prompts customizados</CardDescription>
+                  </div>
+                  <Button size="sm" className="gap-2" onClick={openNewTemplate}>
+                    <Plus className="h-3.5 w-3.5" /> Novo Template
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {templatesLoading ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando...
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">
+                    Nenhum template criado. Crie o primeiro!
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {templates.map(t => {
+                      const enabledSections = (t.sections_config || []).filter((s: any) => s.enabled);
+                      return (
+                        <div key={t.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-muted/20 hover:bg-muted/40 transition-colors">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <h4 className="font-medium text-sm">{t.name}</h4>
+                              <Badge variant="secondary" className="text-[9px]">{enabledSections.length} seções</Badge>
+                            </div>
+                            {t.description && <p className="text-xs text-muted-foreground mt-0.5 truncate">{t.description}</p>}
+                            <div className="flex gap-1 mt-1.5 flex-wrap">
+                              {enabledSections.map((s: PautaTemplateSectionConfig) => (
+                                <Badge key={s.key} variant="outline" className="text-[8px] h-[18px]">{s.label}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-3">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEditTemplate(t)}>
+                              <Edit className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => deleteTemplate(t.id)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
         {/* TAB: Termos Banidos */}
         <TabsContent value="banned">
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
