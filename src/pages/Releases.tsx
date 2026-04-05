@@ -581,11 +581,30 @@ export default function Releases() {
 
         {/* Enrich countries */}
         {releases.some(r => !r.country) && (
-          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={enrichCountries} disabled={enrichingCountries}>
+          <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => enrichCountries(false)} disabled={enrichingCountries}>
             {enrichingCountries ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
             Repatriar ({releases.filter(r => !r.country).length})
           </Button>
         )}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-1 text-xs" disabled={enrichingCountries}>
+              <RefreshCw className="h-3 w-3" /> Repatriar Todos
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Repatriar todos os releases?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Isso vai buscar o país de origem de todos os {releases.length} releases, sobrescrevendo países já preenchidos. O processo pode demorar alguns minutos.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={() => enrichCountries(true)}>Repatriar Todos</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         {/* View mode toggle */}
         <div className="flex items-center rounded-md border border-border overflow-hidden">
