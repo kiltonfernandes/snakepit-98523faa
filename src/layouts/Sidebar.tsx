@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings
+  LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings, BarChart3
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
