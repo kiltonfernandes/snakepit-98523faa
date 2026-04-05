@@ -156,8 +156,8 @@ export default function Dashboard() {
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-            <Card className="cursor-pointer hover:border-primary/30 transition-colors" onClick={() => navigate(s.route)}>
+          <motion.div key={s.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} whileHover={{ scale: 1.02 }}>
+            <Card className="cursor-pointer hover:border-primary/40 hover:shadow-lg transition-all duration-200" onClick={() => navigate(s.route)}>
               <CardContent className="flex items-center justify-between p-4">
                 <div>
                   <p className="text-xs text-muted-foreground">{s.label}</p>
