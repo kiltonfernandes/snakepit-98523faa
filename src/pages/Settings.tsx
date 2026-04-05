@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu, Music } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -16,6 +17,7 @@ import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
+import { motion } from 'framer-motion';
 
 const TONE_PRESETS = [
   { label: 'Cirúrgico', value: 30, desc: 'Extremamente preciso e direto. Mínimo de adjetivos, foco em dados.' },
@@ -35,17 +37,17 @@ export default function Settings() {
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
-  const [tokenDialogOpen, setTokenDialogOpen] = useState(false);
   const [aiUsage, setAiUsage] = useState<{ scope: string; tokens_input: number; tokens_output: number; estimated_cost: number; created_at: string; episode_date: string | null; week_id: string | null }[]>([]);
   const [aiUsageLoading, setAiUsageLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('tone');
 
   useEffect(() => {
-    if (!tokenDialogOpen) return;
+    if (activeTab !== 'tokens') return;
     setAiUsageLoading(true);
     supabase.from('ai_usage_logs' as any).select('*').order('created_at', { ascending: false }).limit(500)
       .then(({ data }) => { setAiUsage((data as any[]) || []); setAiUsageLoading(false); })
       .then(undefined, () => setAiUsageLoading(false));
-  }, [tokenDialogOpen]);
+  }, [activeTab]);
 
   const totalTokensIn = aiUsage.reduce((s, r) => s + (r.tokens_input || 0), 0);
   const totalTokensOut = aiUsage.reduce((s, r) => s + (r.tokens_output || 0), 0);
@@ -75,7 +77,6 @@ export default function Settings() {
 
   const temperature = settings.brand_tone_temperature / 100;
   const currentPreset = TONE_PRESETS.find(p => Math.abs(settings.brand_tone_temperature - p.value) < 3);
-  const currentTone = toneProfileForTemperature(settings.brand_tone_temperature);
 
   const labPrompt = buildToneProbePrompt(settings);
 
@@ -133,7 +134,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="space-y-6">
+    <motion.div className="space-y-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <SettingsIcon className="h-6 w-6 text-primary" />
@@ -142,277 +143,367 @@ export default function Settings() {
         <p className="text-muted-foreground mt-1">Preferências da workstation</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Coluna Esquerda */}
-        <div className="space-y-6">
-          {/* Prompt Manager */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <FileCode className="h-4 w-4" /> System Prompts
-              </CardTitle>
-              <CardDescription>Gerencie todos os prompts do sistema — instruções, identidade, playbooks por seção</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">{PROMPT_BLOCKS.length} blocos de prompt</span>
-                  {overridesCount > 0 && (
-                    <Badge variant="secondary" className="text-xs">{overridesCount} customizado{overridesCount > 1 ? 's' : ''}</Badge>
-                  )}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="tone" className="gap-1.5 text-xs"><Thermometer className="h-3.5 w-3.5" /> Tom & Prompts</TabsTrigger>
+          <TabsTrigger value="banned" className="gap-1.5 text-xs"><Ban className="h-3.5 w-3.5" /> Termos Banidos</TabsTrigger>
+          <TabsTrigger value="logs" className="gap-1.5 text-xs"><Activity className="h-3.5 w-3.5" /> Logs</TabsTrigger>
+          <TabsTrigger value="tokens" className="gap-1.5 text-xs"><Cpu className="h-3.5 w-3.5" /> IA & Tokens</TabsTrigger>
+          <TabsTrigger value="audio" className="gap-1.5 text-xs"><Music className="h-3.5 w-3.5" /> Áudio</TabsTrigger>
+        </TabsList>
+
+        {/* TAB: Tom & Prompts */}
+        <TabsContent value="tone">
+          <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <div className="space-y-6">
+              {/* Prompt Manager */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileCode className="h-4 w-4" /> System Prompts
+                  </CardTitle>
+                  <CardDescription>Gerencie todos os prompts do sistema</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">{PROMPT_BLOCKS.length} blocos</span>
+                      {overridesCount > 0 && (
+                        <Badge variant="secondary" className="text-xs">{overridesCount} customizado{overridesCount > 1 ? 's' : ''}</Badge>
+                      )}
+                    </div>
+                    <Button size="sm" className="gap-2" onClick={() => setPromptManagerOpen(true)}>
+                      <FileCode className="h-3.5 w-3.5" /> Gerenciar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Description Template */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileText className="h-4 w-4" /> Descrição Fixa
+                  </CardTitle>
+                  <CardDescription>Template HTML base para descrições de episódios</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {settings.description_template_html ? `${settings.description_template_html.length} chars` : 'Não configurado'}
+                    </span>
+                    <Button size="sm" className="gap-2" onClick={() => {
+                      setDescTemplateValue(settings.description_template_html || '');
+                      setDescTemplateOpen(true);
+                    }}>
+                      <FileText className="h-3.5 w-3.5" /> Editar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tone Lab */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Thermometer className="h-4 w-4" /> Laboratório de Tom
+                </CardTitle>
+                <CardDescription>Controle da temperatura do tom Heavynauta</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-muted-foreground">Temperatura</span>
+                    <span className="font-mono text-muted-foreground">{temperature.toFixed(2)}</span>
+                  </div>
+                  <Slider
+                    value={[settings.brand_tone_temperature]}
+                    max={100}
+                    step={1}
+                    onValueChange={([v]) => updateSettings({ brand_tone_temperature: v })}
+                  />
                 </div>
-                <Button size="sm" className="gap-2" onClick={() => setPromptManagerOpen(true)}>
-                  <FileCode className="h-3.5 w-3.5" /> Gerenciar Prompts
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tone Lab */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Thermometer className="h-4 w-4" /> Laboratório de Tom
-              </CardTitle>
-              <CardDescription>Controle da temperatura do tom Heavynauta</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">Temperatura</span>
-                  <span className="font-mono text-muted-foreground">{temperature.toFixed(2)}</span>
+                <div className="flex gap-2 text-xs text-muted-foreground">
+                  <span>Conservador</span>
+                  <span className="ml-auto">Criativo</span>
                 </div>
-                <Slider
-                  value={[settings.brand_tone_temperature]}
-                  max={100}
-                  step={1}
-                  onValueChange={([v]) => updateSettings({ brand_tone_temperature: v })}
-                />
-              </div>
-              <div className="flex gap-2 text-xs text-muted-foreground">
-                <span>Conservador</span>
-                <span className="ml-auto">Criativo</span>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                {TONE_PRESETS.map(preset => (
-                  <Button
-                    key={preset.label}
-                    variant={Math.abs(settings.brand_tone_temperature - preset.value) < 3 ? 'default' : 'outline'}
-                    size="sm"
-                    className="text-xs"
-                    onClick={() => updateSettings({ brand_tone_temperature: preset.value })}
-                  >
-                    {preset.label}
-                  </Button>
-                ))}
-              </div>
-              {currentPreset && (
-                <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">{currentPreset.desc}</p>
-              )}
-
-              <div className="space-y-2 border-t border-border pt-4">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium">Preview do Prompt de Tom</label>
-                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={copyLabPrompt}>
-                    {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                    Copiar
-                  </Button>
-                </div>
-                <pre className="text-[10px] bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[150px] overflow-y-auto text-muted-foreground">
-                  {labPrompt}
-                </pre>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Export defaults */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Padrões de Exportação</CardTitle>
-              <CardDescription>Layout e container padrão para exportação</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground">Layout</label>
-                  <Select value={settings.default_export_layout} onValueChange={v => updateSettings({ default_export_layout: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="split">Split</SelectItem>
-                      <SelectItem value="unified">Unificado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs text-muted-foreground">Container</label>
-                  <Select value={settings.default_export_container} onValueChange={v => updateSettings({ default_export_container: v })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="zip">ZIP</SelectItem>
-                      <SelectItem value="flat">Flat</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Description Template */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <FileText className="h-4 w-4" /> Descrição Fixa
-              </CardTitle>
-              <CardDescription>Template HTML base para descrições de episódios. Use <code className="text-xs bg-muted px-1 rounded">{'<<<title>>>'}</code> para o título e <code className="text-xs bg-muted px-1 rounded">{'<<<generated content>>>'}</code> para o conteúdo gerado por IA.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
-                  {settings.description_template_html ? `${settings.description_template_html.length} caracteres` : 'Não configurado'}
-                </span>
-                <Button size="sm" className="gap-2" onClick={() => {
-                  setDescTemplateValue(settings.description_template_html || '');
-                  setDescTemplateOpen(true);
-                }}>
-                  <FileText className="h-3.5 w-3.5" /> Editar Template
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* AI Token Usage */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Cpu className="h-4 w-4" /> Uso de IA & Tokens
-              </CardTitle>
-              <CardDescription>Monitore o consumo de tokens e custos estimados</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button size="sm" className="gap-2 w-full" onClick={() => setTokenDialogOpen(true)}>
-                <Cpu className="h-3.5 w-3.5" /> Ver Dashboard de Tokens
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Coluna Direita */}
-        <div className="space-y-6">
-          {/* Banned Terms */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Ban className="h-4 w-4" /> Termos Banidos
-              </CardTitle>
-              <CardDescription>Palavras e expressões proibidas nos prompts</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Adicionar termo..."
-                  value={newTerm}
-                  onChange={e => setNewTerm(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && addBannedTerm()}
-                  className="flex-1"
-                />
-                <Button size="icon" onClick={addBannedTerm} disabled={!newTerm.trim()}>
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </div>
-              {bannedTerms.length > 0 ? (
                 <div className="flex gap-2 flex-wrap">
-                  {bannedTerms.map(term => (
-                    <Badge key={term} variant="secondary" className="gap-1 pr-1">
-                      {term}
-                      <button onClick={() => removeBannedTerm(term)} className="ml-1 hover:text-destructive">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
+                  {TONE_PRESETS.map(preset => (
+                    <Button
+                      key={preset.label}
+                      variant={Math.abs(settings.brand_tone_temperature - preset.value) < 3 ? 'default' : 'outline'}
+                      size="sm"
+                      className="text-xs"
+                      onClick={() => updateSettings({ brand_tone_temperature: preset.value })}
+                    >
+                      {preset.label}
+                    </Button>
                   ))}
                 </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nenhum termo banido configurado.</p>
-              )}
-            </CardContent>
-          </Card>
+                {currentPreset && (
+                  <p className="text-xs text-muted-foreground bg-muted/30 p-2 rounded">{currentPreset.desc}</p>
+                )}
 
-          {/* Activity Log */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm flex items-center gap-2">
-                    <Activity className="h-4 w-4" /> Log de Atividade
-                  </CardTitle>
-                  <CardDescription>Histórico de ações do sistema</CardDescription>
+                <div className="space-y-2 border-t border-border pt-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-medium">Preview do Prompt</label>
+                    <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={copyLabPrompt}>
+                      {copied ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                      Copiar
+                    </Button>
+                  </div>
+                  <pre className="text-[10px] bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[150px] overflow-y-auto text-muted-foreground">
+                    {labPrompt}
+                  </pre>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={exportLogCsv} disabled={filteredLog.length === 0}>
-                    <Download className="h-3 w-3" /> CSV
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* TAB: Termos Banidos */}
+        <TabsContent value="banned">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Ban className="h-4 w-4" /> Termos Banidos
+                </CardTitle>
+                <CardDescription>Palavras e expressões proibidas nos prompts</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Adicionar termo..."
+                    value={newTerm}
+                    onChange={e => setNewTerm(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addBannedTerm()}
+                    className="flex-1"
+                  />
+                  <Button size="icon" onClick={addBannedTerm} disabled={!newTerm.trim()}>
+                    <Plus className="h-4 w-4" />
                   </Button>
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-destructive hover:text-destructive" disabled={activityLog.length === 0}>
-                        <Trash2 className="h-3 w-3" /> Limpar
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Limpar todos os logs?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Essa ação é irreversível. Todos os {activityLog.length} registros de atividade serão removidos permanentemente.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                        <AlertDialogAction onClick={deleteAllLogs} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                          {isDeleting ? 'Limpando...' : 'Sim, limpar tudo'}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input placeholder="Buscar no log..." className="pl-8 h-8 text-xs" value={logSearch} onChange={e => setLogSearch(e.target.value)} />
-                </div>
-                <Select value={logFilter} onValueChange={setLogFilter}>
-                  <SelectTrigger className="w-[150px] h-8 text-xs">
-                    <Filter className="h-3 w-3 mr-1" /><SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas as ações</SelectItem>
-                    {logActions.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              {filteredLog.length > 0 ? (
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-2">
-                    {filteredLog.map(entry => (
-                      <div key={entry.id} className="flex items-start gap-3 p-2 rounded-md bg-muted/30 text-xs">
-                        <span className="text-muted-foreground/50 font-mono shrink-0 mt-0.5">
-                          {new Date(entry.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <div>
-                          <span className="font-medium">{entry.action}</span>
-                          <span className="text-muted-foreground ml-1.5">{entry.details}</span>
-                        </div>
-                      </div>
+                {bannedTerms.length > 0 ? (
+                  <div className="flex gap-2 flex-wrap">
+                    {bannedTerms.map(term => (
+                      <Badge key={term} variant="secondary" className="gap-1 pr-1">
+                        {term}
+                        <button onClick={() => removeBannedTerm(term)} className="ml-1 hover:text-destructive">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </Badge>
                     ))}
                   </div>
-                </ScrollArea>
-              ) : (
-                <p className="text-sm text-muted-foreground">Nenhuma atividade encontrada.</p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhum termo banido configurado.</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* TAB: Logs */}
+        <TabsContent value="logs">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm flex items-center gap-2">
+                      <Activity className="h-4 w-4" /> Log de Atividade
+                    </CardTitle>
+                    <CardDescription>Histórico de ações do sistema</CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" className="gap-1 text-xs h-7" onClick={exportLogCsv} disabled={filteredLog.length === 0}>
+                      <Download className="h-3 w-3" /> CSV
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs h-7 text-destructive hover:text-destructive" disabled={activityLog.length === 0}>
+                          <Trash2 className="h-3 w-3" /> Limpar
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Limpar todos os logs?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Essa ação é irreversível. Todos os {activityLog.length} registros serão removidos.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={deleteAllLogs} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            {isDeleting ? 'Limpando...' : 'Sim, limpar tudo'}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input placeholder="Buscar no log..." className="pl-8 h-8 text-xs" value={logSearch} onChange={e => setLogSearch(e.target.value)} />
+                  </div>
+                  <Select value={logFilter} onValueChange={setLogFilter}>
+                    <SelectTrigger className="w-[150px] h-8 text-xs">
+                      <Filter className="h-3 w-3 mr-1" /><SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas as ações</SelectItem>
+                      {logActions.map(a => <SelectItem key={a} value={a} className="text-xs">{a}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {filteredLog.length > 0 ? (
+                  <ScrollArea className="h-[500px]">
+                    <div className="space-y-2">
+                      {filteredLog.map(entry => (
+                        <div key={entry.id} className="flex items-start gap-3 p-2 rounded-md bg-muted/30 text-xs">
+                          <span className="text-muted-foreground/50 font-mono shrink-0 mt-0.5">
+                            {new Date(entry.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <div>
+                            <span className="font-medium">{entry.action}</span>
+                            <span className="text-muted-foreground ml-1.5">{entry.details}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Nenhuma atividade encontrada.</p>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* TAB: IA & Tokens */}
+        <TabsContent value="tokens">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Cpu className="h-4 w-4" /> Dashboard de Tokens
+                </CardTitle>
+                <CardDescription>Consumo estimado de tokens e custos por tipo de geração</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {aiUsageLoading ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
+                ) : aiUsage.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground text-sm">Nenhum uso registrado ainda.</div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="bg-muted/30 rounded-lg p-3 text-center">
+                        <div className="text-lg font-bold font-mono">{(totalTokensIn + totalTokensOut).toLocaleString()}</div>
+                        <div className="text-[10px] text-muted-foreground">Tokens totais</div>
+                      </div>
+                      <div className="bg-muted/30 rounded-lg p-3 text-center">
+                        <div className="text-lg font-bold font-mono">{aiUsage.length}</div>
+                        <div className="text-[10px] text-muted-foreground">Chamadas</div>
+                      </div>
+                      <div className="bg-muted/30 rounded-lg p-3 text-center">
+                        <div className="text-lg font-bold font-mono text-primary">${totalCost.toFixed(4)}</div>
+                        <div className="text-[10px] text-muted-foreground">Custo estimado</div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium">Por tipo</h4>
+                      {Object.entries(usageByScope).map(([scope, data]) => (
+                        <div key={scope} className="flex items-center justify-between bg-muted/20 rounded px-3 py-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="text-[10px]">{scope}</Badge>
+                            <span className="text-muted-foreground">{data.count} chamadas</span>
+                          </div>
+                          <div className="flex items-center gap-4 font-mono">
+                            <span>{(data.input + data.output).toLocaleString()} tok</span>
+                            <span className="text-primary">${data.cost.toFixed(4)}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-medium">Últimas chamadas</h4>
+                      <ScrollArea className="h-[300px]">
+                        <div className="space-y-1">
+                          {aiUsage.slice(0, 50).map((r, i) => (
+                            <div key={i} className="flex items-center justify-between text-[10px] px-2 py-1 rounded bg-muted/10">
+                              <span className="text-muted-foreground font-mono">{new Date(r.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                              <Badge variant="outline" className="text-[9px] h-4">{r.scope}</Badge>
+                              <span className="font-mono">{(r.tokens_input + r.tokens_output).toLocaleString()}</span>
+                              <span className="font-mono text-primary">${r.estimated_cost.toFixed(5)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+
+        {/* TAB: Áudio */}
+        <TabsContent value="audio">
+          <motion.div className="grid grid-cols-1 lg:grid-cols-2 gap-6" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Music className="h-4 w-4" /> Padrões de Exportação
+                </CardTitle>
+                <CardDescription>Layout, container e qualidade de áudio</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Layout</label>
+                    <Select value={settings.default_export_layout} onValueChange={v => updateSettings({ default_export_layout: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="split">Split</SelectItem>
+                        <SelectItem value="unified">Unificado</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs text-muted-foreground">Container</label>
+                    <Select value={settings.default_export_container} onValueChange={v => updateSettings({ default_export_container: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="zip">ZIP</SelectItem>
+                        <SelectItem value="flat">Flat</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Informações</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground">
+                  A qualidade de exportação (bitrate) pode ser ajustada diretamente no sidebar do Rivaldo durante o processamento.
+                  Opções disponíveis: 128, 192, 256 e 320 kbps.
+                </p>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
+      </Tabs>
 
       <PromptManager
         open={promptManagerOpen}
@@ -430,8 +521,8 @@ export default function Settings() {
             <DialogTitle>Template de Descrição Fixa</DialogTitle>
             <DialogDescription>
               Cole aqui o HTML base para as descrições dos episódios.<br />
-              Use <code className="bg-muted px-1 rounded text-xs">{'<<<title>>>'}</code> onde o título do episódio deve aparecer.<br />
-              Use <code className="bg-muted px-1 rounded text-xs">{'<<<generated content>>>'}</code> onde o conteúdo gerado por IA deve ser inserido.
+              Use <code className="bg-muted px-1 rounded text-xs">{'<<<title>>>'}</code> onde o título deve aparecer.<br />
+              Use <code className="bg-muted px-1 rounded text-xs">{'<<<generated content>>>'}</code> para o conteúdo gerado por IA.
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -450,69 +541,6 @@ export default function Settings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <Dialog open={tokenDialogOpen} onOpenChange={setTokenDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Cpu className="h-5 w-5" /> Dashboard de Tokens</DialogTitle>
-            <DialogDescription>Consumo estimado de tokens e custos por tipo de geração</DialogDescription>
-          </DialogHeader>
-          {aiUsageLoading ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">Carregando...</div>
-          ) : aiUsage.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground text-sm">Nenhum uso registrado ainda. Gere títulos ou descrições para começar a monitorar.</div>
-          ) : (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-3">
-                <div className="bg-muted/30 rounded-lg p-3 text-center">
-                  <div className="text-lg font-bold font-mono">{(totalTokensIn + totalTokensOut).toLocaleString()}</div>
-                  <div className="text-[10px] text-muted-foreground">Tokens totais</div>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-3 text-center">
-                  <div className="text-lg font-bold font-mono">{aiUsage.length}</div>
-                  <div className="text-[10px] text-muted-foreground">Chamadas</div>
-                </div>
-                <div className="bg-muted/30 rounded-lg p-3 text-center">
-                  <div className="text-lg font-bold font-mono text-primary">${totalCost.toFixed(4)}</div>
-                  <div className="text-[10px] text-muted-foreground">Custo estimado</div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium">Por tipo</h4>
-                {Object.entries(usageByScope).map(([scope, data]) => (
-                  <div key={scope} className="flex items-center justify-between bg-muted/20 rounded px-3 py-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="text-[10px]">{scope}</Badge>
-                      <span className="text-muted-foreground">{data.count} chamadas</span>
-                    </div>
-                    <div className="flex items-center gap-4 font-mono">
-                      <span>{(data.input + data.output).toLocaleString()} tok</span>
-                      <span className="text-primary">${data.cost.toFixed(4)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="space-y-2">
-                <h4 className="text-xs font-medium">Últimas chamadas</h4>
-                <ScrollArea className="h-[200px]">
-                  <div className="space-y-1">
-                    {aiUsage.slice(0, 50).map((r, i) => (
-                      <div key={i} className="flex items-center justify-between text-[10px] px-2 py-1 rounded bg-muted/10">
-                        <span className="text-muted-foreground font-mono">{new Date(r.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
-                        <Badge variant="outline" className="text-[9px] h-4">{r.scope}</Badge>
-                        <span className="font-mono">{(r.tokens_input + r.tokens_output).toLocaleString()}</span>
-                        <span className="font-mono text-primary">${r.estimated_cost.toFixed(5)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
+    </motion.div>
   );
 }

@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Palette, Sparkles, Image, ExternalLink, Download, Copy, RefreshCw, Loader2 } from 'lucide-react';
+import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +67,10 @@ export default function Materials() {
   const [generatingDescriptions, setGeneratingDescriptions] = useState<Set<string>>(new Set());
   const [generatingAllTitles, setGeneratingAllTitles] = useState(false);
   const [generatingAllDescriptions, setGeneratingAllDescriptions] = useState(false);
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [progressItems, setProgressItems] = useState<GenerationItem[]>([]);
+  const [progressLogs, setProgressLogs] = useState<string[]>([]);
+  const [progressTitle, setProgressTitle] = useState('');
 
   // Default to the latest week that has pautas
   const selectedWeek = weeks.find((w) => w.id === selectedWeekId)
@@ -842,11 +847,31 @@ export default function Materials() {
       return;
     }
 
+    const items: GenerationItem[] = readyMaterials.map(m => ({
+      id: m.id,
+      label: `Títulos — ${DAY_SLOTS.find(d => d.key === m.slot_key)?.label || m.slot_key}`,
+      status: 'pending' as const,
+    }));
+    setProgressItems(items);
+    setProgressLogs([]);
+    setProgressTitle('Gerando títulos em lote...');
+    setProgressModalOpen(true);
     setGeneratingAllTitles(true);
+
     for (const mat of readyMaterials) {
-      await generateTitlesAI(mat.id);
+      setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'generating' } : i));
+      setProgressLogs(prev => [...prev, `Iniciando: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      try {
+        await generateTitlesAI(mat.id);
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `✓ Concluído: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      } catch (err: any) {
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'error', error: err.message } : i));
+        setProgressLogs(prev => [...prev, `✗ Erro: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      }
     }
     setGeneratingAllTitles(false);
+    setProgressLogs(prev => [...prev, 'Geração de títulos concluída']);
     toast.success('Geração de títulos concluída');
   };
 
@@ -857,11 +882,31 @@ export default function Materials() {
       return;
     }
 
+    const items: GenerationItem[] = readyMaterials.map(m => ({
+      id: m.id,
+      label: `Descrição — ${DAY_SLOTS.find(d => d.key === m.slot_key)?.label || m.slot_key}`,
+      status: 'pending' as const,
+    }));
+    setProgressItems(items);
+    setProgressLogs([]);
+    setProgressTitle('Gerando descrições em lote...');
+    setProgressModalOpen(true);
     setGeneratingAllDescriptions(true);
+
     for (const mat of readyMaterials) {
-      await generateDescriptionAI(mat.id);
+      setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'generating' } : i));
+      setProgressLogs(prev => [...prev, `Iniciando: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      try {
+        await generateDescriptionAI(mat.id);
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `✓ Concluído: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      } catch (err: any) {
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'error', error: err.message } : i));
+        setProgressLogs(prev => [...prev, `✗ Erro: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      }
     }
     setGeneratingAllDescriptions(false);
+    setProgressLogs(prev => [...prev, 'Geração de descrições concluída']);
     toast.success('Geração de descrições concluída');
   };
 
@@ -1205,6 +1250,14 @@ export default function Materials() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <GenerationProgressModal
+        open={progressModalOpen}
+        onOpenChange={setProgressModalOpen}
+        title={progressTitle}
+        items={progressItems}
+        logs={progressLogs}
+      />
     </div>
   );
 }
