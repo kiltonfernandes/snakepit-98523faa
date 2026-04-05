@@ -97,6 +97,24 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export interface PautaTemplateSectionConfig {
+  key: string;
+  label: string;
+  enabled: boolean;
+  core_prompt: string;
+}
+
+export interface PautaTemplate {
+  id: string;
+  name: string;
+  description: string;
+  sections_config: PautaTemplateSectionConfig[];
+  segway_intro: string;
+  segway_outro: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface EpisodeCompletionIndicators {
   pauta: boolean;
   title: boolean;
