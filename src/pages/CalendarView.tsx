@@ -628,6 +628,81 @@ export default function CalendarView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Inline cover generation dialog */}
+      <Dialog open={coverDialogOpen} onOpenChange={setCoverDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Gerar Capa</DialogTitle>
+            <DialogDescription>Cole a URL de uma imagem para gerar a capa do episódio.</DialogDescription>
+          </DialogHeader>
+          {selectedMaterial && (
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label className="text-xs">URL da Imagem</Label>
+                <Input
+                  value={coverImageUrl}
+                  onChange={e => setCoverImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="text-xs"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={() => {
+                  const title = getSelectedTitle(selectedMaterial);
+                  const query = buildCoverSearchQuery(title);
+                  window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(query)}`, '_blank');
+                }}>
+                  <Search className="h-3 w-3" /> Buscar Imagens
+                </Button>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1 gap-2"
+                  disabled={!coverImageUrl.trim() || coverGenerating}
+                  onClick={async () => {
+                    if (!coverImageUrl.trim() || !selectedMaterial) return;
+                    setCoverGenerating(true);
+                    const title = getSelectedTitle(selectedMaterial);
+                    setCoverProgressItems([{ id: selectedMaterial.id, label: `Capa — ${title}`, status: 'generating' }]);
+                    setCoverProgressOpen(true);
+                    
+                    generateCoverImage({
+                      imageUrl: coverImageUrl,
+                      title,
+                      onComplete: (dataUrl) => {
+                        updateMaterial(selectedMaterial.id, { cover_url: dataUrl });
+                        setSelectedMaterial(prev => prev ? { ...prev, cover_url: dataUrl } : prev);
+                        setCoverThumbnails(prev => ({ ...prev, [selectedMaterial.id]: dataUrl }));
+                        setCoverProgressItems([{ id: selectedMaterial.id, label: `Capa — ${title}`, status: 'done' }]);
+                        setCoverGenerating(false);
+                        setCoverDialogOpen(false);
+                        toast.success('Capa gerada!');
+                      },
+                      onError: (error) => {
+                        setCoverProgressItems([{ id: selectedMaterial.id, label: `Capa — ${title}`, status: 'error', error }]);
+                        setCoverGenerating(false);
+                        toast.error(error);
+                      },
+                    });
+                  }}
+                >
+                  {coverGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  {coverGenerating ? 'Gerando...' : 'Gerar Capa'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cover progress modal */}
+      <GenerationProgressModal
+        open={coverProgressOpen}
+        onOpenChange={setCoverProgressOpen}
+        title="Gerando capa..."
+        items={coverProgressItems}
+      />
     </div>
   );
 }
