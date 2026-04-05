@@ -638,16 +638,17 @@ export default function Releases() {
                 <span className="text-[10px] text-muted-foreground/60">({rels.length})</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                {rels.map(r => {
+              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {rels.map((r, idx) => {
                   const links = resolveAllLinks(r);
+                  const flag = countryFlag(r.country);
                   return (
-                    <Card key={r.id} className="cursor-pointer hover:border-primary/30 transition-all group overflow-hidden" onClick={() => openEdit(r)}>
-                      <CardContent className="p-0">
-                        {/* Top bar: date + type badge */}
-                        <div className="flex items-center gap-2 px-4 pt-3 pb-1">
-                          <span className="text-xs text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
-                          <Badge variant="outline" className="text-[9px] h-4 px-1.5 border-primary/30 text-primary/70">Studio</Badge>
+                    <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.02 }}>
+                    <Card className="cursor-pointer hover:border-primary/30 transition-all group overflow-hidden aspect-square flex flex-col" onClick={() => openEdit(r)}>
+                      <CardContent className="p-0 flex flex-col flex-1">
+                        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
+                          <span className="text-[10px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
+                          {flag && <span className="text-sm">{flag}</span>}
                           <div className="flex-1" />
                           <input
                             type="checkbox"
@@ -657,11 +658,9 @@ export default function Releases() {
                             onClick={(e) => e.stopPropagation()}
                           />
                         </div>
-
-                        {/* Main content */}
-                        <div className="px-4 pb-2">
+                        <div className="px-3 pb-2 flex-1 flex flex-col justify-center">
                           <h3 className="font-bold text-sm leading-tight">{r.artist}</h3>
-                          <p className="text-xs text-muted-foreground italic mt-0.5 truncate">{r.album}</p>
+                          <p className="text-xs text-muted-foreground italic mt-0.5 line-clamp-2">{r.album}</p>
                         </div>
 
                         {/* Genres */}
