@@ -161,9 +161,10 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
 }
 
 export default function Releases() {
-  const { releases, addRelease, updateRelease, deleteRelease, importReleases } = useApp();
+  const { releases, addRelease, updateRelease, deleteRelease, importReleases, loadReleases } = useApp();
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
+  const [countryFilter, setCountryFilter] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [genreDialogOpen, setGenreDialogOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -175,11 +176,18 @@ export default function Releases() {
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [enrichingCountries, setEnrichingCountries] = useState(false);
 
   // Bulk paste state
   const [pasteText, setPasteText] = useState('');
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
   const [pasting, setPasting] = useState(false);
+
+  const allCountries = useMemo(() => {
+    const set = new Set<string>();
+    releases.forEach(r => { if (r.country) set.add(r.country); });
+    return Array.from(set).sort();
+  }, [releases]);
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
