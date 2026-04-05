@@ -210,7 +210,9 @@ export default function Releases() {
     let result = releases.filter(r => {
       const q = search.toLowerCase();
       const matchSearch = !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
-      const matchGenre = !genreFilter || (r.genres || []).includes(genreFilter);
+      const matchGenre = !genreFilter || (genreFilter.startsWith('~')
+        ? (r.genres || []).some(g => g.toLowerCase().includes(genreFilter.slice(1).toLowerCase()))
+        : (r.genres || []).includes(genreFilter));
       const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : normalizeCountryCode(r.country) === countryFilter;
       let matchDate = true;
       if (dateRange) {
