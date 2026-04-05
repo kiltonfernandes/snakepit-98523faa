@@ -14,6 +14,7 @@ export interface Release {
   created_at: string;
   updated_at: string;
   genres?: string[];
+  country?: string | null;
   youtube_url?: string | null;
   spotify_url?: string | null;
   deezer_url?: string | null;

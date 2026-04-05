@@ -34,7 +34,7 @@ export const DEFAULT_PARAMS: AudioParams = {
   masterGainDb: -1,
   bgmGainDb: -12,
   duckReductionDb: -24,
-  silenceThresholdDb: -26,
+  silenceThresholdDb: -20,
   fadeDownDuration: 1.23,
   fadeUpDuration: 0.3,
   maxPause: 4,
