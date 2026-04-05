@@ -256,6 +256,39 @@ export type Database = {
           },
         ]
       }
+      pauta_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          sections_config: Json
+          segway_intro: string | null
+          segway_outro: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id: string
+          name: string
+          sections_config?: Json
+          segway_intro?: string | null
+          segway_outro?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          sections_config?: Json
+          segway_intro?: string | null
+          segway_outro?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pautas: {
         Row: {
           created_at: string
@@ -269,6 +302,7 @@ export type Database = {
           rendered_text: string | null
           sections_json: Json
           status: string
+          template_id: string | null
           updated_at: string
           warnings_json: Json
           week_id: string
@@ -285,6 +319,7 @@ export type Database = {
           rendered_text?: string | null
           sections_json?: Json
           status?: string
+          template_id?: string | null
           updated_at?: string
           warnings_json?: Json
           week_id: string
@@ -301,6 +336,7 @@ export type Database = {
           rendered_text?: string | null
           sections_json?: Json
           status?: string
+          template_id?: string | null
           updated_at?: string
           warnings_json?: Json
           week_id?: string

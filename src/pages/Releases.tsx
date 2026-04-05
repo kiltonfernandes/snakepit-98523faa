@@ -15,11 +15,12 @@ import { useApp } from '@/contexts/AppContext';
 import { Release } from '@/lib/types';
 import { resolveAllLinks, linksToMarkdown, PLATFORM_CONFIG, type PlatformLinks } from '@/lib/dynamic-links';
 import { countryFlag } from '@/lib/country-utils';
+import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '' };
+const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', country: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '' };
 
 interface ImportSummary { valid: number; duplicates: number; invalid: number; errors: string[]; }
 
@@ -73,15 +74,6 @@ const QUICK_FILTERS: { key: QuickFilter; label: string }[] = [
   { key: 'last_year', label: 'Ano Passado' },
 ];
 
-/**
- * Parse structured release data in the format:
- * DD.MM
- * Artist - Album
- * [Studio] or [EP] or [Live]
- * Genre1, Genre2
- *
- * Assumes current year if not specified.
- */
 function parseStructuredReleases(text: string, currentYear: number): { artist: string; album: string; release_date: string; genres: string[]; rating: number | null; comments: string | null }[] {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const results: { artist: string; album: string; release_date: string; genres: string[]; rating: number | null; comments: string | null }[] = [];
@@ -92,7 +84,6 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
   while (i < lines.length) {
     const line = lines[i];
 
-    // Check if this is a date line (DD.MM format)
     const dateMatch = line.match(/^(\d{2})\.(\d{2})$/);
     if (dateMatch) {
       const day = dateMatch[1];
@@ -102,11 +93,8 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
       continue;
     }
 
-    // Skip month headers like "March 2026" or empty separators
     if (/^[A-Za-z]+ \d{4}$/.test(line) || /^---/.test(line) || /^\[/.test(line)) {
-      // If it starts with [ it could be a type line without a preceding artist — skip
       if (/^\[/.test(line) && results.length > 0) {
-        // This is a type indicator for a previous entry — attach the type info as comment
         i++;
         continue;
       }
@@ -114,17 +102,14 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
       continue;
     }
 
-    // Check if this line is an artist - album line
     const artistAlbumMatch = line.match(/^(.+?)\s*-\s+(.+)$/);
     if (artistAlbumMatch && currentDate) {
       const artist = artistAlbumMatch[1].trim();
       const album = artistAlbumMatch[2].trim();
 
-      // Look ahead for [Type] and genres
       let releaseType = '';
       const genres: string[] = [];
 
-      // Next line might be [Studio], [EP], [Live]
       if (i + 1 < lines.length && /^\[/.test(lines[i + 1])) {
         const typeMatch = lines[i + 1].match(/^\[(.*?)\]$/);
         if (typeMatch) {
@@ -133,10 +118,8 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
         }
       }
 
-      // Next line might be genres (comma-separated, no brackets, no date)
       if (i + 1 < lines.length && !lines[i + 1].match(/^\d{2}\.\d{2}$/) && !lines[i + 1].match(/^.+?\s*-\s+.+$/) && !lines[i + 1].match(/^\[/)) {
         const genreLine = lines[i + 1];
-        // Split by comma and filter out empty
         genreLine.split(',').forEach(g => {
           const trimmed = g.trim();
           if (trimmed) genres.push(trimmed);
@@ -177,6 +160,11 @@ export default function Releases() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>('cards');
   const [enrichingCountries, setEnrichingCountries] = useState(false);
+
+  // Repatriation modal
+  const [repatriateModalOpen, setRepatriateModalOpen] = useState(false);
+  const [repatriateItems, setRepatriateItems] = useState<GenerationItem[]>([]);
+  const [repatriateLogs, setRepatriateLogs] = useState<string[]>([]);
 
   // Bulk paste state
   const [pasteText, setPasteText] = useState('');
@@ -219,33 +207,94 @@ export default function Releases() {
     return result;
   }, [releases, search, genreFilter, countryFilter, quickFilter, sortField, sortDir]);
 
-  // Auto-enrich countries for releases without country
+  // Repatriation: enrich countries with progress modal
   const enrichCountries = useCallback(async () => {
     const missing = releases.filter(r => !r.country);
-    if (missing.length === 0) return;
+    if (missing.length === 0) {
+      toast.info('Todos os releases já possuem país');
+      return;
+    }
+
+    const uniqueArtists = [...new Set(missing.map(r => r.artist))];
+    const items: GenerationItem[] = uniqueArtists.map(a => ({
+      id: a,
+      label: a,
+      status: 'pending' as const,
+    }));
+    setRepatriateItems(items);
+    setRepatriateLogs([`Iniciando repatriação de ${uniqueArtists.length} artistas...`]);
+    setRepatriateModalOpen(true);
     setEnrichingCountries(true);
+
     try {
-      const uniqueArtists = [...new Set(missing.map(r => r.artist))];
       const batchSize = 30;
       for (let i = 0; i < uniqueArtists.length; i += batchSize) {
         const batch = uniqueArtists.slice(i, i + batchSize);
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-country`;
-        const resp = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
-          body: JSON.stringify({ artists: batch }),
-        });
-        if (!resp.ok) continue;
-        const { results } = await resp.json();
-        if (!results) continue;
-        for (const r of missing) {
-          const country = results[r.artist.toLowerCase()];
-          if (country) {
-            await supabase.from('releases' as any).update({ country } as any).eq('id', r.id);
-            updateRelease(r.id, { country });
+        
+        // Mark batch as generating
+        setRepatriateItems(prev => prev.map(item =>
+          batch.includes(item.id) ? { ...item, status: 'generating' } : item
+        ));
+        setRepatriateLogs(prev => [...prev, `Processando lote ${Math.floor(i / batchSize) + 1}/${Math.ceil(uniqueArtists.length / batchSize)} (${batch.length} artistas)...`]);
+
+        try {
+          const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/lookup-country`;
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}` },
+            body: JSON.stringify({ artists: batch }),
+          });
+
+          if (!resp.ok) {
+            setRepatriateItems(prev => prev.map(item =>
+              batch.includes(item.id) ? { ...item, status: 'error', error: `HTTP ${resp.status}` } : item
+            ));
+            setRepatriateLogs(prev => [...prev, `✗ Erro no lote: HTTP ${resp.status}`]);
+            continue;
           }
+
+          const { results } = await resp.json();
+          if (!results) {
+            setRepatriateItems(prev => prev.map(item =>
+              batch.includes(item.id) ? { ...item, status: 'error', error: 'Sem resultados' } : item
+            ));
+            continue;
+          }
+
+          for (const artist of batch) {
+            const country = results[artist.toLowerCase()];
+            if (country) {
+              // Update all releases by this artist
+              const artistReleases = missing.filter(r => r.artist === artist);
+              for (const r of artistReleases) {
+                await supabase.from('releases' as any).update({ country } as any).eq('id', r.id);
+                updateRelease(r.id, { country });
+              }
+              setRepatriateItems(prev => prev.map(item =>
+                item.id === artist ? { ...item, status: 'done' } : item
+              ));
+              setRepatriateLogs(prev => [...prev, `✓ ${artist} → ${countryFlag(country)} ${country}`]);
+            } else {
+              setRepatriateItems(prev => prev.map(item =>
+                item.id === artist ? { ...item, status: 'done' } : item
+              ));
+              setRepatriateLogs(prev => [...prev, `— ${artist}: não encontrado`]);
+            }
+          }
+        } catch (err: any) {
+          setRepatriateItems(prev => prev.map(item =>
+            batch.includes(item.id) ? { ...item, status: 'error', error: err.message } : item
+          ));
+          setRepatriateLogs(prev => [...prev, `✗ Erro: ${err.message}`]);
+        }
+
+        // Small delay between batches
+        if (i + batchSize < uniqueArtists.length) {
+          await new Promise(resolve => setTimeout(resolve, 500));
         }
       }
+
+      setRepatriateLogs(prev => [...prev, 'Repatriação concluída']);
       toast.success('Países atualizados');
       loadReleases();
     } catch (err: any) {
@@ -262,7 +311,7 @@ export default function Releases() {
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (r: Release) => {
-    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '' });
+    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', country: r.country || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '' });
     setEditingId(r.id); setDialogOpen(true);
   };
 
@@ -271,6 +320,7 @@ export default function Releases() {
       artist: form.artist, album: form.album, release_date: form.release_date,
       genres: form.genres.split(',').map(g => g.trim()).filter(Boolean),
       rating: form.rating, comments: form.comments,
+      country: form.country || null,
       youtube_url: form.youtube_url || null,
       spotify_url: form.spotify_url || null,
       deezer_url: form.deezer_url || null,
@@ -293,10 +343,10 @@ export default function Releases() {
     let mime: string;
     let ext: string;
     if (format === 'csv') {
-      const header = 'artist,album,release_date,genres,rating,comments,youtube,spotify,deezer,apple_music,bandcamp,metal_archives';
+      const header = 'artist,album,release_date,genres,rating,comments,country,youtube,spotify,deezer,apple_music,bandcamp,metal_archives';
       const rows = data.map(r => {
         const l = r.links;
-        return [r.artist, r.album, r.release_date, (r.genres || []).join(';'), r.rating || '', r.comments || '', l.youtube, l.spotify, l.deezer, l.apple_music, l.bandcamp, l.metal_archives].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
+        return [r.artist, r.album, r.release_date, (r.genres || []).join(';'), r.rating || '', r.comments || '', r.country || '', l.youtube, l.spotify, l.deezer, l.apple_music, l.bandcamp, l.metal_archives].map(v => `"${String(v).replace(/"/g, '""')}"`).join(',');
       });
       content = [header, ...rows].join('\n');
       mime = 'text/csv';
@@ -354,7 +404,10 @@ export default function Releases() {
             valid++; validReleases.push(item);
           });
 
-          if (validReleases.length > 0) { importReleases(validReleases); setTimeout(() => enrichCountries(), 1500); }
+          if (validReleases.length > 0) {
+            importReleases(validReleases);
+            setTimeout(() => enrichCountries(), 1500);
+          }
           setImportSummary({ valid, duplicates, invalid, errors });
           setImportDialogOpen(true);
         } catch {
@@ -365,7 +418,7 @@ export default function Releases() {
       reader.readAsText(file);
     };
     input.click();
-  }, [releases, importReleases]);
+  }, [releases, importReleases, enrichCountries]);
 
   // Bulk paste handler
   const handleBulkPaste = useCallback(() => {
@@ -400,7 +453,10 @@ export default function Releases() {
         validReleases.push(item);
       });
 
-      if (validReleases.length > 0) { importReleases(validReleases); setTimeout(() => enrichCountries(), 1500); }
+      if (validReleases.length > 0) {
+        importReleases(validReleases);
+        setTimeout(() => enrichCountries(), 1500);
+      }
       setImportSummary({ valid, duplicates, invalid, errors });
       setImportDialogOpen(true);
       setPasteDialogOpen(false);
@@ -410,7 +466,7 @@ export default function Releases() {
     }
 
     setPasting(false);
-  }, [pasteText, releases, importReleases]);
+  }, [pasteText, releases, importReleases, enrichCountries]);
 
   const handleBulkDelete = () => {
     selectedIds.forEach(id => deleteRelease(id));
@@ -510,7 +566,7 @@ export default function Releases() {
         {releases.some(r => !r.country) && (
           <Button variant="outline" size="sm" className="gap-1 text-xs" onClick={enrichCountries} disabled={enrichingCountries}>
             {enrichingCountries ? <Loader2 className="h-3 w-3 animate-spin" /> : <Globe className="h-3 w-3" />}
-            Buscar países
+            Repatriar ({releases.filter(r => !r.country).length})
           </Button>
         )}
 
@@ -573,6 +629,7 @@ export default function Releases() {
                   <SortHeader field="artist">Artista</SortHeader>
                   <SortHeader field="album">Álbum</SortHeader>
                   <SortHeader field="release_date">Data</SortHeader>
+                  <TableHead>País</TableHead>
                   <TableHead>Gêneros</TableHead>
                   <SortHeader field="rating">Rating</SortHeader>
                   <TableHead className="w-[60px]"></TableHead>
@@ -581,7 +638,7 @@ export default function Releases() {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                       {releases.length === 0 ? 'Nenhum lançamento cadastrado.' : 'Nenhum resultado encontrado.'}
                     </TableCell>
                   </TableRow>
@@ -593,6 +650,7 @@ export default function Releases() {
                     <TableCell className="font-medium" onClick={() => openEdit(r)}>{countryFlag(r.country)} {r.artist}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>{r.album}</TableCell>
                     <TableCell className="text-muted-foreground text-sm" onClick={() => openEdit(r)}>{r.release_date}</TableCell>
+                    <TableCell className="text-sm" onClick={() => openEdit(r)}>{r.country ? `${countryFlag(r.country)} ${r.country}` : <span className="text-muted-foreground/40">—</span>}</TableCell>
                     <TableCell onClick={() => openEdit(r)}>
                       <div className="flex gap-1 flex-wrap">
                         {(r.genres || []).slice(0, 3).map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
@@ -619,7 +677,7 @@ export default function Releases() {
         </Card>
       )}
 
-      {/* Card View */}
+      {/* Card View — Compact horizontal cards */}
       {viewMode === 'cards' && (
         <div className="space-y-6">
           {filtered.length === 0 ? (
@@ -638,18 +696,34 @@ export default function Releases() {
                 <span className="text-[10px] text-muted-foreground/60">({rels.length})</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
-              <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {rels.map((r, idx) => {
                   const links = resolveAllLinks(r);
                   const flag = countryFlag(r.country);
                   return (
-                    <motion.div key={r.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.02 }}>
-                    <Card className="cursor-pointer hover:border-primary/30 transition-all group overflow-hidden aspect-square flex flex-col" onClick={() => openEdit(r)}>
-                      <CardContent className="p-0 flex flex-col flex-1">
-                        <div className="flex items-center gap-2 px-3 pt-3 pb-1">
-                          <span className="text-[10px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
-                          {flag && <span className="text-sm">{flag}</span>}
-                          <div className="flex-1" />
+                    <motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.015 }} whileHover={{ scale: 1.02 }}>
+                    <Card className="cursor-pointer hover:border-primary/40 hover:shadow-lg transition-all duration-200 group overflow-hidden" onClick={() => openEdit(r)}>
+                      <CardContent className="p-3 flex items-start gap-3">
+                        {/* Flag + date column */}
+                        <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
+                          {flag ? <span className="text-lg leading-none">{flag}</span> : <Globe className="h-4 w-4 text-muted-foreground/30" />}
+                          <span className="text-[9px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
+                        </div>
+
+                        {/* Info column */}
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-bold text-sm leading-tight truncate">{r.artist}</h3>
+                          <p className="text-xs text-muted-foreground italic truncate">{r.album}</p>
+                          
+                          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                            {(r.genres || []).slice(0, 2).map(g => (
+                              <Badge key={g} variant="secondary" className="text-[8px] h-[18px] rounded-full px-1.5">{g}</Badge>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Actions column */}
+                        <div className="flex flex-col items-end gap-1.5 shrink-0">
                           <input
                             type="checkbox"
                             checked={selectedIds.has(r.id)}
@@ -657,39 +731,24 @@ export default function Releases() {
                             className="rounded opacity-0 group-hover:opacity-100 transition-opacity"
                             onClick={(e) => e.stopPropagation()}
                           />
-                        </div>
-                        <div className="px-3 pb-2 flex-1 flex flex-col justify-center">
-                          <h3 className="font-bold text-sm leading-tight">{r.artist}</h3>
-                          <p className="text-xs text-muted-foreground italic mt-0.5 line-clamp-2">{r.album}</p>
-                        </div>
-
-                        {/* Genres */}
-                        <div className="flex gap-1.5 flex-wrap px-3 pb-2">
-                          {(r.genres || []).slice(0, 2).map(g => (
-                            <Badge key={g} variant="secondary" className="text-[9px] h-4 rounded-full px-1.5">
-                              {g}
-                            </Badge>
-                          ))}
-                        </div>
-
-                        {/* Platform links */}
-                        <div className="flex items-center gap-1 px-3 pb-3 flex-wrap mt-auto">
-                          {([
-                            { key: 'youtube' as const, label: 'YT', color: 'text-red-400 hover:text-red-300 border-red-400/30' },
-                            { key: 'spotify' as const, label: 'SP', color: 'text-emerald-400 hover:text-emerald-300 border-emerald-400/30' },
-                            { key: 'metal_archives' as const, label: 'MA', color: 'text-orange-400 hover:text-orange-300 border-orange-400/30' },
-                          ]).map(p => (
-                            <a
-                              key={p.key}
-                              href={links[p.key]}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={e => e.stopPropagation()}
-                              className={`inline-flex items-center gap-1 text-[9px] border rounded-full px-1.5 py-0.5 transition-colors ${p.color}`}
-                            >
-                              {p.label}
-                            </a>
-                          ))}
+                          <div className="flex gap-1 mt-auto">
+                            {([
+                              { key: 'youtube' as const, label: 'YT', color: 'text-red-400 border-red-400/30' },
+                              { key: 'spotify' as const, label: 'SP', color: 'text-emerald-400 border-emerald-400/30' },
+                              { key: 'metal_archives' as const, label: 'MA', color: 'text-orange-400 border-orange-400/30' },
+                            ]).map(p => (
+                              <a
+                                key={p.key}
+                                href={links[p.key]}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                className={`inline-flex items-center text-[8px] border rounded-full px-1 py-0.5 transition-colors hover:bg-muted/50 ${p.color}`}
+                              >
+                                {p.label}
+                              </a>
+                            ))}
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
@@ -712,11 +771,18 @@ export default function Releases() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="rounded-md bg-muted p-3 text-xs font-mono space-y-0.5">
-              <p className="text-muted-foreground">DD.MM</p>
-              <p>Artista - Álbum</p>
-              <p className="text-muted-foreground">[Studio] ou [EP] ou [Live]</p>
-              <p className="text-muted-foreground">Gênero 1, Gênero 2</p>
+            <div className="flex items-center justify-between">
+              <div className="rounded-md bg-muted p-3 text-xs font-mono space-y-0.5 flex-1">
+                <p className="text-muted-foreground">DD.MM</p>
+                <p>Artista - Álbum</p>
+                <p className="text-muted-foreground">[Studio] ou [EP] ou [Live]</p>
+                <p className="text-muted-foreground">Gênero 1, Gênero 2</p>
+              </div>
+              <div className="ml-3">
+                <Button variant="outline" size="sm" className="gap-2" onClick={() => window.open('https://metalstorm.net/events/new_releases.php?upcoming=1&invisible=1', '_blank')}>
+                  <ExternalLink className="h-3.5 w-3.5" /> Source
+                </Button>
+              </div>
             </div>
             <Textarea
               placeholder={"04.04\nVintergatA - Зверобой\n[Studio]\nSymphonic black metal\n\n08.04\nAttila - Concrete Throne\n[Studio]\nDeathcore, Melodic metalcore, Nu metal"}
@@ -796,7 +862,16 @@ export default function Releases() {
                 <div className="space-y-1.5"><Label>Artista</Label><Input value={form.artist} onChange={e => setForm(p => ({ ...p, artist: e.target.value }))} /></div>
                 <div className="space-y-1.5"><Label>Álbum</Label><Input value={form.album} onChange={e => setForm(p => ({ ...p, album: e.target.value }))} /></div>
               </div>
-              <div className="space-y-1.5"><Label>Data de Lançamento</Label><Input type="date" value={form.release_date} onChange={e => setForm(p => ({ ...p, release_date: e.target.value }))} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>Data de Lançamento</Label><Input type="date" value={form.release_date} onChange={e => setForm(p => ({ ...p, release_date: e.target.value }))} /></div>
+                <div className="space-y-1.5">
+                  <Label>País de Origem</Label>
+                  <div className="flex items-center gap-2">
+                    {form.country && <span className="text-lg">{countryFlag(form.country)}</span>}
+                    <Input value={form.country} onChange={e => setForm(p => ({ ...p, country: e.target.value }))} placeholder="Ex: United States, Brazil..." className="flex-1" />
+                  </div>
+                </div>
+              </div>
               <div className="space-y-1.5"><Label>Gêneros (separados por vírgula)</Label><Input value={form.genres} onChange={e => setForm(p => ({ ...p, genres: e.target.value }))} placeholder="Death Metal, Black Metal, Thrash" /></div>
               <div className="space-y-1.5">
                 <Label>Rating ({form.rating}/5)</Label>
@@ -845,6 +920,15 @@ export default function Releases() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Repatriation progress modal */}
+      <GenerationProgressModal
+        open={repatriateModalOpen}
+        onOpenChange={setRepatriateModalOpen}
+        title={`Repatriando releases (${repatriateItems.filter(i => i.status === 'done').length}/${repatriateItems.length})`}
+        items={repatriateItems}
+        logs={repatriateLogs}
+      />
     </div>
   );
 }
