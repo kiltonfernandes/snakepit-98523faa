@@ -847,11 +847,31 @@ export default function Materials() {
       return;
     }
 
+    const items: GenerationItem[] = readyMaterials.map(m => ({
+      id: m.id,
+      label: `Títulos — ${DAY_SLOTS.find(d => d.key === m.slot_key)?.label || m.slot_key}`,
+      status: 'pending' as const,
+    }));
+    setProgressItems(items);
+    setProgressLogs([]);
+    setProgressTitle('Gerando títulos em lote...');
+    setProgressModalOpen(true);
     setGeneratingAllTitles(true);
+
     for (const mat of readyMaterials) {
-      await generateTitlesAI(mat.id);
+      setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'generating' } : i));
+      setProgressLogs(prev => [...prev, `Iniciando: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      try {
+        await generateTitlesAI(mat.id);
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `✓ Concluído: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      } catch (err: any) {
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'error', error: err.message } : i));
+        setProgressLogs(prev => [...prev, `✗ Erro: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      }
     }
     setGeneratingAllTitles(false);
+    setProgressLogs(prev => [...prev, 'Geração de títulos concluída']);
     toast.success('Geração de títulos concluída');
   };
 
@@ -862,11 +882,31 @@ export default function Materials() {
       return;
     }
 
+    const items: GenerationItem[] = readyMaterials.map(m => ({
+      id: m.id,
+      label: `Descrição — ${DAY_SLOTS.find(d => d.key === m.slot_key)?.label || m.slot_key}`,
+      status: 'pending' as const,
+    }));
+    setProgressItems(items);
+    setProgressLogs([]);
+    setProgressTitle('Gerando descrições em lote...');
+    setProgressModalOpen(true);
     setGeneratingAllDescriptions(true);
+
     for (const mat of readyMaterials) {
-      await generateDescriptionAI(mat.id);
+      setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'generating' } : i));
+      setProgressLogs(prev => [...prev, `Iniciando: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      try {
+        await generateDescriptionAI(mat.id);
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `✓ Concluído: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      } catch (err: any) {
+        setProgressItems(prev => prev.map(i => i.id === mat.id ? { ...i, status: 'error', error: err.message } : i));
+        setProgressLogs(prev => [...prev, `✗ Erro: ${DAY_SLOTS.find(d => d.key === mat.slot_key)?.label}`]);
+      }
     }
     setGeneratingAllDescriptions(false);
+    setProgressLogs(prev => [...prev, 'Geração de descrições concluída']);
     toast.success('Geração de descrições concluída');
   };
 
