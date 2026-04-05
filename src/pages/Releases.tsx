@@ -211,7 +211,7 @@ export default function Releases() {
       const q = search.toLowerCase();
       const matchSearch = !q || r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q) || (r.genres || []).some(g => g.toLowerCase().includes(q));
       const matchGenre = !genreFilter || (r.genres || []).includes(genreFilter);
-      const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : r.country === countryFilter;
+      const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : normalizeCountryCode(r.country) === countryFilter;
       let matchDate = true;
       if (dateRange) {
         matchDate = r.release_date >= dateRange[0] && r.release_date <= dateRange[1];
