@@ -400,7 +400,7 @@ export default function Releases() {
         validReleases.push(item);
       });
 
-      if (validReleases.length > 0) importReleases(validReleases);
+      if (validReleases.length > 0) { importReleases(validReleases); setTimeout(() => enrichCountries(), 1500); }
       setImportSummary({ valid, duplicates, invalid, errors });
       setImportDialogOpen(true);
       setPasteDialogOpen(false);
