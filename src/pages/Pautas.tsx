@@ -174,6 +174,11 @@ export default function Pautas() {
   const [flowGenerating, setFlowGenerating] = useState(false);
   const [flowProgress, setFlowProgress] = useState<Record<string, Record<string, 'pending' | 'generating' | 'done' | 'error'>>>({});
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  // Progress modal state
+  const [progressModalOpen, setProgressModalOpen] = useState(false);
+  const [progressItems, setProgressItems] = useState<GenerationItem[]>([]);
+  const [progressLogs, setProgressLogs] = useState<string[]>([]);
+  const [progressTitle, setProgressTitle] = useState('Gerando conteúdo...');
   const [weekCarouselStart, setWeekCarouselStart] = useState(() => {
     const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
     const todayStr = new Date().toISOString().slice(0, 10);
