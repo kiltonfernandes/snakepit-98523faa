@@ -179,9 +179,9 @@ export default function Releases() {
   const renderFlag = useCallback((country: string | null | undefined, className = 'h-4 w-5 rounded-[2px] overflow-hidden') => {
     const code = normalizeCountryCode(country);
     if (!code) return <Globe className="h-4 w-4 text-muted-foreground/30" />;
-    const FlagComponent = CountryFlags[code as keyof typeof CountryFlags] as React.ComponentType<React.SVGProps<SVGSVGElement>> | undefined;
+    const FlagComponent = CountryFlags[code as keyof typeof CountryFlags] as unknown as ((props: { className?: string }) => JSX.Element) | undefined;
     if (!FlagComponent) return <Globe className="h-4 w-4 text-muted-foreground/30" />;
-    return <FlagComponent className={className} title={country ?? code} />;
+    return <span title={country ?? code}><FlagComponent className={className} /></span>;
   }, []);
 
   const allCountries = useMemo(() => {
@@ -747,17 +747,13 @@ export default function Releases() {
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                 {rels.map((r, idx) => {
                   const links = resolveAllLinks(r);
-                  const flagCode = normalizeCountryCode(r.country);
                   return (
                     <motion.div key={r.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: idx * 0.015 }} whileHover={{ scale: 1.02 }}>
                     <Card className="cursor-pointer hover:border-primary/40 hover:shadow-lg transition-all duration-200 group overflow-hidden" onClick={() => openEdit(r)}>
                       <CardContent className="p-3 flex items-start gap-3">
                         {/* Flag + date column */}
                         <div className="flex flex-col items-center gap-1 shrink-0 pt-0.5">
-                          {flagCode ? (() => {
-                            const FlagComponent = CountryFlags[flagCode as keyof typeof CountryFlags] as React.ComponentType<React.SVGProps<SVGSVGElement>> | undefined;
-                            return FlagComponent ? <FlagComponent className="h-4 w-5 rounded-[2px] overflow-hidden" title={r.country ?? flagCode} /> : <Globe className="h-4 w-4 text-muted-foreground/30" />;
-                          })() : <Globe className="h-4 w-4 text-muted-foreground/30" />}
+                          {renderFlag(r.country)}
                           <span className="text-[9px] text-muted-foreground font-mono">{r.release_date.slice(5).replace('-', '.')}</span>
                         </div>
 
