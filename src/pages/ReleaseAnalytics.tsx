@@ -601,6 +601,38 @@ export default function ReleaseAnalytics() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Drilldown Panel */}
+      {drilldown && (
+        <Card className="mt-4">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">
+              Drilldown: {drilldown.type === 'genre' ? drilldown.value : drilldown.type === 'country' ? drilldown.value : formatMonthLabel(drilldown.value)}
+              <Badge variant="secondary" className="ml-2">{drilldownReleases.length} releases</Badge>
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setDrilldown(null)} className="text-xs">✕ Fechar</Button>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-1">
+                {drilldownReleases.map(r => (
+                  <div key={r.id} className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-muted/20 text-sm">
+                    {renderFlag(normalizeCountryCode(r.country) || '')}
+                    <span className="font-medium">{r.artist}</span>
+                    <span className="text-muted-foreground italic">{r.album}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{r.release_date}</span>
+                    <div className="flex gap-1">
+                      {(r.genres || []).slice(0, 2).map(g => (
+                        <Badge key={g} variant="secondary" className="text-[8px]">{g}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
