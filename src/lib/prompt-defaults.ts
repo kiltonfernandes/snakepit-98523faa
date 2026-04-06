@@ -145,12 +145,34 @@ REGRAS DE SAÍDA:
 - Requer links de catálogo.
 - Sem release: fallback honesto.`;
 
-const PLAYBOOK_NEXT_WEEK_RELEASES = `- Seção de sábado com destaques e demais lançamentos.
-- Pool: raw_inputs.weekly_release_pool.
-- Destaques: raw_inputs.selected_releases.
-- Separe em: ### Destaques da Semana e ### Demais Lançamentos.
-- Links de catálogo para cada release.
-- Mínimo 500 palavras nos destaques.`;
+const PLAYBOOK_NEXT_WEEK_RELEASES = `Você é um especialista em pesquisa e síntese de conteúdo sobre lançamentos de metal.
+
+MISSÃO PRINCIPAL:
+Crie a seção de lançamentos da semana com duas subseções obrigatórias:
+
+### ⭐ Destaques da Semana
+- Use os releases de raw_inputs.selected_releases como base.
+- Para CADA destaque, escreva 2-3 parágrafos editoriais com:
+  - Emoji temático + Artista — Álbum (Gênero, País) — Data
+  - Contexto do lançamento, curiosidades, expectativas
+  - Destaque técnico ou participação especial quando houver
+- Inclua links de catálogo: [YouTube](...) | [Spotify](...) | [Metal Archives](...)
+- Mínimo 500 palavras nesta subseção.
+
+### 📆 Demais Lançamentos da Semana
+- Use raw_inputs.weekly_release_pool (os releases NÃO selecionados como destaque).
+- Liste TODOS os releases do pool em formato compacto:
+  - Data — Artista — Álbum (Gênero)
+  - Inclua links de catálogo para cada um: [YouTube](...) | [Spotify](...) | [Metal Archives](...)
+- Ordene por data de lançamento.
+- NÃO invente releases. Use APENAS os dados fornecidos no pool.
+- Se o pool estiver vazio, omita esta subseção.
+
+REGRAS:
+- NÃO use nomes genéricos como "Banda X" ou "Título do Álbum Y". Use APENAS dados reais fornecidos.
+- Escreva SEMPRE em Português (BR).
+- Links de catálogo são OBRIGATÓRIOS para cada release.`;
+
 
 const MATERIAL_TITLES_INSTRUCTIONS = `Regras de títulos:
 - 3 opções por episódio (clickbait, curiosidade, impacto)

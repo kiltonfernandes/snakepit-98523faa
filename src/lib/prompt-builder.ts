@@ -128,6 +128,21 @@ function buildDayPayload(pauta: Pauta, releases: Release[]): DayPayload {
       .map(r => fmtRelease(r));
   }
 
+  // Saturday: compute weekly_release_pool from date range (D+2 to D+8)
+  if (slot === 'saturday') {
+    const pub = new Date(pauta.publication_date + 'T12:00:00');
+    const dPlus2 = new Date(pub); dPlus2.setDate(pub.getDate() + 2);
+    const dPlus8 = new Date(pub); dPlus8.setDate(pub.getDate() + 8);
+    const minDate = dPlus2.toISOString().slice(0, 10);
+    const maxDate = dPlus8.toISOString().slice(0, 10);
+    const selectedIds = new Set(inputs.selected_release_ids || []);
+    const pool = releases
+      .filter(r => r.release_date >= minDate && r.release_date <= maxDate && !selectedIds.has(r.id))
+      .sort((a, b) => a.release_date.localeCompare(b.release_date))
+      .map(r => fmtRelease(r));
+    if (pool.length) enrichedInputs.weekly_release_pool = pool;
+  }
+
   // Generic data source enrichment: any input key ending in _id that references a release
   for (const [key, val] of Object.entries(inputs)) {
     if (key.endsWith('_id') && typeof val === 'string' && !enrichedInputs[key.replace('_id', '_release')]) {

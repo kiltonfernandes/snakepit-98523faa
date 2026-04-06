@@ -429,6 +429,47 @@ export default function Materials() {
       `Dia: ${context.dayLabel}`,
       `Data: ${mat.episode_date}`,
       context.summary,
+    );
+
+    // Saturday: hardcode releases list into the description prompt
+    if (mat.slot_key === 'saturday') {
+      const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
+      const selectedIds = new Set<string>(inputs.selected_release_ids || []);
+
+      // Compute week range: publication_date + 2 to + 8
+      const pub = new Date(pauta.publication_date + 'T12:00:00');
+      const dPlus2 = new Date(pub); dPlus2.setDate(pub.getDate() + 2);
+      const dPlus8 = new Date(pub); dPlus8.setDate(pub.getDate() + 8);
+      const minDate = dPlus2.toISOString().slice(0, 10);
+      const maxDate = dPlus8.toISOString().slice(0, 10);
+
+      const highlights = releases.filter(r => selectedIds.has(r.id));
+      const remaining = releases
+        .filter(r => !selectedIds.has(r.id) && r.release_date >= minDate && r.release_date <= maxDate)
+        .sort((a, b) => a.release_date.localeCompare(b.release_date))
+        .slice(0, 20);
+
+      if (highlights.length > 0 || remaining.length > 0) {
+        lines.push('', 'LANÇAMENTOS DA SEMANA (INCLUIR NA DESCRIÇÃO OBRIGATORIAMENTE):');
+        if (highlights.length > 0) {
+          lines.push('', '⭐ Destaques:');
+          highlights.forEach(r => {
+            const genres = r.genres?.length ? ` (${r.genres.join(', ')})` : '';
+            lines.push(`- ${r.artist} — ${r.album}${genres} — ${r.release_date}`);
+          });
+        }
+        if (remaining.length > 0) {
+          lines.push('', '📆 Demais Lançamentos (primeiros 20):');
+          remaining.forEach(r => {
+            const genres = r.genres?.length ? ` (${r.genres.join(', ')})` : '';
+            lines.push(`- ${r.release_date.slice(5)} — ${r.artist} — ${r.album}${genres}`);
+          });
+        }
+        lines.push('', 'REGRA: Inclua TODOS estes lançamentos como uma lista HTML (<ul><li>) na descrição.');
+      }
+    }
+
+    lines.push(
       '',
       'BLOCO INSTITUCIONAL PARA INCLUIR NO FINAL EXATAMENTE UMA VEZ:',
       brandBlock,
@@ -437,11 +478,12 @@ export default function Materials() {
       template ? '- Siga o template fixo acima' : '- 1 parágrafo de abertura',
       '- 1 ou 2 parágrafos resumindo os destaques',
       '- 1 lista curta com highlights do episódio',
+      mat.slot_key === 'saturday' ? '- Lista completa de lançamentos da semana' : '',
       '- bloco institucional',
       '- CTA final em HTML',
     );
 
-    return lines.join('\n');
+    return lines.filter(l => l !== undefined).join('\n');
   };
 
   const generateDescriptionAI = useCallback(async (materialId: string) => {

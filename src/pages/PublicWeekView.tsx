@@ -36,6 +36,9 @@ interface PublicRelease {
   id: string;
   artist: string;
   album: string;
+  release_date: string;
+  genres?: string[];
+  country?: string | null;
   youtube_url?: string | null;
   spotify_url?: string | null;
   deezer_url?: string | null;
@@ -78,6 +81,28 @@ function daySlotFromDate(dateStr: string): DaySlot {
   return map[wd] || 'monday';
 }
 
+function ReleasePlatformLinks({ release }: { release: PublicRelease }) {
+  const links = resolveAllLinks(release);
+  const platforms = [
+    { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
+    { key: 'spotify' as const, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
+    { key: 'metal_archives' as const, label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300' },
+  ];
+
+  return (
+    <span className="inline-flex items-center gap-1.5 ml-2">
+      {platforms.map((p, i, arr) => (
+        <span key={p.key} className="inline-flex items-center gap-0.5">
+          <a href={links[p.key]} target="_blank" rel="noopener noreferrer" className={`text-xs font-medium transition-colors ${p.color}`}>
+            {p.label}
+          </a>
+          {i < arr.length - 1 && <span className="text-foreground/20 text-xs">·</span>}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 function QuickLinks({ links }: { links: { youtube: string; spotify: string; deezer: string; metal_archives: string } }) {
   const platforms = [
     { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
@@ -103,7 +128,73 @@ function QuickLinks({ links }: { links: { youtube: string; spotify: string; deez
   );
 }
 
-function PautaDay({ pauta, releases }: { pauta: PublicPauta; releases: PublicRelease[] }) {
+function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; allReleases: PublicRelease[] }) {
+  const inputs = pauta.raw_inputs_json || {};
+  const selectedIds = new Set<string>(inputs.selected_release_ids || []);
+
+  // Compute week range: publication_date + 2 to + 8
+  const pub = new Date(pauta.publication_date + 'T12:00:00');
+  const dPlus2 = new Date(pub); dPlus2.setDate(pub.getDate() + 2);
+  const dPlus8 = new Date(pub); dPlus8.setDate(pub.getDate() + 8);
+  const minDate = dPlus2.toISOString().slice(0, 10);
+  const maxDate = dPlus8.toISOString().slice(0, 10);
+
+  const highlights = allReleases.filter(r => selectedIds.has(r.id));
+  const remaining = allReleases
+    .filter(r => !selectedIds.has(r.id) && r.release_date >= minDate && r.release_date <= maxDate)
+    .sort((a, b) => a.release_date.localeCompare(b.release_date));
+
+  if (highlights.length === 0 && remaining.length === 0) return null;
+
+  return (
+    <div className="space-y-8 mt-8 border-t border-foreground/10 pt-6">
+      {highlights.length > 0 && (
+        <div>
+          <h3 className="text-lg font-bold uppercase tracking-wider text-foreground mb-4">⭐ Destaques da Semana</h3>
+          <div className="space-y-4">
+            {highlights.map(r => {
+              const genreStr = r.genres?.length ? r.genres.join(', ') : '';
+              const countryStr = r.country || '';
+              const meta = [genreStr, countryStr].filter(Boolean).join(', ');
+              return (
+                <div key={r.id} className="border-l-4 border-primary pl-4">
+                  <p className="font-bold text-foreground">
+                    {r.artist} — {r.album} {meta && <span className="text-muted-foreground font-normal">({meta})</span>} — {r.release_date}
+                  </p>
+                  <ReleasePlatformLinks release={r} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {remaining.length > 0 && (
+        <div>
+          <h3 className="text-lg font-bold uppercase tracking-wider text-foreground mb-4">📆 Demais Lançamentos da Semana</h3>
+          <div className="space-y-2">
+            {remaining.map(r => {
+              const genreStr = r.genres?.length ? r.genres.join(', ') : '';
+              return (
+                <div key={r.id} className="flex flex-wrap items-center gap-1 text-foreground/80">
+                  <span className="text-muted-foreground text-sm">{r.release_date.slice(5)}</span>
+                  <span>—</span>
+                  <span className="font-medium">{r.artist}</span>
+                  <span>—</span>
+                  <span>{r.album}</span>
+                  {genreStr && <span className="text-muted-foreground text-sm">({genreStr})</span>}
+                  <ReleasePlatformLinks release={r} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PautaDay({ pauta, releases, allReleases }: { pauta: PublicPauta; releases: PublicRelease[]; allReleases: PublicRelease[] }) {
   const slot = daySlotFromDate(pauta.publication_date);
   const sections = getSectionsForDay(slot);
   const data = (pauta.sections_json || {}) as Record<string, string>;
@@ -189,6 +280,11 @@ function PautaDay({ pauta, releases }: { pauta: PublicPauta; releases: PublicRel
         })}
       </section>
 
+      {/* Saturday: structured releases block with links */}
+      {slot === 'saturday' && (
+        <SaturdayReleasesBlock pauta={pauta} allReleases={allReleases} />
+      )}
+
       {/* ENCERRAMENTO */}
       <section className="space-y-3 border-t border-foreground/10 pt-6">
         <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Encerramento</h2>
@@ -221,6 +317,7 @@ export default function PublicWeekView() {
   const [pautas, setPautas] = useState<PublicPauta[]>([]);
   const [materials, setMaterials] = useState<PublicMaterial[]>([]);
   const [releases, setReleases] = useState<PublicRelease[]>([]);
+  const [allReleases, setAllReleases] = useState<PublicRelease[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -233,25 +330,86 @@ export default function PublicWeekView() {
       supabase.from('episode_materials' as any).select('id, slot_key, episode_date, title_options_json, selected_title_index, description_html, cover_url').eq('week_id', weekId),
     ]).then(async ([weekRes, pautasRes, matsRes]) => {
       if (weekRes.error || !weekRes.data) { setError('Semana não encontrada'); setLoading(false); return; }
-      setWeek(weekRes.data as any);
+      const weekData = weekRes.data as any;
+      setWeek(weekData);
       const pautaList = (pautasRes.data as any[]) || [];
       setPautas(pautaList);
       setMaterials((matsRes.data as any[]) || []);
 
-      // Load releases referenced by pautas
+      // Load releases referenced by pautas (reviews)
       const releaseIds = new Set<string>();
       pautaList.forEach((p: any) => {
         const inputs = p.raw_inputs_json || {};
         if (inputs.review_rafa_id) releaseIds.add(inputs.review_rafa_id);
         if (inputs.review_kilton_id) releaseIds.add(inputs.review_kilton_id);
+        if (inputs.selected_release_ids) {
+          (inputs.selected_release_ids as string[]).forEach(id => releaseIds.add(id));
+        }
       });
       if (releaseIds.size > 0) {
         const { data: relData } = await supabase
           .from('releases' as any)
-          .select('id, artist, album, youtube_url, spotify_url, deezer_url, apple_music_url, bandcamp_url, metal_archives_url')
+          .select('id, artist, album, release_date, country, youtube_url, spotify_url, deezer_url, apple_music_url, bandcamp_url, metal_archives_url')
           .in('id', Array.from(releaseIds));
-        setReleases((relData as any[]) || []);
+        const rels = (relData as any[]) || [];
+        setReleases(rels);
+
+        // Also load genres for these releases
+        if (rels.length > 0) {
+          const { data: genreData } = await supabase
+            .from('release_genres' as any)
+            .select('release_id, genre')
+            .in('release_id', rels.map(r => r.id));
+          if (genreData) {
+            const genreMap = new Map<string, string[]>();
+            (genreData as any[]).forEach((g: any) => {
+              if (!genreMap.has(g.release_id)) genreMap.set(g.release_id, []);
+              genreMap.get(g.release_id)!.push(g.genre);
+            });
+            rels.forEach(r => { (r as any).genres = genreMap.get(r.id) || []; });
+            setReleases([...rels]);
+          }
+        }
       }
+
+      // Load ALL releases for the week range (for Saturday "Demais Lançamentos")
+      const saturdayPauta = pautaList.find((p: any) => {
+        const wd = new Date(p.publication_date + 'T12:00:00').getDay();
+        return wd === 6;
+      });
+      if (saturdayPauta) {
+        const satDate = new Date(saturdayPauta.publication_date + 'T12:00:00');
+        const dPlus2 = new Date(satDate); dPlus2.setDate(satDate.getDate() + 2);
+        const dPlus8 = new Date(satDate); dPlus8.setDate(satDate.getDate() + 8);
+        const minDate = dPlus2.toISOString().slice(0, 10);
+        const maxDate = dPlus8.toISOString().slice(0, 10);
+
+        const { data: weekRelData } = await supabase
+          .from('releases' as any)
+          .select('id, artist, album, release_date, country, youtube_url, spotify_url, deezer_url, apple_music_url, bandcamp_url, metal_archives_url')
+          .gte('release_date', minDate)
+          .lte('release_date', maxDate)
+          .order('release_date');
+
+        const weekRels = (weekRelData as any[]) || [];
+        // Load genres for week releases
+        if (weekRels.length > 0) {
+          const { data: genreData } = await supabase
+            .from('release_genres' as any)
+            .select('release_id, genre')
+            .in('release_id', weekRels.map(r => r.id));
+          if (genreData) {
+            const genreMap = new Map<string, string[]>();
+            (genreData as any[]).forEach((g: any) => {
+              if (!genreMap.has(g.release_id)) genreMap.set(g.release_id, []);
+              genreMap.get(g.release_id)!.push(g.genre);
+            });
+            weekRels.forEach(r => { (r as any).genres = genreMap.get(r.id) || []; });
+          }
+        }
+        setAllReleases(weekRels);
+      }
+
       setLoading(false);
     }).catch(() => { setError('Erro ao carregar dados'); setLoading(false); });
   }, [weekId]);
@@ -289,6 +447,12 @@ export default function PublicWeekView() {
   weekEnd.setDate(weekStart.getDate() + 6);
   const headerLabel = `${weekStart.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })} – ${weekEnd.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}`;
 
+  // Merge all releases for the Saturday block
+  const mergedReleases = [...releases];
+  allReleases.forEach(r => {
+    if (!mergedReleases.find(mr => mr.id === r.id)) mergedReleases.push(r);
+  });
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border px-6 py-6 text-center">
@@ -312,7 +476,7 @@ export default function PublicWeekView() {
 
             {tabs.map(t => (
               <TabsContent key={t.key} value={t.key}>
-                <PautaDay pauta={t.pauta} releases={releases} />
+                <PautaDay pauta={t.pauta} releases={releases} allReleases={mergedReleases} />
               </TabsContent>
             ))}
           </Tabs>
