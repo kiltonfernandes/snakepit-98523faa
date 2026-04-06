@@ -1069,6 +1069,11 @@ export default function Pautas() {
               {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando na Wikipedia...</> : <><Wand2 className="h-3.5 w-3.5" /> Preencher Automaticamente</>}
             </Button>
           )}
+          {step.key === 'news' && (
+            <Button size="sm" variant="outline" className="gap-2 mt-2" onClick={handleAutoFillNews} disabled={loadingNews}>
+              {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando notícias...</> : <><Newspaper className="h-3.5 w-3.5" /> Preencher Automaticamente</>}
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
