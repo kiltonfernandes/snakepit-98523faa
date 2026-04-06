@@ -35,14 +35,9 @@ function getPautaSlot(pauta: Pauta): DaySlot {
   return slotMap[wd] || 'monday';
 }
 
-// D-90 to D-1: releases from 90 days before publication to the day before
-function getEligibleReviews(releases: Release[], publicationDate: string): Release[] {
-  const pub = new Date(publicationDate + 'T12:00:00');
-  const dMinus90 = new Date(pub); dMinus90.setDate(pub.getDate() - 90);
-  const dMinus1 = new Date(pub); dMinus1.setDate(pub.getDate() - 1);
-  const minDate = dMinus90.toISOString().slice(0, 10);
-  const maxDate = dMinus1.toISOString().slice(0, 10);
-  return releases.filter(r => r.release_date >= minDate && r.release_date <= maxDate);
+// No filter — show all releases for review selection
+function getEligibleReviews(releases: Release[], _publicationDate: string): Release[] {
+  return releases;
 }
 
 function getISOWeekLabel(dateStr: string): string {
