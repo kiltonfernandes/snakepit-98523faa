@@ -221,7 +221,7 @@ function PautaDay({ pauta, releases, allReleases, coverUrl }: { pauta: PublicPau
       {/* BLOCOS DO EPISÓDIO */}
       <section className="space-y-6">
         <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Blocos do episódio</h2>
-        {sections.map((sec, idx) => {
+        {filteredSections.map((sec, idx) => {
           const rawContent = data[sec.key]?.trim() || '';
           const content = rawContent ? cleanContent(rawContent) : null;
 
