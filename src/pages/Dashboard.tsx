@@ -55,7 +55,7 @@ export default function Dashboard() {
         pauta = weekPautas.find(p => getPautaSlot(p.publication_date) === day.key) || null;
       }
       const indicators: EpisodeCompletionIndicators = {
-        pauta: pauta?.status === 'finalized',
+        pauta: !!pauta && !['pesquisa', 'draft'].includes(pauta.status),
         title: mat?.selected_title_index != null,
         description: !!mat?.description_html,
         cover: !!mat?.cover_url,
