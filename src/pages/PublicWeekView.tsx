@@ -7,6 +7,7 @@ import heavynautaBadge from '@/assets/heavynauta-badge.svg';
 import { getSectionsForDay } from '@/lib/constants';
 import { DaySlot } from '@/lib/types';
 import { resolveAllLinks } from '@/lib/dynamic-links';
+import { countryFlag } from '@/lib/country-utils';
 
 interface PublicPauta {
   id: string;
@@ -83,22 +84,11 @@ function daySlotFromDate(dateStr: string): DaySlot {
 
 function ReleasePlatformLinks({ release }: { release: PublicRelease }) {
   const links = resolveAllLinks(release);
-  const platforms = [
-    { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
-    { key: 'spotify' as const, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
-    { key: 'metal_archives' as const, label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300' },
-  ];
-
   return (
     <span className="inline-flex items-center gap-1.5 ml-2">
-      {platforms.map((p, i, arr) => (
-        <span key={p.key} className="inline-flex items-center gap-0.5">
-          <a href={links[p.key]} target="_blank" rel="noopener noreferrer" className={`text-xs font-medium transition-colors ${p.color}`}>
-            {p.label}
-          </a>
-          {i < arr.length - 1 && <span className="text-foreground/20 text-xs">·</span>}
-        </span>
-      ))}
+      <a href={links.youtube} target="_blank" rel="noopener noreferrer" className="text-xs font-medium transition-colors text-red-400 hover:text-red-300">
+        YouTube
+      </a>
     </span>
   );
 }
