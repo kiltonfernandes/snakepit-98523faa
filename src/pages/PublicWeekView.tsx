@@ -187,9 +187,11 @@ function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; all
   );
 }
 
-function PautaDay({ pauta, releases, allReleases }: { pauta: PublicPauta; releases: PublicRelease[]; allReleases: PublicRelease[] }) {
+function PautaDay({ pauta, releases, allReleases, coverUrl }: { pauta: PublicPauta; releases: PublicRelease[]; allReleases: PublicRelease[]; coverUrl?: string | null }) {
   const slot = daySlotFromDate(pauta.publication_date);
   const sections = getSectionsForDay(slot);
+  // For Saturday, skip the AI-generated next_week_releases section (use structured block instead)
+  const filteredSections = slot === 'saturday' ? sections.filter(s => s.key !== 'next_week_releases') : sections;
   const data = (pauta.sections_json || {}) as Record<string, string>;
   const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
   const allLinks = (pauta.discovered_links_json || []) as string[];
@@ -198,6 +200,9 @@ function PautaDay({ pauta, releases, allReleases }: { pauta: PublicPauta; releas
   return (
     <div className="space-y-10">
       <header className="border-b border-foreground/10 pb-6 text-center">
+        {coverUrl && (
+          <img src={coverUrl} alt="Capa do episódio" className="mx-auto mb-4 max-h-64 rounded-lg object-cover" />
+        )}
         <h2 className="text-2xl font-bold tracking-tight text-foreground">SNAKEPIT</h2>
         <p className="mt-2 text-lg font-semibold text-foreground/80">
           {DAY_LABELS[slot]} — {d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
