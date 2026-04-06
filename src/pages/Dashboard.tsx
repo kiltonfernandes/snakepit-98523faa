@@ -130,14 +130,14 @@ export default function Dashboard() {
       yearMap[y][m].push(w);
     });
     return Object.entries(yearMap)
-      .sort(([a], [b]) => Number(b) - Number(a))
+      .sort(([a], [b]) => Number(a) - Number(b))
       .map(([year, months]) => ({
         year: Number(year),
         months: Object.entries(months)
-          .sort(([a], [b]) => Number(b) - Number(a))
+          .sort(([a], [b]) => Number(a) - Number(b))
           .map(([month, wks]) => ({
             month: Number(month),
-            weeks: wks.sort((a, b) => b.start_date.localeCompare(a.start_date)),
+            weeks: wks.sort((a, b) => a.start_date.localeCompare(b.start_date)),
           })),
       }));
   }, [weeks]);

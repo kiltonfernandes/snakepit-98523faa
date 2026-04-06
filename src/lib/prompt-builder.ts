@@ -106,18 +106,39 @@ function buildDayPayload(pauta: Pauta, releases: Release[]): DayPayload {
   }
 
   const enrichedInputs = { ...inputs };
+  // Helper to format release info with optional editor comments
+  const fmtRelease = (r: Release) => {
+    let s = `${r.artist} - ${r.album} (${r.release_date})`;
+    if (r.genres?.length) s += ` [${r.genres.join(', ')}]`;
+    if (r.comments) s += ` | Comentário do editor: ${r.comments}`;
+    return s;
+  };
+
   if (inputs.review_rafa_id) {
     const rel = releases.find(r => r.id === inputs.review_rafa_id);
-    if (rel) enrichedInputs.review_rafa_release = `${rel.artist} - ${rel.album} (${rel.release_date})`;
+    if (rel) enrichedInputs.review_rafa_release = fmtRelease(rel);
   }
   if (inputs.review_kilton_id) {
     const rel = releases.find(r => r.id === inputs.review_kilton_id);
-    if (rel) enrichedInputs.review_kilton_release = `${rel.artist} - ${rel.album} (${rel.release_date})`;
+    if (rel) enrichedInputs.review_kilton_release = fmtRelease(rel);
   }
   if (inputs.selected_release_ids?.length) {
     enrichedInputs.selected_releases = releases
       .filter(r => inputs.selected_release_ids.includes(r.id))
-      .map(r => `${r.artist} - ${r.album} (${r.release_date})`);
+      .map(r => fmtRelease(r));
+  }
+
+  // Generic data source enrichment: any input key ending in _id that references a release
+  for (const [key, val] of Object.entries(inputs)) {
+    if (key.endsWith('_id') && typeof val === 'string' && !enrichedInputs[key.replace('_id', '_release')]) {
+      const rel = releases.find(r => r.id === val);
+      if (rel) enrichedInputs[key.replace('_id', '_release')] = fmtRelease(rel);
+    }
+    if (key.endsWith('_ids') && Array.isArray(val) && val.length && !enrichedInputs[key.replace('_ids', '_releases')]) {
+      enrichedInputs[key.replace('_ids', '_releases')] = releases
+        .filter(r => val.includes(r.id))
+        .map(r => fmtRelease(r));
+    }
   }
 
   return {
