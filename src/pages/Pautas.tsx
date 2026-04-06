@@ -1251,6 +1251,9 @@ export default function Pautas() {
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
                     {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Wand2 className="h-3.5 w-3.5" /> Auto Aniversários</>}
                   </Button>
+                  <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillNews} disabled={loadingNews}>
+                    {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Newspaper className="h-3.5 w-3.5" /> Auto Notícias</>}
+                  </Button>
                   <Button size="sm" className="gap-2" onClick={handleSaveAll}>
                     <Save className="h-3.5 w-3.5" /> Salvar Todos
                   </Button>
