@@ -148,6 +148,7 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
 }
 
 export default function Releases() {
+  const navigate = useNavigate();
   const { releases, addRelease, updateRelease, deleteRelease, importReleases, loadReleases, pautas } = useApp();
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
