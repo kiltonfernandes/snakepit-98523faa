@@ -114,20 +114,25 @@ export async function generateCoverImage({ imageUrl, title, onComplete, onError 
     ctx.save();
     ctx.clip();
 
+    // Always cover-fill the frame — no cropping artifacts
     const imageRatio = img.width / img.height;
     const targetRatio = imageAreaW / imageAreaH;
-    let drawWidth = imageAreaW;
-    let drawHeight = imageAreaH;
-    let offsetX = frameMargin;
-    let offsetY = frameTop;
+    let drawWidth: number;
+    let drawHeight: number;
+    let offsetX: number;
+    let offsetY: number;
 
     if (imageRatio > targetRatio) {
+      // Image is wider than target: match height, center horizontally
       drawHeight = imageAreaH;
       drawWidth = drawHeight * imageRatio;
       offsetX = frameMargin - (drawWidth - imageAreaW) / 2;
+      offsetY = frameTop;
     } else {
+      // Image is taller than target: match width, center vertically
       drawWidth = imageAreaW;
       drawHeight = drawWidth / imageRatio;
+      offsetX = frameMargin;
       offsetY = frameTop - (drawHeight - imageAreaH) / 2;
     }
 

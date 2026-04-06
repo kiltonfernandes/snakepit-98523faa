@@ -15,6 +15,7 @@ import { normalizeCountryCode } from '@/lib/country-utils';
 import { NORMALIZED_GENRES } from '@/lib/constants';
 import * as CountryFlags from 'country-flag-icons/react/3x2';
 import { motion } from 'framer-motion';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from 'recharts';
 
 const MONTHS_PT = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const MONTHS_FULL = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
@@ -46,6 +47,12 @@ function renderFlag(code: string, className = 'h-4 w-5 rounded-[2px] overflow-hi
   return <FC className={className} />;
 }
 
+const CHART_COLORS = [
+  'hsl(var(--primary))', 'hsl(var(--chart-2, 280 60% 50%))', 'hsl(var(--chart-3, 200 60% 50%))',
+  'hsl(var(--chart-4, 120 60% 40%))', 'hsl(var(--chart-5, 40 80% 50%))', '#e74c3c', '#9b59b6', '#1abc9c',
+  '#f39c12', '#2ecc71', '#e67e22',
+];
+
 export default function ReleaseAnalytics() {
   const navigate = useNavigate();
   const { releases } = useApp();
@@ -62,6 +69,7 @@ export default function ReleaseAnalytics() {
   const [genreFilter, setGenreFilter] = useState<string>('all');
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [monthRange, setMonthRange] = useState<number[]>([1, 12]);
+  const [drilldown, setDrilldown] = useState<{ type: string; value: string } | null>(null);
 
   const filtered = useMemo(() => {
     return releases.filter(r => {
@@ -190,19 +198,28 @@ export default function ReleaseAnalytics() {
     return `${MONTHS_PT[Number(m) - 1]} ${y}`;
   };
 
-  const BarVisual = ({ items, maxVal }: { items: [string, number][]; maxVal: number }) => (
-    <div className="space-y-1.5">
-      {items.map(([label, val]) => (
-        <div key={label} className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-24 truncate text-right">{label}</span>
-          <div className="flex-1 h-5 bg-muted/30 rounded-sm overflow-hidden">
-            <div className="h-full bg-primary/60 rounded-sm transition-all" style={{ width: `${Math.max((val / maxVal) * 100, 2)}%` }} />
-          </div>
-          <span className="text-xs font-mono w-8 text-right">{val}</span>
-        </div>
-      ))}
-    </div>
-  );
+  // Drilldown releases
+  const drilldownReleases = useMemo(() => {
+    if (!drilldown) return [];
+    return filtered.filter(r => {
+      if (drilldown.type === 'genre') {
+        return (r.genres || []).some(g => normalizeGenreToMain(g) === drilldown.value);
+      }
+      if (drilldown.type === 'country') {
+        return normalizeCountryCode(r.country) === drilldown.value;
+      }
+      if (drilldown.type === 'month') {
+        const d = new Date(r.release_date + 'T12:00:00');
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === drilldown.value;
+      }
+      return false;
+    });
+  }, [drilldown, filtered]);
+
+  const genreChartData = useMemo(() => byGenre.map(([g, c]) => ({ name: g, count: c })), [byGenre]);
+  const monthChartData = useMemo(() => byMonth.map(([k, v]) => ({ name: formatMonthLabel(k), key: k, count: v })), [byMonth]);
+  const countryChartData = useMemo(() => byCountry.slice(0, 15).map(([code, data]) => ({ name: data.label, code, count: data.count })), [byCountry]);
+  const genrePieData = useMemo(() => byGenre.slice(0, 8).map(([g, c]) => ({ name: g, value: c })), [byGenre]);
 
   return (
     <div className="space-y-6">
@@ -399,16 +416,34 @@ export default function ReleaseAnalytics() {
         </TabsContent>
 
         {/* COUNTRIES */}
-        <TabsContent value="countries" className="mt-4">
+        <TabsContent value="countries" className="mt-4 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Lançamentos por País</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm">Top 15 Países</CardTitle></CardHeader>
             <CardContent>
-              <ScrollArea className="h-[500px]">
+              {countryChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={countryChartData} layout="vertical" margin={{ left: 60 }}
+                    onClick={(e) => e?.activePayload?.[0] && setDrilldown({ type: 'country', value: e.activePayload[0].payload.code })}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={60} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Todos os Países</CardTitle></CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[300px]">
                 <div className="space-y-2">
                   {byCountry.map(([code, data], i) => (
                     <motion.div key={code} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
                       className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-muted/20 cursor-pointer"
-                      onClick={() => setCountryFilter(code)}
+                      onClick={() => setDrilldown({ type: 'country', value: code })}
                     >
                       <span className="text-xs text-muted-foreground w-6 text-right font-mono">{i + 1}</span>
                       {renderFlag(code)}
@@ -426,12 +461,39 @@ export default function ReleaseAnalytics() {
         </TabsContent>
 
         {/* GENRES */}
-        <TabsContent value="genres" className="mt-4">
+        <TabsContent value="genres" className="mt-4 space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Lançamentos por Gênero Normalizado</CardTitle></CardHeader>
             <CardContent>
-              {byGenre.length > 0 && (
-                <BarVisual items={byGenre.map(([g, c]) => [g, c])} maxVal={byGenre[0][1]} />
+              {genreChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={genreChartData} layout="vertical" margin={{ left: 80 }}
+                    onClick={(e) => e?.activePayload?.[0] && setDrilldown({ type: 'genre', value: e.activePayload[0].payload.name })}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={80} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Genre pie chart */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Distribuição por Gênero</CardTitle></CardHeader>
+            <CardContent className="flex justify-center">
+              {genrePieData.length > 0 && (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie data={genrePieData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      onClick={(_, idx) => setDrilldown({ type: 'genre', value: genrePieData[idx].name })}>
+                      {genrePieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} cursor="pointer" />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                  </PieChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
@@ -501,17 +563,76 @@ export default function ReleaseAnalytics() {
         </TabsContent>
 
         {/* TIMELINE */}
-        <TabsContent value="timeline" className="mt-4">
+        <TabsContent value="timeline" className="mt-4 space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Lançamentos por Mês</CardTitle></CardHeader>
             <CardContent>
-              {byMonth.length > 0 && (
-                <BarVisual items={byMonth.map(([k, v]) => [formatMonthLabel(k), v])} maxVal={topMonth?.[1] || 1} />
+              {monthChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={monthChartData}
+                    onClick={(e) => e?.activePayload?.[0] && setDrilldown({ type: 'month', value: e.activePayload[0].payload.key })}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Trend line */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Tendência de Lançamentos</CardTitle></CardHeader>
+            <CardContent>
+              {monthChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={monthChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: 'hsl(var(--primary))' }} />
+                  </LineChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Drilldown Panel */}
+      {drilldown && (
+        <Card className="mt-4">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm">
+              Drilldown: {drilldown.type === 'genre' ? drilldown.value : drilldown.type === 'country' ? drilldown.value : formatMonthLabel(drilldown.value)}
+              <Badge variant="secondary" className="ml-2">{drilldownReleases.length} releases</Badge>
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setDrilldown(null)} className="text-xs">✕ Fechar</Button>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-1">
+                {drilldownReleases.map(r => (
+                  <div key={r.id} className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-muted/20 text-sm">
+                    {renderFlag(normalizeCountryCode(r.country) || '')}
+                    <span className="font-medium">{r.artist}</span>
+                    <span className="text-muted-foreground italic">{r.album}</span>
+                    <span className="text-xs text-muted-foreground ml-auto">{r.release_date}</span>
+                    <div className="flex gap-1">
+                      {(r.genres || []).slice(0, 2).map(g => (
+                        <Badge key={g} variant="secondary" className="text-[8px]">{g}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

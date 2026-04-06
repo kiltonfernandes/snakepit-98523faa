@@ -102,10 +102,11 @@ function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; 
     }
     const genres = Array.from(genreMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => a.artist.localeCompare(b.artist)) }));
+      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => b.release_date.localeCompare(a.release_date)) }));
     result.push({ weekLabel, genres });
   }
-  result.sort((a, b) => a.weekLabel.localeCompare(b.weekLabel));
+  // Sort weeks from most recent to oldest
+  result.sort((a, b) => b.weekLabel.localeCompare(a.weekLabel));
   return result;
 }
 
@@ -267,7 +268,10 @@ export default function Pautas() {
         const fives = anns.filter(a => a.yearsAgo % 5 === 0);
         const best = milestones[0] || fives[0] || anns[0];
 
-        const text = `Aniversário de ${best.yearsAgo} anos de "${best.album}" (${best.artist}, ${best.year})`;
+        // Normalize: trim, clean extra spaces, capitalize properly for hyperlink parsing
+        const artist = best.artist.trim().replace(/\s+/g, ' ');
+        const album = best.album.trim().replace(/\s+/g, ' ');
+        const text = `${artist} — ${album} (${best.year}, ${best.yearsAgo} anos)`;
         updateRawInput(pauta.id, 'anniversary', text);
         filled++;
       }
@@ -811,6 +815,17 @@ export default function Pautas() {
 
   const flowTotalSteps = FLOW_STEPS.length + 1;
 
+  // Collect all release IDs already used in reviews across ALL pautas (not just this week)
+  const usedReviewIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of pautas) {
+      const inputs = (p.raw_inputs_json || {}) as Record<string, any>;
+      if (inputs.review_rafa_id) ids.add(inputs.review_rafa_id);
+      if (inputs.review_kilton_id) ids.add(inputs.review_kilton_id);
+    }
+    return ids;
+  }, [pautas]);
+
   const ReleasePicker = ({ pauta, inputKey, label }: { pauta: Pauta; inputKey: string; label: string }) => {
     const [search, setSearch] = useState('');
     const [open, setOpen] = useState(false);
@@ -819,9 +834,12 @@ export default function Pautas() {
     const selectedId = inputs[inputKey];
     const selected = releases.find(r => r.id === selectedId);
 
+    // Exclude releases already used in any review (except the current selection)
+    const available = eligible.filter(r => r.id === selectedId || !usedReviewIds.has(r.id));
+
     const filtered = search.trim()
-      ? eligible.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
-      : eligible;
+      ? available.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
+      : available;
 
     const grouped = groupReleasesByWeekAndGenre(filtered);
 
@@ -878,7 +896,7 @@ export default function Pautas() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground p-3 text-center italic">
-                  {eligible.length === 0 ? 'Nenhum release na janela D-90 a D-1' : 'Nenhum resultado'}
+                  {eligible.length === 0 ? 'Nenhum release na janela D-90 a D-1' : available.length === 0 ? 'Todos os releases já foram usados em reviews' : 'Nenhum resultado'}
                 </p>
               )}
             </ScrollArea>

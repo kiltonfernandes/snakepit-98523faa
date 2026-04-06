@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -147,7 +148,8 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
 }
 
 export default function Releases() {
-  const { releases, addRelease, updateRelease, deleteRelease, importReleases, loadReleases } = useApp();
+  const navigate = useNavigate();
+  const { releases, addRelease, updateRelease, deleteRelease, importReleases, loadReleases, pautas } = useApp();
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const [countryFilter, setCountryFilter] = useState<string | null>(null);
@@ -197,6 +199,17 @@ export default function Releases() {
       .sort((a, b) => a[1].localeCompare(b[1]))
       .map(([code, label]) => ({ code, label }));
   }, [releases]);
+
+  // Build map of release ID -> pauta info for review tags
+  const reviewMap = useMemo(() => {
+    const map = new Map<string, { pautaId: string; reviewer: string; pubDate: string }>();
+    pautas.forEach(p => {
+      const inputs = (p.raw_inputs_json || {}) as Record<string, any>;
+      if (inputs.review_rafa_id) map.set(inputs.review_rafa_id, { pautaId: p.id, reviewer: 'Rafa', pubDate: p.publication_date });
+      if (inputs.review_kilton_id) map.set(inputs.review_kilton_id, { pautaId: p.id, reviewer: 'Kilton', pubDate: p.publication_date });
+    });
+    return map;
+  }, [pautas]);
 
   const allGenres = useMemo(() => {
     const set = new Set<string>();
@@ -776,6 +789,18 @@ export default function Releases() {
                             {(r.genres || []).slice(0, 2).map(g => (
                               <Badge key={g} variant="secondary" className="text-[8px] h-[18px] rounded-full px-1.5">{g}</Badge>
                             ))}
+                            {reviewMap.has(r.id) && (
+                              <Badge
+                                className="text-[8px] h-[18px] rounded-full px-1.5 bg-primary/20 text-primary border-primary/30 cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const info = reviewMap.get(r.id)!;
+                                  navigate(`/pautas`);
+                                }}
+                              >
+                                ★ Review {reviewMap.get(r.id)!.reviewer} ({reviewMap.get(r.id)!.pubDate.slice(5)})
+                              </Badge>
+                            )}
                           </div>
                         </div>
 

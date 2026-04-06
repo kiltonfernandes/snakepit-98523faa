@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle,
   ChevronDown, ChevronRight as ChevronRightIcon, BarChart3, TrendingUp,
-  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye,
+  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
@@ -21,6 +21,7 @@ import * as CountryFlags from 'country-flag-icons/react/3x2';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const MONTHS_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -532,6 +533,15 @@ export default function Dashboard() {
         <Button variant="outline" onClick={() => navigate('/calendar')} className="gap-2">
           Calendário <Calendar className="h-4 w-4" />
         </Button>
+        {currentWeek && (
+          <Button variant="outline" className="gap-2" onClick={() => {
+            const url = `${window.location.origin}/week/${currentWeek.id}`;
+            navigator.clipboard.writeText(url);
+            toast.success('Link copiado!');
+          }}>
+            <Link2 className="h-4 w-4" /> Copiar Link da Semana
+          </Button>
+        )}
       </div>
     </div>
   );
