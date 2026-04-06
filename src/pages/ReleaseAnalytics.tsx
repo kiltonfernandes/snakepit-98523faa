@@ -69,6 +69,7 @@ export default function ReleaseAnalytics() {
   const [genreFilter, setGenreFilter] = useState<string>('all');
   const [countryFilter, setCountryFilter] = useState<string>('all');
   const [monthRange, setMonthRange] = useState<number[]>([1, 12]);
+  const [drilldown, setDrilldown] = useState<{ type: string; value: string } | null>(null);
 
   const filtered = useMemo(() => {
     return releases.filter(r => {
