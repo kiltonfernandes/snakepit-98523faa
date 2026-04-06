@@ -144,11 +144,12 @@ function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; all
           <div className="space-y-4">
             {highlights.map(r => {
               const genreStr = r.genres?.length ? r.genres.join(', ') : '';
-              const countryStr = r.country || '';
-              const meta = [genreStr, countryStr].filter(Boolean).join(', ');
+              const flag = countryFlag(r.country);
+              const meta = [genreStr, r.country].filter(Boolean).join(', ');
               return (
                 <div key={r.id} className="border-l-4 border-primary pl-4">
                   <p className="font-bold text-foreground">
+                    {flag && <span className="mr-1">{flag}</span>}
                     {r.artist} — {r.album} {meta && <span className="text-muted-foreground font-normal">({meta})</span>} — {r.release_date}
                   </p>
                   <ReleasePlatformLinks release={r} />
@@ -163,12 +164,14 @@ function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; all
         <div>
           <h3 className="text-lg font-bold uppercase tracking-wider text-foreground mb-4">📆 Demais Lançamentos da Semana</h3>
           <div className="space-y-2">
-            {remaining.map(r => {
+            {remaining.slice(0, 20).map(r => {
               const genreStr = r.genres?.length ? r.genres.join(', ') : '';
+              const flag = countryFlag(r.country);
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-1 text-foreground/80">
                   <span className="text-muted-foreground text-sm">{r.release_date.slice(5)}</span>
                   <span>—</span>
+                  {flag && <span>{flag}</span>}
                   <span className="font-medium">{r.artist}</span>
                   <span>—</span>
                   <span>{r.album}</span>
