@@ -1,6 +1,6 @@
 import { cn } from '@/lib/utils';
 
-type StatusVariant = 'draft' | 'in_progress' | 'review' | 'finalized' | 'generated' | 'needs_review' | 'pending' | 'processing' | 'ready' | 'published' | 'used' | 'archived' | 'reviewed';
+type StatusVariant = 'draft' | 'in_progress' | 'review' | 'finalized' | 'generated' | 'needs_review' | 'pending' | 'processing' | 'ready' | 'published' | 'used' | 'archived' | 'reviewed' | 'pesquisa' | 'revisao' | 'criando_materiais' | 'pronto_gravar' | 'pronto_agendar' | 'agendado' | 'publicado';
 
 const variantStyles: Record<StatusVariant, string> = {
   draft: 'bg-muted text-muted-foreground',
@@ -16,6 +16,13 @@ const variantStyles: Record<StatusVariant, string> = {
   used: 'bg-emerald-500/20 text-emerald-400',
   archived: 'bg-muted text-muted-foreground',
   reviewed: 'bg-primary/20 text-primary',
+  pesquisa: 'bg-blue-500/20 text-blue-400',
+  revisao: 'bg-yellow-500/20 text-yellow-400',
+  criando_materiais: 'bg-primary/20 text-primary',
+  pronto_gravar: 'bg-orange-500/20 text-orange-400',
+  pronto_agendar: 'bg-emerald-500/20 text-emerald-400',
+  agendado: 'bg-cyan-500/20 text-cyan-400',
+  publicado: 'bg-lavender/20 text-lavender',
 };
 
 const labels: Record<StatusVariant, string> = {
@@ -32,6 +39,13 @@ const labels: Record<StatusVariant, string> = {
   used: 'Usado',
   archived: 'Arquivado',
   reviewed: 'Revisado',
+  pesquisa: 'Pesquisa',
+  revisao: 'Revisão',
+  criando_materiais: 'Criando Materiais',
+  pronto_gravar: 'Pronto p/ Gravar',
+  pronto_agendar: 'Pronto p/ Agendar',
+  agendado: 'Agendado',
+  publicado: 'Publicado',
 };
 
 interface StatusBadgeProps {
@@ -40,13 +54,15 @@ interface StatusBadgeProps {
 }
 
 export function StatusBadge({ status, className }: StatusBadgeProps) {
+  const style = variantStyles[status] || variantStyles.draft;
+  const label = labels[status] || status;
   return (
     <span className={cn(
       'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
-      variantStyles[status],
+      style,
       className
     )}>
-      {labels[status]}
+      {label}
     </span>
   );
 }
