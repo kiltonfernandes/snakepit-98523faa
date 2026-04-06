@@ -116,7 +116,6 @@ function getEligibleSaturdayReleases(releases: Release[], publicationDate: strin
   const minDate = dPlus2.toISOString().slice(0, 10);
   const maxDate = dPlus8.toISOString().slice(0, 10);
   return releases.filter(r => r.release_date >= minDate && r.release_date <= maxDate);
-  });
 }
 
 // Flow step definitions - added saturday_releases step
