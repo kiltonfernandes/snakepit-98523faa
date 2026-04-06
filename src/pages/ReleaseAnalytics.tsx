@@ -508,65 +508,22 @@ export default function ReleaseAnalytics() {
 
         {/* SCENES */}
         <TabsContent value="scenes" className="mt-4 space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Flame className="h-4 w-4 text-orange-400" /> Top 10 Cenas Mais Ativas</CardTitle></CardHeader>
-              <CardContent>
-                <ScrollArea className="h-[400px]">
-                  <div className="space-y-2">
-                    {topScenes.map((sc, i) => (
-                      <div key={`${sc.country}:${sc.genre}`} className="flex items-center gap-2 py-1.5 px-2 rounded hover:bg-muted/20">
-                        <span className="text-xs text-muted-foreground w-5 font-mono">{i + 1}</span>
-                        {renderFlag(sc.country)}
-                        <span className="text-sm flex-1 truncate">{sc.genre}</span>
-                        <Badge variant="outline" className="text-[10px]">{sc.uniqueArtists} artistas</Badge>
-                        <span className="text-xs font-mono font-bold">{sc.count}</span>
-                      </div>
-                    ))}
-                  </div>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader><CardTitle className="text-sm">Resumo de Cenas</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold">{totalScenes}</p>
-                    <p className="text-xs text-muted-foreground">Cenas Ativas</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold">{avgPerScene.toFixed(1)}</p>
-                    <p className="text-xs text-muted-foreground">Média/Cena</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold">{scenes.filter(s => s.count >= 5).length}</p>
-                    <p className="text-xs text-muted-foreground">Cenas com 5+</p>
-                  </div>
-                  <div className="text-center p-3 rounded-lg bg-muted/20">
-                    <p className="text-2xl font-bold">{new Set(scenes.map(s => s.country)).size}</p>
-                    <p className="text-xs text-muted-foreground">Países com Cena</p>
-                  </div>
-                </div>
-
-                {bottomScenes.length > 0 && (
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-2 font-medium">Cenas Menos Ativas</p>
-                    <div className="space-y-1.5">
-                      {bottomScenes.map(sc => (
-                        <div key={`${sc.country}:${sc.genre}`} className="flex items-center gap-2 text-sm">
-                          {renderFlag(sc.country)}
-                          <span className="flex-1 truncate">{sc.genre}</span>
-                          <span className="text-xs font-mono text-muted-foreground">{sc.count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
+          <ScenesTab
+            scenes={scenes}
+            filtered={filtered}
+            totalScenes={totalScenes}
+            avgPerScene={avgPerScene}
+            sceneSearch={sceneSearch}
+            setSceneSearch={setSceneSearch}
+            sceneGenreFilter={sceneGenreFilter}
+            setSceneGenreFilter={setSceneGenreFilter}
+            sceneCountryFilter={sceneCountryFilter}
+            setSceneCountryFilter={setSceneCountryFilter}
+            sceneMinCount={sceneMinCount}
+            setSceneMinCount={setSceneMinCount}
+            sceneDrilldown={sceneDrilldown}
+            setSceneDrilldown={setSceneDrilldown}
+          />
         </TabsContent>
 
         {/* TIMELINE */}
