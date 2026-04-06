@@ -787,6 +787,18 @@ export default function Releases() {
                             {(r.genres || []).slice(0, 2).map(g => (
                               <Badge key={g} variant="secondary" className="text-[8px] h-[18px] rounded-full px-1.5">{g}</Badge>
                             ))}
+                            {reviewMap.has(r.id) && (
+                              <Badge
+                                className="text-[8px] h-[18px] rounded-full px-1.5 bg-primary/20 text-primary border-primary/30 cursor-pointer"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const info = reviewMap.get(r.id)!;
+                                  navigate(`/pautas`);
+                                }}
+                              >
+                                ★ Review {reviewMap.get(r.id)!.reviewer} ({reviewMap.get(r.id)!.pubDate.slice(5)})
+                              </Badge>
+                            )}
                           </div>
                         </div>
 
