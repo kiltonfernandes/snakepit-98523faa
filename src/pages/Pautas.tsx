@@ -1655,7 +1655,49 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+      {/* + Pauta Dialog */}
+      <Dialog open={addPautaDialogOpen} onOpenChange={setAddPautaDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Pauta</DialogTitle>
+            <DialogDescription>Selecione a data e o template. A pauta será vinculada à semana correspondente (criada automaticamente se não existir).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Data da Pauta</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newPautaDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {newPautaDate ? format(newPautaDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione uma data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={newPautaDate} onSelect={setNewPautaDate} locale={ptBR} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Template</Label>
+              <Select value={newPautaTemplateId} onValueChange={setNewPautaTemplateId}>
+                <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Padrão (sem template)</SelectItem>
+                  {templates.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddPautaDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddPauta} disabled={!newPautaDate}>Criar Pauta</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remover Semana</DialogTitle>
