@@ -218,17 +218,23 @@ export default function Pautas() {
     bannedTerms,
   }), [settings, releases, bannedTerms]);
 
-  // Auto-finalize check on pauta changes
+  // Auto-compute pauta status based on pauta + material state
+  const weekMats = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
   useEffect(() => {
     if (!selectedWeek) return;
     for (const pauta of weekPautas) {
-      if (shouldAutoFinalize(pauta, releases)) {
-        updatePauta(pauta.id, { status: 'finalized', finalized_at: new Date().toISOString() });
+      const mat = weekMats.find(m => m.slot_key === getPautaSlot(pauta) || m.episode_date === pauta.publication_date);
+      const computed = computePautaStatus(pauta, mat);
+      if (pauta.status !== computed) {
+        updatePauta(pauta.id, { 
+          status: computed, 
+          ...(computed === 'revisao' && !pauta.finalized_at ? { finalized_at: new Date().toISOString() } : {}),
+          warnings_json: [],
+        });
         recalcWeekStatus(selectedWeek.id);
-        toast.success(`Pauta ${pauta.publication_date} auto-finalizada`);
       }
     }
-  }, [weekPautas.map(p => JSON.stringify({ s: p.sections_json, i: p.raw_inputs_json, st: p.status })).join(',')]);
+  }, [weekPautas.map(p => JSON.stringify({ s: p.sections_json, i: p.raw_inputs_json, st: p.status })).join(','), weekMats.map(m => JSON.stringify({ t: m.selected_title_index, d: !!m.description_html, c: !!m.cover_url, sp: m.spotify_link })).join(',')]);
 
   const handleCreateWeek = () => {
     if (!newWeekDate) return;
@@ -659,6 +665,10 @@ export default function Pautas() {
   const finalizePauta = (id: string) => {
     const pauta = pautas.find(p => p.id === id);
     if (!pauta) return;
+    const mat = weekMats.find(m => m.slot_key === getPautaSlot(pauta) || m.episode_date === pauta.publication_date);
+    const computed = computePautaStatus(pauta, mat);
+    
+    // Dynamic warnings
     const slot = getPautaSlot(pauta);
     const sections = getSectionsForDay(slot);
     const data = (pauta.sections_json || {}) as Record<string, string>;
@@ -675,12 +685,11 @@ export default function Pautas() {
       warnings.push(`Seções vazias: ${empty.map(s => s.label).join(', ')}`);
     }
 
+    updatePauta(id, { status: computed, warnings_json: warnings, ...(computed !== 'pesquisa' ? { finalized_at: new Date().toISOString() } : {}) });
     if (warnings.length > 0) {
-      updatePauta(id, { status: 'needs_review', warnings_json: warnings });
-      toast.warning(`Pauta enviada para revisão: ${warnings.join('; ')}`);
+      toast.warning(`Avisos: ${warnings.join('; ')}`);
     } else {
-      updatePauta(id, { status: 'finalized', finalized_at: new Date().toISOString(), warnings_json: [] });
-      toast.success('Pauta finalizada');
+      toast.success(`Status atualizado: ${computed}`);
     }
     if (selectedWeek) recalcWeekStatus(selectedWeek.id);
   };
