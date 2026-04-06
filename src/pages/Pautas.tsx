@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle, Wand2 } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle, Wand2, Newspaper } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { Calendar } from '@/components/ui/calendar';
@@ -233,6 +233,7 @@ export default function Pautas() {
   };
 
   const [loadingAnniversaries, setLoadingAnniversaries] = useState(false);
+  const [loadingNews, setLoadingNews] = useState(false);
 
   const getRawInputs = (pauta: Pauta) => (pauta.raw_inputs_json || {}) as Record<string, any>;
 
@@ -280,6 +281,44 @@ export default function Pautas() {
       toast.error(`Erro: ${e.message}`);
     } finally {
       setLoadingAnniversaries(false);
+    }
+  }, [selectedWeek, weekPautas, updateRawInput]);
+
+  const handleAutoFillNews = useCallback(async () => {
+    if (!selectedWeek) return;
+    setLoadingNews(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('search-metal-news', {
+        body: { week_start: selectedWeek.start_date, max_per_day: 3 },
+      });
+      if (error) throw new Error(error.message || 'Erro ao buscar notícias');
+      const newsMap: Record<string, { title: string; link: string; source: string; why: string }[]> = data?.news || {};
+
+      let filled = 0;
+      for (const pauta of weekPautas) {
+        const slot = getPautaSlot(pauta);
+        if (slot === 'saturday' || slot === 'sunday') continue;
+        const dateStr = pauta.publication_date;
+        const newsItems = newsMap[dateStr];
+        if (!newsItems || newsItems.length === 0) continue;
+
+        const best = newsItems[0];
+        updateRawInput(pauta.id, 'news_link', best.link);
+        updateRawInput(pauta.id, 'comment_news', `${best.title} (${best.source}) — ${best.why || ''}`);
+        filled++;
+      }
+
+      const srcCount = data?.raw_count || 0;
+      const sources = (data?.sources || []).join(', ');
+      if (filled > 0) {
+        toast.success(`${filled} notícias preenchidas (${srcCount} artigos de ${sources})`);
+      } else {
+        toast.info('Nenhuma notícia relevante encontrada para esta semana');
+      }
+    } catch (e: any) {
+      toast.error(`Erro: ${e.message}`);
+    } finally {
+      setLoadingNews(false);
     }
   }, [selectedWeek, weekPautas, updateRawInput]);
 
@@ -1030,6 +1069,11 @@ export default function Pautas() {
               {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando na Wikipedia...</> : <><Wand2 className="h-3.5 w-3.5" /> Preencher Automaticamente</>}
             </Button>
           )}
+          {step.key === 'news' && (
+            <Button size="sm" variant="outline" className="gap-2 mt-2" onClick={handleAutoFillNews} disabled={loadingNews}>
+              {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando notícias...</> : <><Newspaper className="h-3.5 w-3.5" /> Preencher Automaticamente</>}
+            </Button>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1211,6 +1255,9 @@ export default function Pautas() {
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
                     {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Wand2 className="h-3.5 w-3.5" /> Auto Aniversários</>}
+                  </Button>
+                  <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillNews} disabled={loadingNews}>
+                    {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Newspaper className="h-3.5 w-3.5" /> Auto Notícias</>}
                   </Button>
                   <Button size="sm" className="gap-2" onClick={handleSaveAll}>
                     <Save className="h-3.5 w-3.5" /> Salvar Todos
