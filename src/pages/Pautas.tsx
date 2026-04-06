@@ -23,7 +23,7 @@ import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
-import { Pauta, PautaSections, DaySlot, Release } from '@/lib/types';
+import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, type PromptBuildContext } from '@/lib/prompt-builder';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
