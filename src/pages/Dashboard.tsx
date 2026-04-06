@@ -92,7 +92,7 @@ export default function Dashboard() {
     const c = { draft: 0, generating: 0, finalized: 0, total: currentWeekPautas.length };
     currentWeekPautas.forEach(p => {
       if (p.status === 'finalized') c.finalized++;
-      else if (p.status === 'generating') c.generating++;
+      else if (p.status === 'generated') c.generating++;
       else c.draft++;
     });
     return c;
