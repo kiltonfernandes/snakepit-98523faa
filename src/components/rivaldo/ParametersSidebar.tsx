@@ -54,7 +54,7 @@ function SliderField({
 }
 
 function Section({
-  title, icon: Icon, children, defaultOpen = true,
+  title, icon: Icon, children, defaultOpen = false,
 }: {
   title: string; icon: React.ElementType; children: React.ReactNode; defaultOpen?: boolean;
 }) {

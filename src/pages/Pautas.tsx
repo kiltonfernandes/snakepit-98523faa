@@ -102,10 +102,11 @@ function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; 
     }
     const genres = Array.from(genreMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => a.artist.localeCompare(b.artist)) }));
+      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => b.release_date.localeCompare(a.release_date)) }));
     result.push({ weekLabel, genres });
   }
-  result.sort((a, b) => a.weekLabel.localeCompare(b.weekLabel));
+  // Sort weeks from most recent to oldest
+  result.sort((a, b) => b.weekLabel.localeCompare(a.weekLabel));
   return result;
 }
 
