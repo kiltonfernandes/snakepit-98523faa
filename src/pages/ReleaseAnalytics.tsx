@@ -47,6 +47,12 @@ function renderFlag(code: string, className = 'h-4 w-5 rounded-[2px] overflow-hi
   return <FC className={className} />;
 }
 
+const CHART_COLORS = [
+  'hsl(var(--primary))', 'hsl(var(--chart-2, 280 60% 50%))', 'hsl(var(--chart-3, 200 60% 50%))',
+  'hsl(var(--chart-4, 120 60% 40%))', 'hsl(var(--chart-5, 40 80% 50%))', '#e74c3c', '#9b59b6', '#1abc9c',
+  '#f39c12', '#2ecc71', '#e67e22',
+];
+
 export default function ReleaseAnalytics() {
   const navigate = useNavigate();
   const { releases } = useApp();
