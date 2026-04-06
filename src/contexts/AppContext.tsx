@@ -26,6 +26,7 @@ interface AppContextType {
   updateWeek: (id: string, w: Partial<EditorialWeek>) => void;
   deleteWeek: (id: string) => void;
   recalcWeekStatus: (weekId: string) => void;
+  addPauta: (pauta: Pauta) => void;
   updatePauta: (id: string, p: Partial<Pauta>) => void;
   getPautasForWeek: (weekId: string) => Pauta[];
   updateMaterial: (id: string, m: Partial<EpisodeMaterial>) => void;
