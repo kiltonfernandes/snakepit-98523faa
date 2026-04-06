@@ -257,6 +257,24 @@ export async function runPipeline(
     const processedMaster = mixVoiceTracks(voiceBuffers, onLog);
     applyGainToBuffer(processedMaster, params.masterGainDb);
 
+    // Add pre-master silence (BGM plays alone before voice starts)
+    const preSilenceSamples = Math.round(processedMaster.sampleRate * (params.bgmPreMasterSilence || 0));
+    // Add post-master silence (BGM plays alone after voice ends)
+    const postSilenceSamples = Math.round(processedMaster.sampleRate * (params.bgmPostMasterSilence || 0));
+
+    let masterForDuck: AudioBuffer;
+    if (preSilenceSamples > 0 || postSilenceSamples > 0) {
+      const extendedLength = preSilenceSamples + processedMaster.length + postSilenceSamples;
+      masterForDuck = monoDataToAudioBuffer(new Float32Array(extendedLength), processedMaster.sampleRate);
+      const dst = masterForDuck.getChannelData(0);
+      const src = processedMaster.getChannelData(0);
+      // Pre-silence is zeros (already zeroed), then master, then post-silence (zeros)
+      dst.set(src, preSilenceSamples);
+      onLog(`Silêncio pré-master: ${params.bgmPreMasterSilence}s | pós-master: ${params.bgmPostMasterSilence}s`, 'info');
+    } else {
+      masterForDuck = processedMaster;
+    }
+
     onLog('Decodificando trilha, intro e outro...', 'step');
     const [bgmRaw, introRaw, outroRaw] = await Promise.all([
       decodeFile(input.bgm),
@@ -264,16 +282,16 @@ export async function runPipeline(
       decodeFile(input.outro),
     ]);
 
-    const bgm = ensureSampleRate(bgmRaw, processedMaster.sampleRate);
-    const intro = ensureSampleRate(introRaw, processedMaster.sampleRate);
-    const outro = ensureSampleRate(outroRaw, processedMaster.sampleRate);
+    const bgm = ensureSampleRate(bgmRaw, masterForDuck.sampleRate);
+    const intro = ensureSampleRate(introRaw, masterForDuck.sampleRate);
+    const outro = ensureSampleRate(outroRaw, masterForDuck.sampleRate);
 
     applyGainToBuffer(bgm, params.bgmGainDb);
-    const bgmReady = extendBgmToMatch(bgm, processedMaster.length + Math.round(processedMaster.sampleRate * 180));
-    const duckedBgm = applyAutoDuck(processedMaster, bgmReady, onLog, params);
+    const bgmReady = extendBgmToMatch(bgm, masterForDuck.length + Math.round(masterForDuck.sampleRate * 180));
+    const duckedBgm = applyAutoDuck(masterForDuck, bgmReady, onLog, params);
 
     stepProgress(0.74, 0.08, 0.4, onProgress, 'Mixando trilha com BGM...');
-    const mixed = mixAndTrim(processedMaster, duckedBgm, onLog, params);
+    const mixed = mixAndTrim(masterForDuck, duckedBgm, onLog, params);
     stepProgress(0.82, 0.05, 0.5, onProgress, 'Montando intro e outro...');
     const assembled = concatenate(intro, mixed, outro, onLog, params);
     const finalMaster = applyFinalMasterTarget(assembled, params, onLog);
