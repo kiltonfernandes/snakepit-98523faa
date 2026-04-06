@@ -443,12 +443,39 @@ export default function ReleaseAnalytics() {
         </TabsContent>
 
         {/* GENRES */}
-        <TabsContent value="genres" className="mt-4">
+        <TabsContent value="genres" className="mt-4 space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Lançamentos por Gênero Normalizado</CardTitle></CardHeader>
             <CardContent>
-              {byGenre.length > 0 && (
-                <BarVisual items={byGenre.map(([g, c]) => [g, c])} maxVal={byGenre[0][1]} />
+              {genreChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={genreChartData} layout="vertical" margin={{ left: 80 }}
+                    onClick={(e) => e?.activePayload?.[0] && setDrilldown({ type: 'genre', value: e.activePayload[0].payload.name })}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={80} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Genre pie chart */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Distribuição por Gênero</CardTitle></CardHeader>
+            <CardContent className="flex justify-center">
+              {genrePieData.length > 0 && (
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie data={genrePieData} cx="50%" cy="50%" outerRadius={100} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      onClick={(_, idx) => setDrilldown({ type: 'genre', value: genrePieData[idx].name })}>
+                      {genrePieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} cursor="pointer" />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                  </PieChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
@@ -518,12 +545,39 @@ export default function ReleaseAnalytics() {
         </TabsContent>
 
         {/* TIMELINE */}
-        <TabsContent value="timeline" className="mt-4">
+        <TabsContent value="timeline" className="mt-4 space-y-4">
           <Card>
             <CardHeader><CardTitle className="text-sm">Lançamentos por Mês</CardTitle></CardHeader>
             <CardContent>
-              {byMonth.length > 0 && (
-                <BarVisual items={byMonth.map(([k, v]) => [formatMonthLabel(k), v])} maxVal={topMonth?.[1] || 1} />
+              {monthChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={350}>
+                  <BarChart data={monthChartData}
+                    onClick={(e) => e?.activePayload?.[0] && setDrilldown({ type: 'month', value: e.activePayload[0].payload.key })}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Trend line */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Tendência de Lançamentos</CardTitle></CardHeader>
+            <CardContent>
+              {monthChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={250}>
+                  <LineChart data={monthChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} angle={-45} textAnchor="end" height={60} />
+                    <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: 'hsl(var(--primary))' }} />
+                  </LineChart>
+                </ResponsiveContainer>
               )}
             </CardContent>
           </Card>
