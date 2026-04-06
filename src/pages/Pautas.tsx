@@ -812,6 +812,17 @@ export default function Pautas() {
 
   const flowTotalSteps = FLOW_STEPS.length + 1;
 
+  // Collect all release IDs already used in reviews across ALL pautas (not just this week)
+  const usedReviewIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of pautas) {
+      const inputs = (p.raw_inputs_json || {}) as Record<string, any>;
+      if (inputs.review_rafa_id) ids.add(inputs.review_rafa_id);
+      if (inputs.review_kilton_id) ids.add(inputs.review_kilton_id);
+    }
+    return ids;
+  }, [pautas]);
+
   const ReleasePicker = ({ pauta, inputKey, label }: { pauta: Pauta; inputKey: string; label: string }) => {
     const [search, setSearch] = useState('');
     const [open, setOpen] = useState(false);
@@ -820,9 +831,12 @@ export default function Pautas() {
     const selectedId = inputs[inputKey];
     const selected = releases.find(r => r.id === selectedId);
 
+    // Exclude releases already used in any review (except the current selection)
+    const available = eligible.filter(r => r.id === selectedId || !usedReviewIds.has(r.id));
+
     const filtered = search.trim()
-      ? eligible.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
-      : eligible;
+      ? available.filter(r => `${r.artist} ${r.album}`.toLowerCase().includes(search.toLowerCase()))
+      : available;
 
     const grouped = groupReleasesByWeekAndGenre(filtered);
 
@@ -879,7 +893,7 @@ export default function Pautas() {
                 </div>
               ) : (
                 <p className="text-xs text-muted-foreground p-3 text-center italic">
-                  {eligible.length === 0 ? 'Nenhum release na janela D-90 a D-1' : 'Nenhum resultado'}
+                  {eligible.length === 0 ? 'Nenhum release na janela D-90 a D-1' : available.length === 0 ? 'Todos os releases já foram usados em reviews' : 'Nenhum resultado'}
                 </p>
               )}
             </ScrollArea>
