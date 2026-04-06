@@ -1298,6 +1298,9 @@ export default function Pautas() {
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
+          <Button size="sm" variant="secondary" className="gap-2" onClick={() => setAddPautaDialogOpen(true)}>
+            <Plus className="h-4 w-4" /> Pauta
+          </Button>
           <Button size="sm" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Nova Semana
           </Button>
