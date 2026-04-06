@@ -23,7 +23,7 @@ import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
-import { Pauta, PautaSections, DaySlot, Release } from '@/lib/types';
+import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, type PromptBuildContext } from '@/lib/prompt-builder';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
@@ -152,10 +152,14 @@ function shouldAutoFinalize(pauta: Pauta, releases: Release[]): boolean {
 }
 
 export default function Pautas() {
-  const { weeks, addWeek, deleteWeek, pautas, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
+  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [addPautaDialogOpen, setAddPautaDialogOpen] = useState(false);
+  const [newPautaDate, setNewPautaDate] = useState<Date | undefined>(undefined);
+  const [newPautaTemplateId, setNewPautaTemplateId] = useState<string>('none');
+  const [templates, setTemplates] = useState<any[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
@@ -223,6 +227,77 @@ export default function Pautas() {
     setSelectedWeekId(week.id);
     setCreateDialogOpen(false);
     setNewWeekDate(undefined);
+  };
+
+  // Load templates for + Pauta dialog
+  useEffect(() => {
+    supabase.from('pauta_templates' as any).select('*').order('name').then(({ data }) => {
+      if (data) setTemplates(data as any[]);
+    });
+  }, []);
+
+  const handleAddPauta = () => {
+    if (!newPautaDate) return;
+    const dateStr = newPautaDate.toISOString().slice(0, 10);
+    
+    // Find or create the week for this date
+    const d = new Date(newPautaDate);
+    const dayOfWeek = d.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    const mondayStr = monday.toISOString().slice(0, 10);
+    
+    let week = weeks.find(w => w.start_date === mondayStr);
+    if (!week) {
+      week = addWeek(mondayStr);
+    }
+    
+    const wd = newPautaDate.getDay();
+    const pautaType = wd === 6 ? 'saturday' : wd === 0 ? 'sunday' : 'weekday';
+    
+    const newPauta: Pauta = {
+      id: crypto.randomUUID(),
+      week_id: week.id,
+      publication_date: dateStr,
+      pauta_type: pautaType as any,
+      status: 'draft',
+      raw_inputs_json: {},
+      sections_json: { anniversary: '', review_rafa: '', news: '', review_kilton: '', next_week_releases: '' },
+      rendered_markdown: null,
+      rendered_text: null,
+      warnings_json: [],
+      discovered_links_json: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      finalized_at: null,
+      template_id: newPautaTemplateId !== 'none' ? newPautaTemplateId : undefined,
+    } as any;
+    
+    addPauta(newPauta);
+    
+    // Also create a material row for this pauta
+    const mat: EpisodeMaterial = {
+      id: crypto.randomUUID(),
+      week_id: week.id,
+      slot_key: (['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][wd] || 'monday') as any,
+      episode_date: dateStr,
+      source_pauta_id: newPauta.id,
+      title_options_json: [],
+      selected_title_index: null,
+      description_html: null,
+      cover_url: null,
+      spotify_link: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    supabase.from('episode_materials' as any).insert(mat as any).then();
+    
+    setSelectedWeekId(week.id);
+    setAddPautaDialogOpen(false);
+    setNewPautaDate(undefined);
+    setNewPautaTemplateId('none');
+    toast.success(`Pauta criada para ${format(newPautaDate, 'dd/MM/yyyy')}`);
   };
 
   const handleDeleteWeek = () => {
@@ -1223,6 +1298,9 @@ export default function Pautas() {
               <Trash2 className="h-3.5 w-3.5" />
             </Button>
           )}
+          <Button size="sm" variant="secondary" className="gap-2" onClick={() => setAddPautaDialogOpen(true)}>
+            <Plus className="h-4 w-4" /> Pauta
+          </Button>
           <Button size="sm" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Nova Semana
           </Button>
@@ -1573,6 +1651,48 @@ export default function Pautas() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleCreateWeek} disabled={!newWeekDate}>Criar Semana</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* + Pauta Dialog */}
+      <Dialog open={addPautaDialogOpen} onOpenChange={setAddPautaDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Pauta</DialogTitle>
+            <DialogDescription>Selecione a data e o template. A pauta será vinculada à semana correspondente (criada automaticamente se não existir).</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Data da Pauta</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !newPautaDate && "text-muted-foreground")}>
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {newPautaDate ? format(newPautaDate, "dd/MM/yyyy", { locale: ptBR }) : "Selecione uma data"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={newPautaDate} onSelect={setNewPautaDate} locale={ptBR} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label>Template</Label>
+              <Select value={newPautaTemplateId} onValueChange={setNewPautaTemplateId}>
+                <SelectTrigger><SelectValue placeholder="Selecione um template" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Padrão (sem template)</SelectItem>
+                  {templates.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddPautaDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddPauta} disabled={!newPautaDate}>Criar Pauta</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

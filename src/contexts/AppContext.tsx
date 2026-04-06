@@ -26,6 +26,7 @@ interface AppContextType {
   updateWeek: (id: string, w: Partial<EditorialWeek>) => void;
   deleteWeek: (id: string) => void;
   recalcWeekStatus: (weekId: string) => void;
+  addPauta: (pauta: Pauta) => void;
   updatePauta: (id: string, p: Partial<Pauta>) => void;
   getPautasForWeek: (weekId: string) => Pauta[];
   updateMaterial: (id: string, m: Partial<EpisodeMaterial>) => void;
@@ -313,6 +314,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const addPauta = useCallback((pauta: Pauta) => {
+    setPautas(prev => [...prev, pauta]);
+    supabase.from('pautas' as any).insert(pauta as any).then();
+    logActivity('Pauta criada', `Data: ${pauta.publication_date}`);
+  }, [logActivity]);
+
   const updatePauta = useCallback((id: string, p: Partial<Pauta>) => {
     setPautas(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
     supabase.from('pautas' as any).update({ ...p, updated_at: now() } as any).eq('id', id).then();
@@ -414,7 +421,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       releases, weeks, pautas, materials, settings, activityLog,
       addRelease, updateRelease, deleteRelease,
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
-      updatePauta, getPautasForWeek,
+      addPauta, updatePauta, getPautasForWeek,
       updateMaterial, getMaterialsForWeek, loadMaterialCover,
       updateSettings, logActivity, importReleases, loadReleases,
       savePromptSession,
