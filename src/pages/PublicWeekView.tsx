@@ -84,11 +84,21 @@ function daySlotFromDate(dateStr: string): DaySlot {
 
 function ReleasePlatformLinks({ release }: { release: PublicRelease }) {
   const links = resolveAllLinks(release);
+  const platforms = [
+    { url: links.youtube, label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
+    { url: links.spotify, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
+    { url: links.metal_archives, label: 'MA', color: 'text-orange-400 hover:text-orange-300' },
+  ];
   return (
     <span className="inline-flex items-center gap-1.5 ml-2">
-      <a href={links.youtube} target="_blank" rel="noopener noreferrer" className="text-xs font-medium transition-colors text-red-400 hover:text-red-300">
-        YouTube
-      </a>
+      {platforms.map((p, i, arr) => (
+        <span key={p.label} className="inline-flex items-center gap-1">
+          <a href={p.url} target="_blank" rel="noopener noreferrer" className={`text-xs font-medium transition-colors ${p.color}`}>
+            {p.label}
+          </a>
+          {i < arr.length - 1 && <span className="text-foreground/20">|</span>}
+        </span>
+      ))}
     </span>
   );
 }
