@@ -198,6 +198,17 @@ export default function Releases() {
       .map(([code, label]) => ({ code, label }));
   }, [releases]);
 
+  // Build map of release ID -> pauta info for review tags
+  const reviewMap = useMemo(() => {
+    const map = new Map<string, { pautaId: string; reviewer: string; pubDate: string }>();
+    pautas.forEach(p => {
+      const inputs = (p.raw_inputs_json || {}) as Record<string, any>;
+      if (inputs.review_rafa_id) map.set(inputs.review_rafa_id, { pautaId: p.id, reviewer: 'Rafa', pubDate: p.publication_date });
+      if (inputs.review_kilton_id) map.set(inputs.review_kilton_id, { pautaId: p.id, reviewer: 'Kilton', pubDate: p.publication_date });
+    });
+    return map;
+  }, [pautas]);
+
   const allGenres = useMemo(() => {
     const set = new Set<string>();
     releases.forEach(r => (r.genres || []).forEach(g => {
