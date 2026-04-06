@@ -204,7 +204,8 @@ export default function Materials() {
 
   const isPautaReady = (mat: EpisodeMaterial) => {
     const pauta = getPautaForMaterial(mat);
-    return Boolean(pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review'));
+    if (!pauta) return false;
+    return !['draft', 'pesquisa'].includes(pauta.status);
   };
 
   const logAiUsage = useCallback(async (scope: string, promptText: string, responseText: string, episodeDate?: string, weekId?: string) => {
