@@ -7,6 +7,7 @@ import heavynautaBadge from '@/assets/heavynauta-badge.svg';
 import { getSectionsForDay } from '@/lib/constants';
 import { DaySlot } from '@/lib/types';
 import { resolveAllLinks } from '@/lib/dynamic-links';
+import { countryFlag } from '@/lib/country-utils';
 
 interface PublicPauta {
   id: string;
@@ -83,22 +84,11 @@ function daySlotFromDate(dateStr: string): DaySlot {
 
 function ReleasePlatformLinks({ release }: { release: PublicRelease }) {
   const links = resolveAllLinks(release);
-  const platforms = [
-    { key: 'youtube' as const, label: 'YouTube', color: 'text-red-400 hover:text-red-300' },
-    { key: 'spotify' as const, label: 'Spotify', color: 'text-emerald-400 hover:text-emerald-300' },
-    { key: 'metal_archives' as const, label: 'Metal Archives', color: 'text-orange-400 hover:text-orange-300' },
-  ];
-
   return (
     <span className="inline-flex items-center gap-1.5 ml-2">
-      {platforms.map((p, i, arr) => (
-        <span key={p.key} className="inline-flex items-center gap-0.5">
-          <a href={links[p.key]} target="_blank" rel="noopener noreferrer" className={`text-xs font-medium transition-colors ${p.color}`}>
-            {p.label}
-          </a>
-          {i < arr.length - 1 && <span className="text-foreground/20 text-xs">·</span>}
-        </span>
-      ))}
+      <a href={links.youtube} target="_blank" rel="noopener noreferrer" className="text-xs font-medium transition-colors text-red-400 hover:text-red-300">
+        YouTube
+      </a>
     </span>
   );
 }
@@ -154,11 +144,12 @@ function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; all
           <div className="space-y-4">
             {highlights.map(r => {
               const genreStr = r.genres?.length ? r.genres.join(', ') : '';
-              const countryStr = r.country || '';
-              const meta = [genreStr, countryStr].filter(Boolean).join(', ');
+              const flag = countryFlag(r.country);
+              const meta = [genreStr, r.country].filter(Boolean).join(', ');
               return (
                 <div key={r.id} className="border-l-4 border-primary pl-4">
                   <p className="font-bold text-foreground">
+                    {flag && <span className="mr-1">{flag}</span>}
                     {r.artist} — {r.album} {meta && <span className="text-muted-foreground font-normal">({meta})</span>} — {r.release_date}
                   </p>
                   <ReleasePlatformLinks release={r} />
@@ -173,12 +164,14 @@ function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; all
         <div>
           <h3 className="text-lg font-bold uppercase tracking-wider text-foreground mb-4">📆 Demais Lançamentos da Semana</h3>
           <div className="space-y-2">
-            {remaining.map(r => {
+            {remaining.slice(0, 20).map(r => {
               const genreStr = r.genres?.length ? r.genres.join(', ') : '';
+              const flag = countryFlag(r.country);
               return (
                 <div key={r.id} className="flex flex-wrap items-center gap-1 text-foreground/80">
                   <span className="text-muted-foreground text-sm">{r.release_date.slice(5)}</span>
                   <span>—</span>
+                  {flag && <span>{flag}</span>}
                   <span className="font-medium">{r.artist}</span>
                   <span>—</span>
                   <span>{r.album}</span>
@@ -194,9 +187,11 @@ function SaturdayReleasesBlock({ pauta, allReleases }: { pauta: PublicPauta; all
   );
 }
 
-function PautaDay({ pauta, releases, allReleases }: { pauta: PublicPauta; releases: PublicRelease[]; allReleases: PublicRelease[] }) {
+function PautaDay({ pauta, releases, allReleases, coverUrl }: { pauta: PublicPauta; releases: PublicRelease[]; allReleases: PublicRelease[]; coverUrl?: string | null }) {
   const slot = daySlotFromDate(pauta.publication_date);
   const sections = getSectionsForDay(slot);
+  // For Saturday, skip the AI-generated next_week_releases section (use structured block instead)
+  const filteredSections = slot === 'saturday' ? sections.filter(s => s.key !== 'next_week_releases') : sections;
   const data = (pauta.sections_json || {}) as Record<string, string>;
   const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
   const allLinks = (pauta.discovered_links_json || []) as string[];
@@ -205,6 +200,9 @@ function PautaDay({ pauta, releases, allReleases }: { pauta: PublicPauta; releas
   return (
     <div className="space-y-10">
       <header className="border-b border-foreground/10 pb-6 text-center">
+        {coverUrl && (
+          <img src={coverUrl} alt="Capa do episódio" className="mx-auto mb-4 max-h-64 rounded-lg object-cover" />
+        )}
         <h2 className="text-2xl font-bold tracking-tight text-foreground">SNAKEPIT</h2>
         <p className="mt-2 text-lg font-semibold text-foreground/80">
           {DAY_LABELS[slot]} — {d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
@@ -223,7 +221,7 @@ function PautaDay({ pauta, releases, allReleases }: { pauta: PublicPauta; releas
       {/* BLOCOS DO EPISÓDIO */}
       <section className="space-y-6">
         <h2 className="text-xl font-bold uppercase tracking-wider text-primary">Blocos do episódio</h2>
-        {sections.map((sec, idx) => {
+        {filteredSections.map((sec, idx) => {
           const rawContent = data[sec.key]?.trim() || '';
           const content = rawContent ? cleanContent(rawContent) : null;
 
@@ -474,11 +472,14 @@ export default function PublicWeekView() {
               ))}
             </TabsList>
 
-            {tabs.map(t => (
-              <TabsContent key={t.key} value={t.key}>
-                <PautaDay pauta={t.pauta} releases={releases} allReleases={mergedReleases} />
-              </TabsContent>
-            ))}
+            {tabs.map(t => {
+              const mat = materials.find(m => m.slot_key === t.key);
+              return (
+                <TabsContent key={t.key} value={t.key}>
+                  <PautaDay pauta={t.pauta} releases={releases} allReleases={mergedReleases} coverUrl={mat?.cover_url} />
+                </TabsContent>
+              );
+            })}
           </Tabs>
         )}
       </main>

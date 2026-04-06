@@ -145,13 +145,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     weeks.forEach(w => {
       const weekPautas = pautas.filter(p => p.week_id === w.id);
       if (weekPautas.length === 0) return;
-      const allFinalized = weekPautas.every(p => p.status === 'finalized');
-      const anyNeedsReview = weekPautas.some(p => p.status === 'needs_review');
-      const anyGenerated = weekPautas.some(p => p.status !== 'draft');
+      const allPublished = weekPautas.every(p => p.status === 'publicado' || p.status === 'agendado');
+      const allReady = weekPautas.every(p => ['revisao', 'criando_materiais', 'pronto_gravar', 'pronto_agendar', 'agendado', 'publicado', 'finalized'].includes(p.status));
+      const anyInProgress = weekPautas.some(p => p.status !== 'draft' && p.status !== 'pesquisa');
       let expected = 'draft';
-      if (allFinalized) expected = 'finalized';
-      else if (anyNeedsReview) expected = 'review';
-      else if (anyGenerated) expected = 'in_progress';
+      if (allPublished) expected = 'finalized';
+      else if (allReady) expected = 'review';
+      else if (anyInProgress) expected = 'in_progress';
       if (w.status !== expected) {
         setWeeks(prev => prev.map(x => x.id === w.id ? { ...x, status: expected as any } : x));
         supabase.from('editorial_weeks' as any).update({ status: expected, updated_at: now() } as any).eq('id', w.id).then();

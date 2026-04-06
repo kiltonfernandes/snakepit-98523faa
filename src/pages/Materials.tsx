@@ -204,7 +204,8 @@ export default function Materials() {
 
   const isPautaReady = (mat: EpisodeMaterial) => {
     const pauta = getPautaForMaterial(mat);
-    return Boolean(pauta && (pauta.status === 'generated' || pauta.status === 'finalized' || pauta.status === 'needs_review'));
+    if (!pauta) return false;
+    return !['draft', 'pesquisa'].includes(pauta.status);
   };
 
   const logAiUsage = useCallback(async (scope: string, promptText: string, responseText: string, episodeDate?: string, weekId?: string) => {
@@ -1066,7 +1067,7 @@ export default function Materials() {
 
       {weeks.length > 1 && (
         <div className="flex flex-wrap gap-2">
-          {weeks.map((week) => (
+          {[...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date)).map((week) => (
             <Button key={week.id} variant={selectedWeek?.id === week.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(week.id)}>
               {new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             </Button>

@@ -127,30 +127,50 @@ const FLOW_STEPS = [
   { key: 'saturday_releases', label: 'Lançamentos Sábado', inputKey: 'selected_release_ids' },
 ] as const;
 
-// Auto-finalize check
-function shouldAutoFinalize(pauta: Pauta, releases: Release[]): boolean {
-  if (pauta.status === 'finalized') return false;
+// Compute dynamic pauta status based on pauta + material state
+function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined): Pauta['status'] {
   const slot = getPautaSlot(pauta);
   const sections = getSectionsForDay(slot);
   const data = (pauta.sections_json || {}) as Record<string, string>;
   const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
 
-  // All sections must have content
+  // Check if all inputs are filled
+  let inputsComplete = !!inputs.anniversary?.trim();
+  if (slot !== 'saturday' && slot !== 'sunday') {
+    inputsComplete = inputsComplete && (!!inputs.review_rafa_id || !!inputs.review_kilton_id) && !!inputs.news_link?.trim();
+  }
+  if (slot === 'saturday') {
+    inputsComplete = inputsComplete || (inputs.selected_release_ids?.length > 0);
+  }
+
+  // Check if all sections have AI content
   const allSectionsFilled = sections.every(s => data[s.key]?.trim());
-  if (!allSectionsFilled) return false;
 
-  if (slot === 'saturday' || slot === 'sunday') return allSectionsFilled;
+  // Check material state
+  const hasTitle = material?.selected_title_index != null;
+  const hasDescription = !!material?.description_html;
+  const hasCover = !!material?.cover_url;
+  const hasSpotify = !!material?.spotify_link;
 
-  // Weekday: anniversary + news filled, and at least one review
-  const hasAnniversary = !!inputs.anniversary?.trim();
-  const hasNews = !!inputs.news_link?.trim();
-  const hasReview = !!inputs.review_rafa_id || !!inputs.review_kilton_id;
-
-  return hasAnniversary && hasNews && hasReview;
+  // Published: today >= episode date AND agendado
+  if (hasSpotify && pauta.publication_date <= new Date().toISOString().slice(0, 10)) {
+    return 'publicado';
+  }
+  // Agendado: spotify link filled
+  if (hasSpotify) return 'agendado';
+  // Pronto para agendar: TODO - for now skip, handled by Rivaldo
+  // Pronto para gravar: has cover
+  if (hasCover && hasTitle && hasDescription && allSectionsFilled) return 'pronto_gravar';
+  // Criando materiais: sections done, working on materials
+  if (allSectionsFilled && (hasTitle || hasDescription)) return 'criando_materiais';
+  // Revisão: all sections filled
+  if (allSectionsFilled) return 'revisao';
+  // Pesquisa: still collecting inputs
+  return 'pesquisa';
 }
 
 export default function Pautas() {
-  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
+  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -198,17 +218,23 @@ export default function Pautas() {
     bannedTerms,
   }), [settings, releases, bannedTerms]);
 
-  // Auto-finalize check on pauta changes
+  // Auto-compute pauta status based on pauta + material state
+  const weekMats = selectedWeek ? getMaterialsForWeek(selectedWeek.id) : [];
   useEffect(() => {
     if (!selectedWeek) return;
     for (const pauta of weekPautas) {
-      if (shouldAutoFinalize(pauta, releases)) {
-        updatePauta(pauta.id, { status: 'finalized', finalized_at: new Date().toISOString() });
+      const mat = weekMats.find(m => m.slot_key === getPautaSlot(pauta) || m.episode_date === pauta.publication_date);
+      const computed = computePautaStatus(pauta, mat);
+      if (pauta.status !== computed) {
+        updatePauta(pauta.id, { 
+          status: computed, 
+          ...(computed === 'revisao' && !pauta.finalized_at ? { finalized_at: new Date().toISOString() } : {}),
+          warnings_json: [],
+        });
         recalcWeekStatus(selectedWeek.id);
-        toast.success(`Pauta ${pauta.publication_date} auto-finalizada`);
       }
     }
-  }, [weekPautas.map(p => JSON.stringify({ s: p.sections_json, i: p.raw_inputs_json, st: p.status })).join(',')]);
+  }, [weekPautas.map(p => JSON.stringify({ s: p.sections_json, i: p.raw_inputs_json, st: p.status })).join(','), weekMats.map(m => JSON.stringify({ t: m.selected_title_index, d: !!m.description_html, c: !!m.cover_url, sp: m.spotify_link })).join(',')]);
 
   const handleCreateWeek = () => {
     if (!newWeekDate) return;
@@ -639,6 +665,10 @@ export default function Pautas() {
   const finalizePauta = (id: string) => {
     const pauta = pautas.find(p => p.id === id);
     if (!pauta) return;
+    const mat = weekMats.find(m => m.slot_key === getPautaSlot(pauta) || m.episode_date === pauta.publication_date);
+    const computed = computePautaStatus(pauta, mat);
+    
+    // Dynamic warnings
     const slot = getPautaSlot(pauta);
     const sections = getSectionsForDay(slot);
     const data = (pauta.sections_json || {}) as Record<string, string>;
@@ -655,12 +685,11 @@ export default function Pautas() {
       warnings.push(`Seções vazias: ${empty.map(s => s.label).join(', ')}`);
     }
 
+    updatePauta(id, { status: computed, warnings_json: warnings, ...(computed !== 'pesquisa' ? { finalized_at: new Date().toISOString() } : {}) });
     if (warnings.length > 0) {
-      updatePauta(id, { status: 'needs_review', warnings_json: warnings });
-      toast.warning(`Pauta enviada para revisão: ${warnings.join('; ')}`);
+      toast.warning(`Avisos: ${warnings.join('; ')}`);
     } else {
-      updatePauta(id, { status: 'finalized', finalized_at: new Date().toISOString(), warnings_json: [] });
-      toast.success('Pauta finalizada');
+      toast.success(`Status atualizado: ${computed}`);
     }
     if (selectedWeek) recalcWeekStatus(selectedWeek.id);
   };
@@ -1503,7 +1532,19 @@ export default function Pautas() {
                   if (!pauta) return <p className="text-xs text-muted-foreground italic">Sem pauta</p>;
                   const sections = getSectionsForDay(day.key);
                   const sectionsData = (pauta.sections_json || {}) as Record<string, string>;
-                  const warnings = (pauta.warnings_json || []) as string[];
+                  
+                  // Compute warnings dynamically
+                  const dynamicWarnings: string[] = [];
+                  const inputs = getRawInputs(pauta);
+                  if (day.key !== 'saturday' && day.key !== 'sunday') {
+                    if (!inputs.review_rafa_id && !inputs.review_kilton_id && !sectionsData.review_rafa?.trim() && !sectionsData.review_kilton?.trim()) {
+                      dynamicWarnings.push('Nenhuma resenha definida');
+                    }
+                  }
+                  const empty = sections.filter(s => !sectionsData[s.key]?.trim());
+                  if (empty.length > 0) {
+                    dynamicWarnings.push(`Seções vazias: ${empty.map(s => s.label).join(', ')}`);
+                  }
 
                   return (
                     <div className="space-y-3">
@@ -1522,22 +1563,12 @@ export default function Pautas() {
                           <Button variant="ghost" size="icon" className="h-6 w-6" title="Copiar prompt" onClick={() => handleCopyPrompt(generatePrompt(pauta))}>
                             <Copy className="h-3 w-3" />
                           </Button>
-                          {pauta.status !== 'finalized' && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Finalizar" onClick={() => finalizePauta(pauta.id)}>
-                              <Check className="h-3 w-3" />
-                            </Button>
-                          )}
-                          {pauta.status === 'needs_review' && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Forçar finalização" onClick={() => forceFinalize(pauta.id)}>
-                              <AlertTriangle className="h-3 w-3 text-orange-400" />
-                            </Button>
-                          )}
                         </div>
                       </div>
 
-                      {warnings.length > 0 && (
+                      {dynamicWarnings.length > 0 && (
                         <div className="p-1.5 rounded bg-orange-500/10 border border-orange-500/20">
-                          {warnings.map((w, i) => (
+                          {dynamicWarnings.map((w, i) => (
                             <p key={i} className="text-[10px] text-orange-400">⚠ {w}</p>
                           ))}
                         </div>
