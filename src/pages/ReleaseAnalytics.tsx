@@ -71,6 +71,13 @@ export default function ReleaseAnalytics() {
   const [monthRange, setMonthRange] = useState<number[]>([1, 12]);
   const [drilldown, setDrilldown] = useState<{ type: string; value: string } | null>(null);
 
+  // Scene-specific state
+  const [sceneSearch, setSceneSearch] = useState('');
+  const [sceneGenreFilter, setSceneGenreFilter] = useState<string>('all');
+  const [sceneCountryFilter, setSceneCountryFilter] = useState<string>('all');
+  const [sceneMinCount, setSceneMinCount] = useState(1);
+  const [sceneDrilldown, setSceneDrilldown] = useState<{ country: string; genre: string } | null>(null);
+
   const filtered = useMemo(() => {
     return releases.filter(r => {
       const d = new Date(r.release_date + 'T12:00:00');
