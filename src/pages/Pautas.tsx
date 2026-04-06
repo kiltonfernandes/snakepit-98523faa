@@ -127,30 +127,50 @@ const FLOW_STEPS = [
   { key: 'saturday_releases', label: 'Lançamentos Sábado', inputKey: 'selected_release_ids' },
 ] as const;
 
-// Auto-finalize check
-function shouldAutoFinalize(pauta: Pauta, releases: Release[]): boolean {
-  if (pauta.status === 'finalized') return false;
+// Compute dynamic pauta status based on pauta + material state
+function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined): string {
   const slot = getPautaSlot(pauta);
   const sections = getSectionsForDay(slot);
   const data = (pauta.sections_json || {}) as Record<string, string>;
   const inputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
 
-  // All sections must have content
+  // Check if all inputs are filled
+  let inputsComplete = !!inputs.anniversary?.trim();
+  if (slot !== 'saturday' && slot !== 'sunday') {
+    inputsComplete = inputsComplete && (!!inputs.review_rafa_id || !!inputs.review_kilton_id) && !!inputs.news_link?.trim();
+  }
+  if (slot === 'saturday') {
+    inputsComplete = inputsComplete || (inputs.selected_release_ids?.length > 0);
+  }
+
+  // Check if all sections have AI content
   const allSectionsFilled = sections.every(s => data[s.key]?.trim());
-  if (!allSectionsFilled) return false;
 
-  if (slot === 'saturday' || slot === 'sunday') return allSectionsFilled;
+  // Check material state
+  const hasTitle = material?.selected_title_index != null;
+  const hasDescription = !!material?.description_html;
+  const hasCover = !!material?.cover_url;
+  const hasSpotify = !!material?.spotify_link;
 
-  // Weekday: anniversary + news filled, and at least one review
-  const hasAnniversary = !!inputs.anniversary?.trim();
-  const hasNews = !!inputs.news_link?.trim();
-  const hasReview = !!inputs.review_rafa_id || !!inputs.review_kilton_id;
-
-  return hasAnniversary && hasNews && hasReview;
+  // Published: today >= episode date AND agendado
+  if (hasSpotify && pauta.publication_date <= new Date().toISOString().slice(0, 10)) {
+    return 'publicado';
+  }
+  // Agendado: spotify link filled
+  if (hasSpotify) return 'agendado';
+  // Pronto para agendar: TODO - for now skip, handled by Rivaldo
+  // Pronto para gravar: has cover
+  if (hasCover && hasTitle && hasDescription && allSectionsFilled) return 'pronto_gravar';
+  // Criando materiais: sections done, working on materials
+  if (allSectionsFilled && (hasTitle || hasDescription)) return 'criando_materiais';
+  // Revisão: all sections filled
+  if (allSectionsFilled) return 'revisao';
+  // Pesquisa: still collecting inputs
+  return 'pesquisa';
 }
 
 export default function Pautas() {
-  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
+  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
