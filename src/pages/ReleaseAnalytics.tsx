@@ -198,19 +198,28 @@ export default function ReleaseAnalytics() {
     return `${MONTHS_PT[Number(m) - 1]} ${y}`;
   };
 
-  const BarVisual = ({ items, maxVal }: { items: [string, number][]; maxVal: number }) => (
-    <div className="space-y-1.5">
-      {items.map(([label, val]) => (
-        <div key={label} className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground w-24 truncate text-right">{label}</span>
-          <div className="flex-1 h-5 bg-muted/30 rounded-sm overflow-hidden">
-            <div className="h-full bg-primary/60 rounded-sm transition-all" style={{ width: `${Math.max((val / maxVal) * 100, 2)}%` }} />
-          </div>
-          <span className="text-xs font-mono w-8 text-right">{val}</span>
-        </div>
-      ))}
-    </div>
-  );
+  // Drilldown releases
+  const drilldownReleases = useMemo(() => {
+    if (!drilldown) return [];
+    return filtered.filter(r => {
+      if (drilldown.type === 'genre') {
+        return (r.genres || []).some(g => normalizeGenreToMain(g) === drilldown.value);
+      }
+      if (drilldown.type === 'country') {
+        return normalizeCountryCode(r.country) === drilldown.value;
+      }
+      if (drilldown.type === 'month') {
+        const d = new Date(r.release_date + 'T12:00:00');
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === drilldown.value;
+      }
+      return false;
+    });
+  }, [drilldown, filtered]);
+
+  const genreChartData = useMemo(() => byGenre.map(([g, c]) => ({ name: g, count: c })), [byGenre]);
+  const monthChartData = useMemo(() => byMonth.map(([k, v]) => ({ name: formatMonthLabel(k), key: k, count: v })), [byMonth]);
+  const countryChartData = useMemo(() => byCountry.slice(0, 15).map(([code, data]) => ({ name: data.label, code, count: data.count })), [byCountry]);
+  const genrePieData = useMemo(() => byGenre.slice(0, 8).map(([g, c]) => ({ name: g, value: c })), [byGenre]);
 
   return (
     <div className="space-y-6">
