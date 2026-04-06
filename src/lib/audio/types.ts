@@ -23,6 +23,8 @@ export interface AudioParams {
   silenceCutTarget: number;
   silenceCutBufferMs: number;
   bgmTailAfterMaster: number;
+  bgmPreMasterSilence: number;
+  bgmPostMasterSilence: number;
   outputBitrate: number;
   crossfadeDuration: number;
   trackTargetLufs: number;
@@ -41,6 +43,8 @@ export const DEFAULT_PARAMS: AudioParams = {
   silenceCutTarget: 0.6,
   silenceCutBufferMs: 150,
   bgmTailAfterMaster: 12,
+  bgmPreMasterSilence: 7,
+  bgmPostMasterSilence: 12,
   outputBitrate: 192,
   crossfadeDuration: 0.04,
   trackTargetLufs: -19,
