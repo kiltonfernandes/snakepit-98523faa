@@ -268,7 +268,10 @@ export default function Pautas() {
         const fives = anns.filter(a => a.yearsAgo % 5 === 0);
         const best = milestones[0] || fives[0] || anns[0];
 
-        const text = `Aniversário de ${best.yearsAgo} anos de "${best.album}" (${best.artist}, ${best.year})`;
+        // Normalize: trim, clean extra spaces, capitalize properly for hyperlink parsing
+        const artist = best.artist.trim().replace(/\s+/g, ' ');
+        const album = best.album.trim().replace(/\s+/g, ' ');
+        const text = `${artist} — ${album} (${best.year}, ${best.yearsAgo} anos)`;
         updateRawInput(pauta.id, 'anniversary', text);
         filled++;
       }
