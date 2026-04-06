@@ -36,10 +36,15 @@ async function fetchRSS(source: { name: string; url: string }): Promise<NewsItem
     let match;
     while ((match = itemRegex.exec(xml)) !== null && items.length < 30) {
       const block = match[1];
-      const title = block.match(/<title><!\[CDATA\[(.*?)\]\]>|<title>(.*?)<\/title>/)?.[1] || block.match(/<title>(.*?)<\/title>/)?.[1] || "";
-      const link = block.match(/<link>(.*?)<\/link>/)?.[1] || "";
-      const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || "";
-      const desc = block.match(/<description><!\[CDATA\[(.*?)\]\]>|<description>(.*?)<\/description>/)?.[1] || "";
+      const titleMatch = block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]>|<title>([\s\S]*?)<\/title>/);
+      const title = (titleMatch?.[1] || titleMatch?.[2] || "").trim();
+      // Handle <link>url</link>, <link href="url"/>, and bare <link>url\n patterns
+      const linkMatch = block.match(/<link>\s*(https?:\/\/[^\s<]+)\s*<\/link>/) 
+        || block.match(/<link[^>]+href=["']([^"']+)["']/)
+        || block.match(/<link>\s*(https?:\/\/[^\s<]+)/);
+      const link = (linkMatch?.[1] || "").trim();
+      const pubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() || "";
+      const desc = block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]>/)?.[1] || block.match(/<description>([\s\S]*?)<\/description>/)?.[1] || "";
       const snippet = desc.replace(/<[^>]+>/g, "").slice(0, 200);
 
       if (title) {
