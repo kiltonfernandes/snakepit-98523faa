@@ -128,7 +128,7 @@ const FLOW_STEPS = [
 ] as const;
 
 // Compute dynamic pauta status based on pauta + material state
-function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined): string {
+function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined): Pauta['status'] {
   const slot = getPautaSlot(pauta);
   const sections = getSectionsForDay(slot);
   const data = (pauta.sections_json || {}) as Record<string, string>;
