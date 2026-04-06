@@ -1,5 +1,5 @@
 export type WeekStatus = 'draft' | 'in_progress' | 'review' | 'finalized';
-export type PautaStatus = 'draft' | 'generated' | 'needs_review' | 'finalized';
+export type PautaStatus = 'draft' | 'generated' | 'needs_review' | 'finalized' | 'pesquisa' | 'revisao' | 'criando_materiais' | 'pronto_gravar' | 'pronto_agendar' | 'agendado' | 'publicado';
 export type PautaType = 'weekday' | 'saturday' | 'sunday';
 
 export type DaySlot = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
