@@ -1532,7 +1532,19 @@ export default function Pautas() {
                   if (!pauta) return <p className="text-xs text-muted-foreground italic">Sem pauta</p>;
                   const sections = getSectionsForDay(day.key);
                   const sectionsData = (pauta.sections_json || {}) as Record<string, string>;
-                  const warnings = (pauta.warnings_json || []) as string[];
+                  
+                  // Compute warnings dynamically
+                  const dynamicWarnings: string[] = [];
+                  const inputs = getRawInputs(pauta);
+                  if (day.key !== 'saturday' && day.key !== 'sunday') {
+                    if (!inputs.review_rafa_id && !inputs.review_kilton_id && !sectionsData.review_rafa?.trim() && !sectionsData.review_kilton?.trim()) {
+                      dynamicWarnings.push('Nenhuma resenha definida');
+                    }
+                  }
+                  const empty = sections.filter(s => !sectionsData[s.key]?.trim());
+                  if (empty.length > 0) {
+                    dynamicWarnings.push(`Seções vazias: ${empty.map(s => s.label).join(', ')}`);
+                  }
 
                   return (
                     <div className="space-y-3">
@@ -1551,22 +1563,12 @@ export default function Pautas() {
                           <Button variant="ghost" size="icon" className="h-6 w-6" title="Copiar prompt" onClick={() => handleCopyPrompt(generatePrompt(pauta))}>
                             <Copy className="h-3 w-3" />
                           </Button>
-                          {pauta.status !== 'finalized' && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Finalizar" onClick={() => finalizePauta(pauta.id)}>
-                              <Check className="h-3 w-3" />
-                            </Button>
-                          )}
-                          {pauta.status === 'needs_review' && (
-                            <Button variant="ghost" size="icon" className="h-6 w-6" title="Forçar finalização" onClick={() => forceFinalize(pauta.id)}>
-                              <AlertTriangle className="h-3 w-3 text-orange-400" />
-                            </Button>
-                          )}
                         </div>
                       </div>
 
-                      {warnings.length > 0 && (
+                      {dynamicWarnings.length > 0 && (
                         <div className="p-1.5 rounded bg-orange-500/10 border border-orange-500/20">
-                          {warnings.map((w, i) => (
+                          {dynamicWarnings.map((w, i) => (
                             <p key={i} className="text-[10px] text-orange-400">⚠ {w}</p>
                           ))}
                         </div>

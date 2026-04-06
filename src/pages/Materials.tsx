@@ -1066,7 +1066,7 @@ export default function Materials() {
 
       {weeks.length > 1 && (
         <div className="flex flex-wrap gap-2">
-          {weeks.map((week) => (
+          {[...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date)).map((week) => (
             <Button key={week.id} variant={selectedWeek?.id === week.id ? 'default' : 'outline'} size="sm" onClick={() => setSelectedWeekId(week.id)}>
               {new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             </Button>
