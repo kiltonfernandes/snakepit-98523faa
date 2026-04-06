@@ -53,6 +53,302 @@ const CHART_COLORS = [
   '#f39c12', '#2ecc71', '#e67e22',
 ];
 
+// Scene presets: popular combinations for quick exploration
+const SCENE_PRESETS = [
+  { label: '🇧🇷 Brasil Death', country: 'BR', genre: 'Death Metal' },
+  { label: '🇧🇷 Brasil Thrash', country: 'BR', genre: 'Thrash Metal' },
+  { label: '🇺🇸 USA Death', country: 'US', genre: 'Death Metal' },
+  { label: '🇸🇪 Suécia Death', country: 'SE', genre: 'Death Metal' },
+  { label: '🇸🇪 Suécia Black', country: 'SE', genre: 'Black Metal' },
+  { label: '🇫🇮 Finlândia Death', country: 'FI', genre: 'Death Metal' },
+  { label: '🇫🇮 Finlândia Power', country: 'FI', genre: 'Power Metal' },
+  { label: '🇩🇪 Alemanha Power', country: 'DE', genre: 'Power Metal' },
+  { label: '🇩🇪 Alemanha Thrash', country: 'DE', genre: 'Thrash Metal' },
+  { label: '🇬🇧 UK Heavy', country: 'GB', genre: 'Heavy Metal' },
+  { label: '🇳🇴 Noruega Black', country: 'NO', genre: 'Black Metal' },
+  { label: '🇬🇷 Grécia Black', country: 'GR', genre: 'Black Metal' },
+  { label: '🇺🇸 USA Metalcore', country: 'US', genre: 'Metalcore' },
+  { label: '🇮🇹 Itália Symphonic', country: 'IT', genre: 'Symphonic Metal' },
+  { label: '🇺🇸 USA Doom', country: 'US', genre: 'Doom Metal' },
+  { label: '🇺🇸 USA Prog', country: 'US', genre: 'Progressive Metal' },
+];
+
+interface SceneEntry {
+  country: string;
+  genre: string;
+  count: number;
+  uniqueArtists: number;
+  artists: Set<string>;
+}
+
+interface ScenesTabProps {
+  scenes: SceneEntry[];
+  filtered: any[];
+  totalScenes: number;
+  avgPerScene: number;
+  sceneSearch: string;
+  setSceneSearch: (v: string) => void;
+  sceneGenreFilter: string;
+  setSceneGenreFilter: (v: string) => void;
+  sceneCountryFilter: string;
+  setSceneCountryFilter: (v: string) => void;
+  sceneMinCount: number;
+  setSceneMinCount: (v: number) => void;
+  sceneDrilldown: { country: string; genre: string } | null;
+  setSceneDrilldown: (v: { country: string; genre: string } | null) => void;
+}
+
+function ScenesTab({
+  scenes, filtered, totalScenes, avgPerScene,
+  sceneSearch, setSceneSearch,
+  sceneGenreFilter, setSceneGenreFilter,
+  sceneCountryFilter, setSceneCountryFilter,
+  sceneMinCount, setSceneMinCount,
+  sceneDrilldown, setSceneDrilldown,
+}: ScenesTabProps) {
+  const sceneGenres = useMemo(() => [...new Set(scenes.map(s => s.genre))].sort(), [scenes]);
+  const sceneCountries = useMemo(() => {
+    const map = new Map<string, string>();
+    scenes.forEach(s => { if (!map.has(s.country)) map.set(s.country, s.country); });
+    return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [scenes]);
+
+  const filteredScenes = useMemo(() => {
+    return scenes.filter(s => {
+      if (s.count < sceneMinCount) return false;
+      if (sceneGenreFilter !== 'all' && s.genre !== sceneGenreFilter) return false;
+      if (sceneCountryFilter !== 'all' && s.country !== sceneCountryFilter) return false;
+      if (sceneSearch) {
+        const q = sceneSearch.toLowerCase();
+        if (!s.genre.toLowerCase().includes(q) && !s.country.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }, [scenes, sceneMinCount, sceneGenreFilter, sceneCountryFilter, sceneSearch]);
+
+  const sceneChartData = useMemo(() =>
+    filteredScenes.slice(0, 20).map(s => ({
+      name: `${s.country} ${s.genre}`,
+      count: s.count,
+      artists: s.uniqueArtists,
+      country: s.country,
+      genre: s.genre,
+    })),
+  [filteredScenes]);
+
+  const sceneDrilldownReleases = useMemo(() => {
+    if (!sceneDrilldown) return [];
+    return filtered.filter(r => {
+      const code = normalizeCountryCode(r.country);
+      if (code !== sceneDrilldown.country) return false;
+      return (r.genres || []).some((g: string) => normalizeGenreToMain(g) === sceneDrilldown.genre);
+    }).sort((a: any, b: any) => b.release_date.localeCompare(a.release_date));
+  }, [sceneDrilldown, filtered]);
+
+  const applyPreset = (preset: { country: string; genre: string }) => {
+    setSceneCountryFilter(preset.country);
+    setSceneGenreFilter(preset.genre);
+    setSceneSearch('');
+    setSceneMinCount(1);
+  };
+
+  const clearSceneFilters = () => {
+    setSceneSearch('');
+    setSceneGenreFilter('all');
+    setSceneCountryFilter('all');
+    setSceneMinCount(1);
+    setSceneDrilldown(null);
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* KPI cards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Cenas Ativas', value: totalScenes, icon: Flame },
+          { label: 'Média / Cena', value: avgPerScene.toFixed(1), icon: Hash },
+          { label: 'Cenas 5+', value: scenes.filter(s => s.count >= 5).length, icon: Star },
+          { label: 'Filtradas', value: filteredScenes.length, icon: Search },
+        ].map((s, i) => (
+          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
+            <Card>
+              <CardContent className="flex items-center justify-between p-4">
+                <div>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                  <p className="text-2xl font-bold mt-1">{s.value}</p>
+                </div>
+                <s.icon className="h-5 w-5 text-muted-foreground/50" />
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Presets */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm flex items-center gap-2"><Zap className="h-4 w-4 text-primary" /> Presets de Cenas</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-1.5">
+            {SCENE_PRESETS.map(p => {
+              const isActive = sceneCountryFilter === p.country && sceneGenreFilter === p.genre;
+              const sceneData = scenes.find(s => s.country === p.country && s.genre === p.genre);
+              return (
+                <Button
+                  key={`${p.country}-${p.genre}`}
+                  variant={isActive ? 'default' : 'outline'}
+                  size="sm"
+                  className="text-xs h-7 gap-1"
+                  onClick={() => isActive ? clearSceneFilters() : applyPreset(p)}
+                >
+                  {p.label}
+                  {sceneData && <Badge variant="secondary" className="text-[9px] px-1 ml-0.5">{sceneData.count}</Badge>}
+                </Button>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Filters */}
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="space-y-1 flex-1 min-w-[150px] max-w-[250px]">
+              <Label className="text-xs">Buscar cena</Label>
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                <Input className="h-8 text-xs pl-7" placeholder="País ou gênero..." value={sceneSearch} onChange={e => setSceneSearch(e.target.value)} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Gênero</Label>
+              <Select value={sceneGenreFilter} onValueChange={setSceneGenreFilter}>
+                <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {sceneGenres.map(g => <SelectItem key={g} value={g}>{g}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">País</Label>
+              <Select value={sceneCountryFilter} onValueChange={setSceneCountryFilter}>
+                <SelectTrigger className="w-[120px] h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {sceneCountries.map(([code]) => (
+                    <SelectItem key={code} value={code}>
+                      <span className="inline-flex items-center gap-2">{renderFlag(code)}<span>{code}</span></span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1 min-w-[120px]">
+              <Label className="text-xs">Mín. lançamentos: {sceneMinCount}</Label>
+              <Slider min={1} max={20} step={1} value={[sceneMinCount]} onValueChange={v => setSceneMinCount(v[0])} />
+            </div>
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={clearSceneFilters}>
+              <Filter className="h-3 w-3 mr-1" /> Limpar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Chart */}
+      {sceneChartData.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm">Top Cenas (clique para detalhar)</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={Math.max(300, sceneChartData.length * 28)}>
+              <BarChart data={sceneChartData} layout="vertical" margin={{ left: 100 }}
+                onClick={(e) => {
+                  const p = e?.activePayload?.[0]?.payload;
+                  if (p) setSceneDrilldown({ country: p.country, genre: p.genre });
+                }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} width={100} />
+                <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }}
+                  formatter={(value: any, name: string) => [value, name === 'count' ? 'Lançamentos' : 'Artistas']} />
+                <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} cursor="pointer" />
+                <Bar dataKey="artists" fill="hsl(var(--chart-2, 280 60% 50%))" radius={[0, 4, 4, 0]} cursor="pointer" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Full list */}
+      <Card>
+        <CardHeader><CardTitle className="text-sm">{filteredScenes.length} Cenas</CardTitle></CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[400px]">
+            <div className="space-y-1">
+              {filteredScenes.map((sc, i) => {
+                const isSelected = sceneDrilldown?.country === sc.country && sceneDrilldown?.genre === sc.genre;
+                return (
+                  <motion.div key={`${sc.country}:${sc.genre}`} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: Math.min(i * 0.015, 0.5) }}
+                    className={`flex items-center gap-2 py-1.5 px-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-primary/10 ring-1 ring-primary/30' : 'hover:bg-muted/20'}`}
+                    onClick={() => setSceneDrilldown(isSelected ? null : { country: sc.country, genre: sc.genre })}
+                  >
+                    <span className="text-xs text-muted-foreground w-5 font-mono">{i + 1}</span>
+                    {renderFlag(sc.country)}
+                    <span className="text-xs text-muted-foreground w-8">{sc.country}</span>
+                    <span className="text-sm flex-1 truncate">{sc.genre}</span>
+                    <Badge variant="outline" className="text-[10px]">{sc.uniqueArtists} artistas</Badge>
+                    <div className="w-24 h-2.5 bg-muted/30 rounded-sm overflow-hidden">
+                      <div className="h-full bg-primary/60 rounded-sm" style={{ width: `${(sc.count / (filteredScenes[0]?.count || 1)) * 100}%` }} />
+                    </div>
+                    <span className="text-xs font-mono font-bold w-6 text-right">{sc.count}</span>
+                  </motion.div>
+                );
+              })}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+
+      {/* Scene drilldown */}
+      {sceneDrilldown && (
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm flex items-center gap-2">
+              {renderFlag(sceneDrilldown.country)}
+              <span>{sceneDrilldown.country} — {sceneDrilldown.genre}</span>
+              <Badge variant="secondary">{sceneDrilldownReleases.length} releases</Badge>
+            </CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setSceneDrilldown(null)} className="text-xs">✕ Fechar</Button>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[350px]">
+              <div className="space-y-1">
+                {sceneDrilldownReleases.map((r: any) => (
+                  <div key={r.id} className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-muted/20 text-sm">
+                    {renderFlag(normalizeCountryCode(r.country) || '')}
+                    <span className="font-medium">{r.artist}</span>
+                    <span className="text-muted-foreground italic flex-1 truncate">{r.album}</span>
+                    <span className="text-xs text-muted-foreground">{r.release_date}</span>
+                    <div className="flex gap-1">
+                      {(r.genres || []).slice(0, 2).map((g: string) => (
+                        <Badge key={g} variant="secondary" className="text-[8px]">{g}</Badge>
+                      ))}
+                    </div>
+                    {r.rating != null && <Badge variant="outline" className="text-[9px]">★ {r.rating}</Badge>}
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 export default function ReleaseAnalytics() {
   const navigate = useNavigate();
   const { releases } = useApp();
