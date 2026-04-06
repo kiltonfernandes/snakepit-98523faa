@@ -229,6 +229,77 @@ export default function Pautas() {
     setNewWeekDate(undefined);
   };
 
+  // Load templates for + Pauta dialog
+  useEffect(() => {
+    supabase.from('pauta_templates' as any).select('*').order('name').then(({ data }) => {
+      if (data) setTemplates(data as any[]);
+    });
+  }, []);
+
+  const handleAddPauta = () => {
+    if (!newPautaDate) return;
+    const dateStr = newPautaDate.toISOString().slice(0, 10);
+    
+    // Find or create the week for this date
+    const d = new Date(newPautaDate);
+    const dayOfWeek = d.getDay();
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(d);
+    monday.setDate(d.getDate() + diff);
+    const mondayStr = monday.toISOString().slice(0, 10);
+    
+    let week = weeks.find(w => w.start_date === mondayStr);
+    if (!week) {
+      week = addWeek(mondayStr);
+    }
+    
+    const wd = newPautaDate.getDay();
+    const pautaType = wd === 6 ? 'saturday' : wd === 0 ? 'sunday' : 'weekday';
+    
+    const newPauta: Pauta = {
+      id: crypto.randomUUID(),
+      week_id: week.id,
+      publication_date: dateStr,
+      pauta_type: pautaType as any,
+      status: 'draft',
+      raw_inputs_json: {},
+      sections_json: { anniversary: '', review_rafa: '', news: '', review_kilton: '', next_week_releases: '' },
+      rendered_markdown: null,
+      rendered_text: null,
+      warnings_json: [],
+      discovered_links_json: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      finalized_at: null,
+      template_id: newPautaTemplateId !== 'none' ? newPautaTemplateId : undefined,
+    } as any;
+    
+    addPauta(newPauta);
+    
+    // Also create a material row for this pauta
+    const mat: EpisodeMaterial = {
+      id: crypto.randomUUID(),
+      week_id: week.id,
+      slot_key: (['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][wd] || 'monday') as any,
+      episode_date: dateStr,
+      source_pauta_id: newPauta.id,
+      title_options_json: [],
+      selected_title_index: null,
+      description_html: null,
+      cover_url: null,
+      spotify_link: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    supabase.from('episode_materials' as any).insert(mat as any).then();
+    
+    setSelectedWeekId(week.id);
+    setAddPautaDialogOpen(false);
+    setNewPautaDate(undefined);
+    setNewPautaTemplateId('none');
+    toast.success(`Pauta criada para ${format(newPautaDate, 'dd/MM/yyyy')}`);
+  };
+
   const handleDeleteWeek = () => {
     if (!selectedWeek) return;
     deleteWeek(selectedWeek.id);
