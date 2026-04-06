@@ -97,11 +97,18 @@ export interface ActivityLog {
   created_at: string;
 }
 
+export interface SectionDataSource {
+  type: 'free_text' | 'url' | 'releases_lookup' | 'releases_review';
+  label: string;
+  input_key: string; // maps to raw_inputs_json key
+}
+
 export interface PautaTemplateSectionConfig {
   key: string;
   label: string;
   enabled: boolean;
   core_prompt: string;
+  data_sources?: SectionDataSource[];
 }
 
 export interface PautaTemplate {

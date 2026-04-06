@@ -40,10 +40,9 @@ function getEligibleReviews(releases: Release[], publicationDate: string): Relea
   const pub = new Date(publicationDate + 'T12:00:00');
   const dMinus90 = new Date(pub); dMinus90.setDate(pub.getDate() - 90);
   const dMinus1 = new Date(pub); dMinus1.setDate(pub.getDate() - 1);
-  return releases.filter(r => {
-    const rd = new Date(r.release_date + 'T12:00:00');
-    return rd >= dMinus90 && rd <= dMinus1;
-  });
+  const minDate = dMinus90.toISOString().slice(0, 10);
+  const maxDate = dMinus1.toISOString().slice(0, 10);
+  return releases.filter(r => r.release_date >= minDate && r.release_date <= maxDate);
 }
 
 function getISOWeekLabel(dateStr: string): string {
@@ -102,11 +101,11 @@ function groupReleasesByWeekAndGenre(releases: Release[]): { weekLabel: string; 
     }
     const genres = Array.from(genreMap.entries())
       .sort(([a], [b]) => a.localeCompare(b))
-      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => b.release_date.localeCompare(a.release_date)) }));
+      .map(([genre, releases]) => ({ genre, releases: releases.sort((a, b) => a.release_date.localeCompare(b.release_date)) }));
     result.push({ weekLabel, genres });
   }
-  // Sort weeks from most recent to oldest
-  result.sort((a, b) => b.weekLabel.localeCompare(a.weekLabel));
+  // Sort weeks from oldest to newest
+  result.sort((a, b) => a.weekLabel.localeCompare(b.weekLabel));
   return result;
 }
 
@@ -114,9 +113,9 @@ function getEligibleSaturdayReleases(releases: Release[], publicationDate: strin
   const pub = new Date(publicationDate + 'T12:00:00');
   const dPlus2 = new Date(pub); dPlus2.setDate(pub.getDate() + 2);
   const dPlus8 = new Date(pub); dPlus8.setDate(pub.getDate() + 8);
-  return releases.filter(r => {
-    const rd = new Date(r.release_date + 'T12:00:00');
-    return rd >= dPlus2 && rd <= dPlus8;
+  const minDate = dPlus2.toISOString().slice(0, 10);
+  const maxDate = dPlus8.toISOString().slice(0, 10);
+  return releases.filter(r => r.release_date >= minDate && r.release_date <= maxDate);
   });
 }
 
