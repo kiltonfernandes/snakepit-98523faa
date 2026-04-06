@@ -152,10 +152,14 @@ function shouldAutoFinalize(pauta: Pauta, releases: Release[]): boolean {
 }
 
 export default function Pautas() {
-  const { weeks, addWeek, deleteWeek, pautas, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
+  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [addPautaDialogOpen, setAddPautaDialogOpen] = useState(false);
+  const [newPautaDate, setNewPautaDate] = useState<Date | undefined>(undefined);
+  const [newPautaTemplateId, setNewPautaTemplateId] = useState<string>('none');
+  const [templates, setTemplates] = useState<any[]>([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
