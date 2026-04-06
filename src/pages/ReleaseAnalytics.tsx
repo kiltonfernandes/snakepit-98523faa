@@ -416,16 +416,34 @@ export default function ReleaseAnalytics() {
         </TabsContent>
 
         {/* COUNTRIES */}
-        <TabsContent value="countries" className="mt-4">
+        <TabsContent value="countries" className="mt-4 space-y-4">
           <Card>
-            <CardHeader><CardTitle className="text-sm">Lançamentos por País</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-sm">Top 15 Países</CardTitle></CardHeader>
             <CardContent>
-              <ScrollArea className="h-[500px]">
+              {countryChartData.length > 0 && (
+                <ResponsiveContainer width="100%" height={400}>
+                  <BarChart data={countryChartData} layout="vertical" margin={{ left: 60 }}
+                    onClick={(e) => e?.activePayload?.[0] && setDrilldown({ type: 'country', value: e.activePayload[0].payload.code })}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis type="number" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} width={60} />
+                    <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8 }} />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} cursor="pointer" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm">Todos os Países</CardTitle></CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[300px]">
                 <div className="space-y-2">
                   {byCountry.map(([code, data], i) => (
                     <motion.div key={code} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.02 }}
                       className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-muted/20 cursor-pointer"
-                      onClick={() => setCountryFilter(code)}
+                      onClick={() => setDrilldown({ type: 'country', value: code })}
                     >
                       <span className="text-xs text-muted-foreground w-6 text-right font-mono">{i + 1}</span>
                       {renderFlag(code)}
