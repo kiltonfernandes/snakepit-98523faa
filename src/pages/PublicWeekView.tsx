@@ -472,11 +472,14 @@ export default function PublicWeekView() {
               ))}
             </TabsList>
 
-            {tabs.map(t => (
-              <TabsContent key={t.key} value={t.key}>
-                <PautaDay pauta={t.pauta} releases={releases} allReleases={mergedReleases} />
-              </TabsContent>
-            ))}
+            {tabs.map(t => {
+              const mat = materials.find(m => m.slot_key === t.key);
+              return (
+                <TabsContent key={t.key} value={t.key}>
+                  <PautaDay pauta={t.pauta} releases={releases} allReleases={mergedReleases} coverUrl={mat?.cover_url} />
+                </TabsContent>
+              );
+            })}
           </Tabs>
         )}
       </main>
