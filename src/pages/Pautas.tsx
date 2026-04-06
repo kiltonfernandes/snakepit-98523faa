@@ -1697,7 +1697,7 @@ export default function Pautas() {
         </DialogContent>
       </Dialog>
 
-
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remover Semana</DialogTitle>
