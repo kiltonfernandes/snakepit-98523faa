@@ -165,7 +165,7 @@ function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined)
 }
 
 export default function Pautas() {
-  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek } = useApp();
+  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek, updateMaterial } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
