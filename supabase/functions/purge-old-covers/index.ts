@@ -15,17 +15,14 @@ serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Calculate cutoff: 7 days ago
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - 7);
-    const cutoffStr = cutoff.toISOString();
+    const cutoff = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
 
-    // Find materials with cover_url that are older than 7 days
     const { data: oldMaterials, error: fetchErr } = await supabase
       .from("episode_materials")
-      .select("id, episode_date, cover_url")
+      .select("id, episode_date, cover_url, cover_saved_at")
       .not("cover_url", "is", null)
-      .lt("created_at", cutoffStr);
+      .not("cover_saved_at", "is", null)
+      .lt("cover_saved_at", cutoff);
 
     if (fetchErr) {
       console.error("Fetch error:", fetchErr);
@@ -36,16 +33,15 @@ serve(async (req) => {
     }
 
     if (!oldMaterials || oldMaterials.length === 0) {
-      return new Response(JSON.stringify({ purged: 0, message: "No old covers to purge" }), {
+      return new Response(JSON.stringify({ purged: 0, message: "No expired covers to purge" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Null out cover_url for old materials
     const ids = oldMaterials.map((m: any) => m.id);
     const { error: updateErr } = await supabase
       .from("episode_materials")
-      .update({ cover_url: null, updated_at: new Date().toISOString() })
+      .update({ cover_url: null, cover_saved_at: null, updated_at: new Date().toISOString() })
       .in("id", ids);
 
     if (updateErr) {
@@ -56,9 +52,9 @@ serve(async (req) => {
       });
     }
 
-    console.log(`Purged ${ids.length} old covers`);
+    console.log(`Purged ${ids.length} expired covers after 72h retention`);
     return new Response(
-      JSON.stringify({ purged: ids.length, ids }),
+      JSON.stringify({ purged: ids.length, ids, retention_hours: 72 }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
