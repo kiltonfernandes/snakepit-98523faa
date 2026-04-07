@@ -1,0 +1,1 @@
+ALTER TABLE public.episode_materials ADD COLUMN repository_url TEXT DEFAULT NULL;
