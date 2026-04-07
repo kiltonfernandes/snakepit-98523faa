@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
