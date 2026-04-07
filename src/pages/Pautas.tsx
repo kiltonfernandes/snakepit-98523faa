@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle, Wand2, Newspaper } from 'lucide-react';
+import { FileText, Plus, Copy, Check, Sparkles, Download, Trash2, AlertTriangle, ExternalLink, Upload, CalendarIcon, Loader2, Zap, ChevronLeft, ChevronRight, Save, Eye, Circle, Wand2, Newspaper, Link2, FolderOpen } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { Calendar } from '@/components/ui/calendar';
@@ -165,7 +165,7 @@ function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined)
 }
 
 export default function Pautas() {
-  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek } = useApp();
+  const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek, updateMaterial } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
   const [newWeekDate, setNewWeekDate] = useState<Date | undefined>(undefined);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -307,6 +307,7 @@ export default function Pautas() {
       description_html: null,
       cover_url: null,
       spotify_link: null,
+      repository_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -1365,9 +1366,10 @@ export default function Pautas() {
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
             <div className="flex items-center justify-between">
               <TabsList>
-                <TabsTrigger value="inputs">Insumos</TabsTrigger>
                 <TabsTrigger value="content">Conteúdo</TabsTrigger>
+                <TabsTrigger value="inputs">Insumos</TabsTrigger>
                 <TabsTrigger value="flow">Flow</TabsTrigger>
+                <TabsTrigger value="management">Management</TabsTrigger>
               </TabsList>
               {activeTab === 'inputs' && (
                 <div className="flex gap-2">
@@ -1630,6 +1632,155 @@ export default function Pautas() {
                 </div>
 
                 {renderFlowStep()}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="management">
+              <div className="space-y-6">
+                <h3 className="text-lg font-semibold">
+                  Management – Semana de {new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}
+                </h3>
+
+                {/* Shared link */}
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    const url = `${window.location.origin}/week/${selectedWeek.id}`;
+                    navigator.clipboard.writeText(url);
+                    toast.success('Link copiado');
+                  }}
+                >
+                  <Link2 className="h-4 w-4" /> Copiar link compartilhável
+                </Button>
+
+                {/* Progress cards grid */}
+                <WorkspaceShell
+                  excludeDays={['sunday']}
+                  weekLabel="Progresso por episódio"
+                  renderDay={(day) => {
+                    const pauta = weekPautas.find(p => getPautaSlot(p) === day.key);
+                    const mat = weekMats.find(m => m.slot_key === day.key);
+                    if (!pauta) return <p className="text-xs text-muted-foreground italic">Sem pauta</p>;
+
+                    const slot = getPautaSlot(pauta);
+                    const sections = getSectionsForDay(slot);
+                    const data = (pauta.sections_json || {}) as Record<string, string>;
+                    const allSectionsFilled = sections.every(s => data[s.key]?.trim());
+
+                    const indicators = {
+                      pauta: allSectionsFilled,
+                      title: mat?.selected_title_index != null,
+                      description: !!mat?.description_html,
+                      cover: !!mat?.cover_url,
+                      scheduling: !!mat?.spotify_link,
+                    };
+                    const doneCount = Object.values(indicators).filter(Boolean).length;
+                    const total = 5;
+                    const pct = Math.round((doneCount / total) * 100);
+
+                    return (
+                      <div className="space-y-4">
+                        {/* Progress bar */}
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-medium">{doneCount}/{total}</span>
+                            <span className={cn(
+                              'h-2.5 w-2.5 rounded-full',
+                              doneCount === total ? 'bg-emerald-500' : doneCount >= 3 ? 'bg-yellow-500' : 'bg-orange-500'
+                            )} />
+                          </div>
+                          <Progress value={pct} className="h-1.5" />
+                        </div>
+
+                        {/* Indicator chips */}
+                        <div className="flex flex-wrap gap-1.5 text-[10px]">
+                          {([
+                            { key: 'pauta', label: 'Pauta', done: indicators.pauta },
+                            { key: 'title', label: 'Título', done: indicators.title },
+                            { key: 'desc', label: 'Desc.', done: indicators.description },
+                            { key: 'cover', label: 'Capa', done: indicators.cover },
+                            { key: 'sched', label: 'Agend.', done: indicators.scheduling },
+                          ] as const).map(item => (
+                            <span key={item.key} className="flex items-center gap-0.5">
+                              {item.done
+                                ? <Check className="h-3 w-3 text-emerald-400" />
+                                : <Circle className="h-3 w-3 text-muted-foreground/40" />
+                              }
+                              {item.label}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Spotify link */}
+                        <div className="space-y-1.5 border-t border-border/50 pt-3">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                            <Link2 className="h-3 w-3" /> Link do Spotify
+                          </Label>
+                          <div className="flex gap-1.5">
+                            <Input
+                              className="h-8 text-xs flex-1"
+                              placeholder="https://open.spotify.com/episode/..."
+                              value={mat?.spotify_link || ''}
+                              onChange={e => {
+                                if (mat) updateMaterial(mat.id, { spotify_link: e.target.value || null });
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              className="h-8 px-3"
+                              disabled={!mat}
+                              onClick={() => {
+                                if (mat) {
+                                  updateMaterial(mat.id, { spotify_link: mat.spotify_link });
+                                  toast.success('Link do Spotify salvo');
+                                }
+                              }}
+                            >
+                              Salvar
+                            </Button>
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">Preencher marca o episódio como agendado.</p>
+                        </div>
+
+                        {/* Repository link */}
+                        <div className="space-y-1.5 border-t border-border/50 pt-3">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                            <FolderOpen className="h-3 w-3" /> Repositório
+                          </Label>
+                          <div className="flex gap-1.5">
+                            <Input
+                              className="h-8 text-xs flex-1"
+                              placeholder="Link para as gravações do episódio..."
+                              value={mat?.repository_url || ''}
+                              onChange={e => {
+                                if (mat) updateMaterial(mat.id, { repository_url: e.target.value || null });
+                              }}
+                            />
+                            <Button
+                              size="sm"
+                              className="h-8 px-3"
+                              disabled={!mat}
+                              onClick={() => {
+                                if (mat) {
+                                  updateMaterial(mat.id, { repository_url: mat.repository_url });
+                                  toast.success('Repositório salvo');
+                                }
+                              }}
+                            >
+                              Salvar
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Status badge */}
+                        <div className="border-t border-border/50 pt-2">
+                          <StatusBadge status={computePautaStatus(pauta, mat)} />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
               </div>
             </TabsContent>
           </Tabs>

@@ -144,6 +144,7 @@ export type Database = {
           description_html: string | null
           episode_date: string
           id: string
+          repository_url: string | null
           selected_title_index: number | null
           slot_key: string
           source_pauta_id: string | null
@@ -158,6 +159,7 @@ export type Database = {
           description_html?: string | null
           episode_date: string
           id: string
+          repository_url?: string | null
           selected_title_index?: number | null
           slot_key: string
           source_pauta_id?: string | null
@@ -172,6 +174,7 @@ export type Database = {
           description_html?: string | null
           episode_date?: string
           id?: string
+          repository_url?: string | null
           selected_title_index?: number | null
           slot_key?: string
           source_pauta_id?: string | null
