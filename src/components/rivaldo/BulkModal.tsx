@@ -92,6 +92,27 @@ export function BulkModal({
   const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
+  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase
+        .from('episode_materials')
+        .select('id, title_options_json, selected_title_index, spotify_link')
+        .is('spotify_link', null);
+      if (!data) return;
+      const titles: { id: string; title: string }[] = [];
+      for (const row of data) {
+        const opts = Array.isArray(row.title_options_json) ? row.title_options_json : [];
+        const idx = row.selected_title_index ?? 0;
+        const selected = opts[idx] as { text?: string } | undefined;
+        const title = selected?.text || (opts[0] as { text?: string })?.text;
+        if (title) titles.push({ id: row.id, title });
+      }
+      setEpisodeTitles(titles);
+    })();
+  }, [open]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
