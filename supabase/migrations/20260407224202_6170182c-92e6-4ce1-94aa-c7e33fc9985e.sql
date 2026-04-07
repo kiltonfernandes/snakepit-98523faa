@@ -1,0 +1,1 @@
+ALTER TABLE public.episode_materials ADD COLUMN cover_saved_at TEXT DEFAULT NULL;

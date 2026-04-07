@@ -139,6 +139,7 @@ export type Database = {
       }
       episode_materials: {
         Row: {
+          cover_saved_at: string | null
           cover_url: string | null
           created_at: string
           description_html: string | null
@@ -154,6 +155,7 @@ export type Database = {
           week_id: string
         }
         Insert: {
+          cover_saved_at?: string | null
           cover_url?: string | null
           created_at?: string
           description_html?: string | null
@@ -169,6 +171,7 @@ export type Database = {
           week_id: string
         }
         Update: {
+          cover_saved_at?: string | null
           cover_url?: string | null
           created_at?: string
           description_html?: string | null

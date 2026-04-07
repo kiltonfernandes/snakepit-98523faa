@@ -671,8 +671,9 @@ export default function CalendarView() {
                       imageUrl: coverImageUrl,
                       title,
                       onComplete: (dataUrl) => {
-                        updateMaterial(selectedMaterial.id, { cover_url: dataUrl });
-                        setSelectedMaterial(prev => prev ? { ...prev, cover_url: dataUrl } : prev);
+                        const coverSavedAt = new Date().toISOString();
+                        updateMaterial(selectedMaterial.id, { cover_url: dataUrl, cover_saved_at: coverSavedAt });
+                        setSelectedMaterial(prev => prev ? { ...prev, cover_url: dataUrl, cover_saved_at: coverSavedAt } : prev);
                         setCoverThumbnails(prev => ({ ...prev, [selectedMaterial.id]: dataUrl }));
                         setCoverProgressItems([{ id: selectedMaterial.id, label: `Capa — ${title}`, status: 'done' }]);
                         setCoverGenerating(false);

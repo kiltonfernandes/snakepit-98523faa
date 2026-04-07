@@ -132,6 +132,7 @@ export default function Materials() {
           cover_url: null,
           spotify_link: null,
           repository_url: null,
+          cover_saved_at: null,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
@@ -660,8 +661,9 @@ export default function Materials() {
     const exportCover = () => {
       try {
         const dataUrl = canvas.toDataURL('image/png');
+        const coverSavedAt = new Date().toISOString();
         setCoverPreview(dataUrl);
-        updateMaterial(mat.id, { cover_url: dataUrl });
+        updateMaterial(mat.id, { cover_url: dataUrl, cover_saved_at: coverSavedAt });
         toast.success('Capa gerada (3000×3000)');
       } catch (error) {
         console.error('Cover export error:', error);
