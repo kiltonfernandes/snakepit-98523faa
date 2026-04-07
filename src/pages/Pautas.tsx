@@ -307,6 +307,7 @@ export default function Pautas() {
       description_html: null,
       cover_url: null,
       spotify_link: null,
+      repository_url: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
