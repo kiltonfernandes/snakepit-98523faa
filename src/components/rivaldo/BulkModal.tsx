@@ -1,5 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
@@ -90,6 +92,27 @@ export function BulkModal({
   const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
+  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string }[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      const { data } = await supabase
+        .from('episode_materials')
+        .select('id, title_options_json, selected_title_index, spotify_link')
+        .is('spotify_link', null);
+      if (!data) return;
+      const titles: { id: string; title: string }[] = [];
+      for (const row of data) {
+        const opts = Array.isArray(row.title_options_json) ? row.title_options_json : [];
+        const idx = row.selected_title_index ?? 0;
+        const selected = opts[idx] as { text?: string } | undefined;
+        const title = selected?.text || (opts[0] as { text?: string })?.text;
+        if (title) titles.push({ id: row.id, title });
+      }
+      setEpisodeTitles(titles);
+    })();
+  }, [open]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
@@ -341,14 +364,25 @@ export function BulkModal({
 
                 <div>
                   <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Nome</label>
-                  <input
-                    type="text"
+                  <Select
                     value={row.filename}
+                    onValueChange={(value) => updateRow(row.id, { filename: value })}
                     disabled={isProcessing}
-                    onChange={(e) => updateRow(row.id, { filename: e.target.value })}
-                    placeholder="nome_episodio"
-                    className="mt-1 w-full text-xs bg-background border border-border rounded px-2 py-1.5 outline-none focus:border-primary transition-colors font-mono placeholder:text-muted-foreground"
-                  />
+                  >
+                    <SelectTrigger className="mt-1 h-auto text-xs font-mono py-1.5">
+                      <SelectValue placeholder="Selecionar episódio..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {episodeTitles.map((ep) => (
+                        <SelectItem key={ep.id} value={ep.title} className="text-xs font-mono">
+                          {ep.title}
+                        </SelectItem>
+                      ))}
+                      {episodeTitles.length === 0 && (
+                        <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum episódio disponível</div>
+                      )}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </motion.div>
