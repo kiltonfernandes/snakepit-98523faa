@@ -1366,9 +1366,10 @@ export default function Pautas() {
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
             <div className="flex items-center justify-between">
               <TabsList>
-                <TabsTrigger value="inputs">Insumos</TabsTrigger>
                 <TabsTrigger value="content">Conteúdo</TabsTrigger>
+                <TabsTrigger value="inputs">Insumos</TabsTrigger>
                 <TabsTrigger value="flow">Flow</TabsTrigger>
+                <TabsTrigger value="management">Management</TabsTrigger>
               </TabsList>
               {activeTab === 'inputs' && (
                 <div className="flex gap-2">
