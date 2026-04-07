@@ -269,7 +269,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return {
         id: uid(), week_id: week.id, slot_key: slot.key, episode_date: epDate.toISOString().slice(0, 10),
         source_pauta_id: newPautas[i].id, title_options_json: [], selected_title_index: null,
-        description_html: null, cover_url: null, spotify_link: null, repository_url: null, created_at: now(), updated_at: now(),
+        description_html: null, cover_url: null, spotify_link: null, repository_url: null, cover_saved_at: null, created_at: now(), updated_at: now(),
       };
     });
     setMaterials(prev => [...prev, ...newMaterials]);
