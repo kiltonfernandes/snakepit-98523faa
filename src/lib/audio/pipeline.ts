@@ -27,7 +27,7 @@ export interface PipelineInput {
 export interface PipelineResult {
   trackReports: TrackReport[];
   masterReport: MasterReport;
-  finalBuffer: AudioBuffer;
+  finalBuffer?: AudioBuffer;
   outputBlob?: Blob;
 }
 
@@ -66,11 +66,13 @@ export interface PipelineRunOptions {
   exportMode?: 'download' | 'blob' | 'none';
   maxVoiceConcurrency?: number;
   processVoiceBuffer?: VoiceBufferProcessor;
+  returnFinalBuffer?: boolean;
 }
 
 export interface BulkPipelineRunOptions extends PipelineRunOptions {
   onItemEncoded?: (item: BulkItem, index: number, result: PipelineResult) => Promise<void> | void;
   onFinalEpisodeEncoded?: (blob: Blob) => Promise<void> | void;
+  downloadIndividualItems?: boolean;
 }
 
 function stepProgress(base: number, span: number, fraction: number, onProgress: ProgressCallback, label: string) {
@@ -132,6 +134,13 @@ function extendBgmToMatch(bgm: AudioBuffer, targetLength: number): AudioBuffer {
     dst[i] = src[i % src.length];
   }
   return output;
+}
+
+function purgeAudioBuffer(buffer: AudioBuffer | null | undefined): void {
+  if (!buffer) return;
+  for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+    buffer.getChannelData(channel).fill(0);
+  }
 }
 
 async function processVoiceBufferWithWorker(worker: VoiceWorkerClient, context: VoiceProcessContext): Promise<{ buffer: AudioBuffer; report: TrackReport }> {
@@ -202,11 +211,15 @@ export async function runPipeline(
   onLog: LogCallback,
   options: PipelineRunOptions = {}
 ): Promise<PipelineResult> {
-  const worker = new VoiceWorkerClient();
+  let worker: VoiceWorkerClient | null = null;
   try {
     const exportMode = options.exportMode ?? 'download';
     const maxVoiceConcurrency = Math.max(1, options.maxVoiceConcurrency ?? 1);
-    const processVoice = options.processVoiceBuffer ?? ((context: VoiceProcessContext) => processVoiceBufferWithWorker(worker, context));
+    const returnFinalBuffer = options.returnFinalBuffer ?? true;
+    const processVoice = options.processVoiceBuffer ?? ((context: VoiceProcessContext) => {
+      worker ??= new VoiceWorkerClient();
+      return processVoiceBufferWithWorker(worker, context);
+    });
 
     onLog('Decodificando arquivos base...', 'step');
     stepProgress(0, 0.1, 0.2, onProgress, 'Decodificando arquivos base...');
@@ -314,9 +327,20 @@ export async function runPipeline(
     }
 
     onLog(`Exportacao final: ${masterReport.loudness.lufs.toFixed(1)} LUFS / ${masterReport.loudness.truePeakDbtp.toFixed(1)} dBTP`, 'success');
-    return { trackReports, masterReport, finalBuffer: finalMaster, outputBlob };
+    const result: PipelineResult = {
+      trackReports,
+      masterReport,
+      outputBlob,
+      ...(returnFinalBuffer ? { finalBuffer: finalMaster } : {}),
+    };
+
+    if (!returnFinalBuffer) {
+      purgeAudioBuffer(finalMaster);
+    }
+
+    return result;
   } finally {
-    worker.terminate();
+    worker?.terminate();
   }
 }
 
@@ -328,67 +352,82 @@ export async function runBulkPipeline(
   options: BulkPipelineRunOptions = {}
 ): Promise<void> {
   const exportMode = options.exportMode ?? 'download';
+  const downloadIndividualItems = options.downloadIndividualItems ?? true;
   onLog(`Iniciando fila bulk com ${input.items.length} itens`, 'step');
-  const [intro, outro] = await Promise.all([decodeFile(input.intro), decodeFile(input.outro)]);
-  const introReady = ensureSampleRate(intro, 48000);
-  const outroReady = ensureSampleRate(outro, 48000);
   const v1Blobs: Blob[] = [];
+  const sharedWorker = new VoiceWorkerClient();
 
-  for (let index = 0; index < input.items.length; index++) {
-    const item = input.items[index];
-    const progressEnvelope = input.generateFinalEpisode ? 0.75 : 0.92;
-    const progressBase = (index / input.items.length) * progressEnvelope;
-    const progressSpan = progressEnvelope / input.items.length;
-    onProgress(progressBase * 100, `Processando ${item.filename}...`);
-    onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
+  try {
+    const processVoiceBuffer: VoiceBufferProcessor = (context) => processVoiceBufferWithWorker(sharedWorker, context);
 
-    const itemOptions: PipelineRunOptions = {
-      ...options,
-      exportMode: 'download',
-    };
+    for (let index = 0; index < input.items.length; index++) {
+      const item = input.items[index];
+      const progressEnvelope = input.generateFinalEpisode ? 0.75 : 0.92;
+      const progressBase = (index / input.items.length) * progressEnvelope;
+      const progressSpan = progressEnvelope / input.items.length;
+      onProgress(progressBase * 100, `Processando ${item.filename}...`);
+      onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
 
-    const result = await runPipeline(
-      {
-        masterMode: item.masterMode,
-        master: item.master,
-        masterTracks: item.masterTracks,
-        processingProfile: item.processingProfile,
-        bgm: item.bgm,
-        intro: input.intro,
-        outro: input.outro,
-        filename: item.filename,
-      },
-      params,
-      (progress, label) => {
-        onProgress(progressBase * 100 + (progress / 100) * (progressSpan * 100), label);
-      },
-      onLog,
-      itemOptions
-    );
+      const itemOptions: PipelineRunOptions = {
+        exportMode: input.generateFinalEpisode ? 'blob' : exportMode,
+        maxVoiceConcurrency: options.maxVoiceConcurrency,
+        processVoiceBuffer,
+        returnFinalBuffer: false,
+      };
 
-    onLog(`Relatorio final: ${result.masterReport.loudness.lufs.toFixed(1)} LUFS`, 'info');
-    await options.onItemEncoded?.(item, index, result);
+      const result = await runPipeline(
+        {
+          masterMode: item.masterMode,
+          master: item.master,
+          masterTracks: item.masterTracks,
+          processingProfile: item.processingProfile,
+          bgm: item.bgm,
+          intro: input.intro,
+          outro: input.outro,
+          filename: item.filename,
+        },
+        params,
+        (progress, label) => {
+          onProgress(progressBase * 100 + (progress / 100) * (progressSpan * 100), label);
+        },
+        onLog,
+        itemOptions
+      );
 
-    if (input.generateFinalEpisode) {
-      const blob = await encodeBufferToMp3Blob(result.finalBuffer, onLog, params.outputBitrate);
-      v1Blobs.push(blob);
+      if (input.generateFinalEpisode) {
+        const itemBlob = result.outputBlob;
+        if (!itemBlob) {
+          throw new Error(`Falha ao gerar MP3 do episódio ${item.filename}.`);
+        }
+        if (downloadIndividualItems) {
+          downloadBlob(itemBlob, item.filename);
+          onLog(`MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(1)} MB)`, 'success');
+        }
+        v1Blobs.push(itemBlob);
+      }
+
+      onLog(`Relatorio final: ${result.masterReport.loudness.lufs.toFixed(1)} LUFS`, 'info');
+      await options.onItemEncoded?.(item, index, result);
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
+
+    if (input.generateFinalEpisode && v1Blobs.length > 0) {
+      onLog('Gerando episodio final consolidado...', 'step');
+      onProgress(78, 'Montando MP3 consolidado...');
+
+      const finalBlob = new Blob([
+        input.intro,
+        ...v1Blobs,
+        input.outro,
+      ], { type: 'audio/mpeg' });
+
+      downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
+      onLog('Episodio final consolidado exportado', 'success');
+      await options.onFinalEpisodeEncoded?.(finalBlob);
+    }
+
+    onProgress(100, 'Bulk finalizado');
+  } finally {
+    sharedWorker.terminate();
   }
-
-  if (input.generateFinalEpisode && v1Blobs.length > 0) {
-    onLog('Gerando episodio final consolidado...', 'step');
-    onProgress(78, 'Montando MP3 consolidado...');
-
-    const finalBlob = new Blob([
-      input.intro,
-      ...v1Blobs,
-      input.outro,
-    ], { type: 'audio/mpeg' });
-
-    downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
-    onLog('Episodio final consolidado exportado', 'success');
-    await options.onFinalEpisodeEncoded?.(finalBlob);
-  }
-
-  onProgress(100, 'Bulk finalizado');
 }
