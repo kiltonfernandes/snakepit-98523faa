@@ -446,7 +446,7 @@ export function BulkModal({
               </SelectContent>
             </Select>
           </div>
-        )
+        )}
 
         <Button onClick={handleStart} disabled={!canStart} className="w-full h-10" data-testid="bulk-enqueue-button">
           {isProcessing ? (
