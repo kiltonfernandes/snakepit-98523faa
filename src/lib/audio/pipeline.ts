@@ -341,6 +341,14 @@ export async function runBulkPipeline(
     onProgress(progressBase * 100, `Processando ${item.filename}...`);
     onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
 
+    // When generating final episode, use blob mode for individual items to avoid
+    // double-encoding (once for download + once for blob collection)
+    const itemExportMode = input.generateFinalEpisode ? 'blob' : exportMode;
+    const itemOptions: PipelineRunOptions = {
+      ...options,
+      exportMode: itemExportMode,
+    };
+
     const result = await runPipeline(
       {
         masterMode: item.masterMode,
@@ -357,20 +365,20 @@ export async function runBulkPipeline(
         onProgress(progressBase * 100 + (progress / 100) * (progressSpan * 100), label);
       },
       onLog,
-      options
+      itemOptions
     );
 
     onLog(`Relatorio final: ${result.masterReport.loudness.lufs.toFixed(1)} LUFS`, 'info');
     await options.onItemEncoded?.(item, index, result);
 
     if (input.generateFinalEpisode) {
-      const blob = result.outputBlob ?? await encodeToMp3Blob(result.finalBuffer, onLog);
-      v1Blobs.push(blob);
+      v1Blobs.push(result.outputBlob!);
     }
   }
 
   if (input.generateFinalEpisode && v1Blobs.length > 0) {
     onLog('Gerando episodio final consolidado...', 'step');
+    onProgress(78, 'Decodificando itens para consolidação...');
     const decoded: AudioBuffer[] = [];
     for (let i = 0; i < v1Blobs.length; i++) {
       const file = new File([v1Blobs[i]], `bulk_${i}.mp3`, { type: 'audio/mpeg' });
@@ -389,12 +397,10 @@ export async function runBulkPipeline(
     }
     dst.set(outroReady.getChannelData(0), offset);
 
-    if (exportMode === 'download') {
-      await encodeToMp3(output, 'episodio_final', onLog, params.outputBitrate);
-    } else {
-      const finalBlob = await encodeBufferToMp3Blob(output, onLog, params.outputBitrate);
-      await options.onFinalEpisodeEncoded?.(finalBlob);
-    }
+    onProgress(88, 'Codificando episódio final...');
+    // Always download the final consolidated episode
+    await encodeToMp3(output, 'episodio_final', onLog, params.outputBitrate);
+    await options.onFinalEpisodeEncoded?.(new Blob([]));
   }
 
   onProgress(100, 'Bulk finalizado');
