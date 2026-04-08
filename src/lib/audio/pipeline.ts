@@ -341,6 +341,14 @@ export async function runBulkPipeline(
     onProgress(progressBase * 100, `Processando ${item.filename}...`);
     onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
 
+    // When generating final episode, use blob mode for individual items to avoid
+    // double-encoding (once for download + once for blob collection)
+    const itemExportMode = input.generateFinalEpisode ? 'blob' : exportMode;
+    const itemOptions: PipelineRunOptions = {
+      ...options,
+      exportMode: itemExportMode,
+    };
+
     const result = await runPipeline(
       {
         masterMode: item.masterMode,
@@ -357,15 +365,14 @@ export async function runBulkPipeline(
         onProgress(progressBase * 100 + (progress / 100) * (progressSpan * 100), label);
       },
       onLog,
-      options
+      itemOptions
     );
 
     onLog(`Relatorio final: ${result.masterReport.loudness.lufs.toFixed(1)} LUFS`, 'info');
     await options.onItemEncoded?.(item, index, result);
 
     if (input.generateFinalEpisode) {
-      const blob = result.outputBlob ?? await encodeToMp3Blob(result.finalBuffer, onLog);
-      v1Blobs.push(blob);
+      v1Blobs.push(result.outputBlob!);
     }
   }
 
