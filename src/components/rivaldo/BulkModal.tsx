@@ -207,7 +207,7 @@ export function BulkModal({
       );
 
       await runBulkPipeline(
-        { items, intro: introFile!, outro: outroFile!, generateFinalEpisode },
+        { items, intro: introFile!, outro: outroFile!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
         audioParams,
         (value, label) => {
           setProgress(value);
@@ -426,6 +426,27 @@ export function BulkModal({
             Gerar episódio final consolidado
           </Label>
         </div>
+
+        {generateFinalEpisode && (
+          <div className="space-y-1">
+            <Label className="text-xs font-mono text-muted-foreground">Nome do episódio consolidado</Label>
+            <Select value={finalEpisodeFilename} onValueChange={setFinalEpisodeFilename} disabled={isProcessing}>
+              <SelectTrigger className="h-8 text-xs font-mono">
+                <SelectValue placeholder="Selecione o título (Domingo)" />
+              </SelectTrigger>
+              <SelectContent>
+                {sundayTitles.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum episódio de domingo encontrado</div>
+                )}
+                {sundayTitles.map((ep) => (
+                  <SelectItem key={ep.id} value={ep.title} className="text-xs font-mono">
+                    {ep.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )
 
         <Button onClick={handleStart} disabled={!canStart} className="w-full h-10" data-testid="bulk-enqueue-button">
           {isProcessing ? (
