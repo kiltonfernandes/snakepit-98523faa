@@ -74,7 +74,7 @@ const Rivaldo = () => {
         const dayName = DAY_NAMES[d.getDay()] || '';
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const label = `[${dd}.${mm} - ${dayName}] - ${title}`;
+        const label = `[${dayName}] - ${title}`;
         return { value: title, label, date: m.episode_date, week_id: m.week_id };
       })
       .filter(o => o.value);
