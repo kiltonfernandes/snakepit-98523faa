@@ -342,9 +342,9 @@ export async function runBulkPipeline(
     onProgress(progressBase * 100, `Processando ${item.filename}...`);
     onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
 
-    // When generating final episode, use blob mode for individual items to avoid
-    // double-encoding (once for download + once for blob collection)
-    const itemExportMode = input.generateFinalEpisode ? 'blob' : exportMode;
+    // Always download each individual episode; if generating final episode,
+    // also collect blob for consolidation
+    const itemExportMode = 'download';
     const itemOptions: PipelineRunOptions = {
       ...options,
       exportMode: itemExportMode,
