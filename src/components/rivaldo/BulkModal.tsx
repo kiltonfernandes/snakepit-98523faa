@@ -92,7 +92,8 @@ export function BulkModal({
   const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
-  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string }[]>([]);
+  const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
+  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string; label: string }[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -102,13 +103,17 @@ export function BulkModal({
         .select('id, title_options_json, selected_title_index, spotify_link, episode_date')
         .order('episode_date', { ascending: true });
       if (!data) return;
-      const titles: { id: string; title: string }[] = [];
+      const titles: { id: string; title: string; label: string }[] = [];
       for (const row of data) {
         const opts = Array.isArray(row.title_options_json) ? row.title_options_json : [];
         const idx = row.selected_title_index ?? 0;
         const selected = opts[idx] as { text?: string } | undefined;
         const title = selected?.text || (opts[0] as { text?: string })?.text;
-        if (title) titles.push({ id: row.id, title });
+        if (title) {
+          const d = new Date(`${row.episode_date}T12:00:00`);
+          const dayName = DAY_NAMES[d.getDay()] || '';
+          titles.push({ id: row.id, title, label: `[${dayName}] - ${title}` });
+        }
       }
       setEpisodeTitles(titles);
     })();
@@ -388,7 +393,7 @@ export function BulkModal({
                     <SelectContent>
                       {episodeTitles.map((ep) => (
                         <SelectItem key={ep.id} value={ep.title} className="text-xs font-mono">
-                          {ep.title}
+                          {ep.label}
                         </SelectItem>
                       ))}
                       {episodeTitles.length === 0 && (
