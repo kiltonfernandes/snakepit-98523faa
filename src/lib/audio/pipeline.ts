@@ -373,7 +373,9 @@ export async function runBulkPipeline(
     await options.onItemEncoded?.(item, index, result);
 
     if (input.generateFinalEpisode) {
-      v1Blobs.push(result.outputBlob!);
+      // Encode a separate blob for consolidation (individual was already downloaded)
+      const blob = await encodeBufferToMp3Blob(result.finalBuffer, onLog, params.outputBitrate);
+      v1Blobs.push(blob);
     }
   }
 
