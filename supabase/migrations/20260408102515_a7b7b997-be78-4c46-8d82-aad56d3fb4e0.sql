@@ -1,0 +1,1 @@
+ALTER TABLE public.episode_materials ADD COLUMN cover_source_url text DEFAULT NULL;

@@ -130,6 +130,7 @@ export default function Materials() {
           selected_title_index: null,
           description_html: null,
           cover_url: null,
+          cover_source_url: null,
           spotify_link: null,
           repository_url: null,
           cover_saved_at: null,
@@ -550,7 +551,8 @@ export default function Materials() {
 
   const openCoverCreator = (daySlot: DaySlot) => {
     setCoverDaySlot(daySlot);
-    setImageUrl('');
+    const mat = weekMaterials.find((m) => m.slot_key === daySlot);
+    setImageUrl(mat?.cover_source_url || '');
     setCoverPreview(null);
     setCoverDialogOpen(true);
   };
@@ -663,7 +665,7 @@ export default function Materials() {
         const dataUrl = canvas.toDataURL('image/png');
         const coverSavedAt = new Date().toISOString();
         setCoverPreview(dataUrl);
-        updateMaterial(mat.id, { cover_url: dataUrl, cover_saved_at: coverSavedAt });
+        updateMaterial(mat.id, { cover_url: dataUrl, cover_saved_at: coverSavedAt, cover_source_url: imageUrl });
         toast.success('Capa gerada (3000×3000)');
       } catch (error) {
         console.error('Cover export error:', error);

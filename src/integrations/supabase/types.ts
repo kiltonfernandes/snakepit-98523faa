@@ -140,6 +140,7 @@ export type Database = {
       episode_materials: {
         Row: {
           cover_saved_at: string | null
+          cover_source_url: string | null
           cover_url: string | null
           created_at: string
           description_html: string | null
@@ -156,6 +157,7 @@ export type Database = {
         }
         Insert: {
           cover_saved_at?: string | null
+          cover_source_url?: string | null
           cover_url?: string | null
           created_at?: string
           description_html?: string | null
@@ -172,6 +174,7 @@ export type Database = {
         }
         Update: {
           cover_saved_at?: string | null
+          cover_source_url?: string | null
           cover_url?: string | null
           created_at?: string
           description_html?: string | null
