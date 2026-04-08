@@ -130,6 +130,7 @@ export default function Materials() {
           selected_title_index: null,
           description_html: null,
           cover_url: null,
+          cover_source_url: null,
           spotify_link: null,
           repository_url: null,
           cover_saved_at: null,
