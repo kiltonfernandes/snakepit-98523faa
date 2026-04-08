@@ -1274,7 +1274,20 @@ export default function Materials() {
             </div>
             <div className="space-y-1.5">
               <Label>URL da Imagem</Label>
-              <Input placeholder="Cole aqui a URL da imagem..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} />
+              <Input
+                placeholder="Cole aqui a URL da imagem..."
+                value={imageUrl}
+                onChange={(e) => setImageUrl(e.target.value)}
+                onBlur={() => {
+                  if (!coverDaySlot) return;
+                  const mat = weekMaterials.find((m) => m.slot_key === coverDaySlot);
+                  if (!mat) return;
+                  const val = imageUrl.trim() || null;
+                  if (val !== (mat.cover_source_url || null)) {
+                    updateMaterial(mat.id, { cover_source_url: val });
+                  }
+                }}
+              />
             </div>
             {imageUrl && (
               <div className="space-y-2">

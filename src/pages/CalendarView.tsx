@@ -643,6 +643,14 @@ export default function CalendarView() {
                 <Input
                   value={coverImageUrl}
                   onChange={e => setCoverImageUrl(e.target.value)}
+                  onBlur={() => {
+                    if (!selectedMaterial) return;
+                    const val = coverImageUrl.trim() || null;
+                    if (val !== (selectedMaterial.cover_source_url || null)) {
+                      updateMaterial(selectedMaterial.id, { cover_source_url: val });
+                      setSelectedMaterial(prev => prev ? { ...prev, cover_source_url: val } : prev);
+                    }
+                  }}
                   placeholder="https://..."
                   className="text-xs"
                 />
