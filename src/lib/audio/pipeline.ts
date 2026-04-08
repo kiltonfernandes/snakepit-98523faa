@@ -1,7 +1,7 @@
 import { mixAndTrim, concatenate } from './assembler';
 import { applyAutoDuck } from './auto-duck';
 import { decodeFile, audioBufferToMonoData, monoDataToAudioBuffer, ensureSampleRate } from './decoder';
-import { encodeBufferToMp3Blob, encodeToMp3, encodeToMp3Blob } from './encoder';
+import { downloadBlob, encodeBufferToMp3Blob, encodeToMp3 } from './encoder';
 import { VoiceWorkerClient } from './voice-worker-client';
 import {
   AudioParams,
