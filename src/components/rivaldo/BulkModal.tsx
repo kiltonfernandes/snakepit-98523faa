@@ -205,8 +205,21 @@ export function BulkModal({
           setProgress(value);
           setProgressLabel(label);
         },
-        addLog
+        addLog,
+        {
+          exportMode: generateFinalEpisode ? 'blob' : 'download',
+          onItemEncoded: generateFinalEpisode
+            ? undefined
+            : async (_item, _index, _result) => {
+                addLog(`Download concluído: ${_item.filename}`, 'success');
+              },
+        }
       );
+      addLog('Bulk finalizado com sucesso!', 'success');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Erro desconhecido no bulk pipeline';
+      addLog(message, 'error');
+      console.error('[Bulk Pipeline Error]', error);
     } finally {
       setIsProcessing(false);
     }
