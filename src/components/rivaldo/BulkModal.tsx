@@ -93,7 +93,10 @@ export function BulkModal({
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
   const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
-  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string; label: string }[]>([]);
+  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string; label: string; dayOfWeek: number }[]>([]);
+  const [finalEpisodeFilename, setFinalEpisodeFilename] = useState('');
+
+  const sundayTitles = useMemo(() => episodeTitles.filter(t => t.dayOfWeek === 0), [episodeTitles]);
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +106,7 @@ export function BulkModal({
         .select('id, title_options_json, selected_title_index, spotify_link, episode_date')
         .order('episode_date', { ascending: true });
       if (!data) return;
-      const titles: { id: string; title: string; label: string }[] = [];
+      const titles: { id: string; title: string; label: string; dayOfWeek: number }[] = [];
       for (const row of data) {
         const opts = Array.isArray(row.title_options_json) ? row.title_options_json : [];
         const idx = row.selected_title_index ?? 0;
@@ -112,7 +115,7 @@ export function BulkModal({
         if (title) {
           const d = new Date(`${row.episode_date}T12:00:00`);
           const dayName = DAY_NAMES[d.getDay()] || '';
-          titles.push({ id: row.id, title, label: `[${dayName}] - ${title}` });
+          titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay() });
         }
       }
       setEpisodeTitles(titles);
@@ -204,7 +207,7 @@ export function BulkModal({
       );
 
       await runBulkPipeline(
-        { items, intro: introFile!, outro: outroFile!, generateFinalEpisode },
+        { items, intro: introFile!, outro: outroFile!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
         audioParams,
         (value, label) => {
           setProgress(value);
@@ -423,6 +426,27 @@ export function BulkModal({
             Gerar episódio final consolidado
           </Label>
         </div>
+
+        {generateFinalEpisode && (
+          <div className="space-y-1">
+            <Label className="text-xs font-mono text-muted-foreground">Nome do episódio consolidado</Label>
+            <Select value={finalEpisodeFilename} onValueChange={setFinalEpisodeFilename} disabled={isProcessing}>
+              <SelectTrigger className="h-8 text-xs font-mono">
+                <SelectValue placeholder="Selecione o título (Domingo)" />
+              </SelectTrigger>
+              <SelectContent>
+                {sundayTitles.length === 0 && (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">Nenhum episódio de domingo encontrado</div>
+                )}
+                {sundayTitles.map((ep) => (
+                  <SelectItem key={ep.id} value={ep.title} className="text-xs font-mono">
+                    {ep.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <Button onClick={handleStart} disabled={!canStart} className="w-full h-10" data-testid="bulk-enqueue-button">
           {isProcessing ? (

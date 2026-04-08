@@ -45,6 +45,7 @@ export interface BulkPipelineInput {
   intro: File;
   outro: File;
   generateFinalEpisode: boolean;
+  finalFilename?: string;
 }
 
 export interface VoiceProcessContext {
@@ -399,7 +400,7 @@ export async function runBulkPipeline(
 
     onProgress(88, 'Codificando episódio final...');
     // Always download the final consolidated episode
-    await encodeToMp3(output, 'episodio_final', onLog, params.outputBitrate);
+    await encodeToMp3(output, input.finalFilename || 'episodio_final', onLog, params.outputBitrate);
     await options.onFinalEpisodeEncoded?.(new Blob([]));
   }
 
