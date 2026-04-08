@@ -109,7 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Exclude cover_url from initial load — it can be multi-MB base64 and causes timeouts
     const { data, error } = await supabase
       .from('episode_materials' as any)
-      .select('id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,created_at,updated_at');
+      .select('id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,created_at,updated_at');
     if (error) console.error('[loadMaterials] error:', error.message);
     if (data) {
       // Preserve any cover_url already in local state (loaded on demand)

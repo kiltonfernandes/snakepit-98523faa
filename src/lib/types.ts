@@ -71,6 +71,7 @@ export interface EpisodeMaterial {
   selected_title_index: number | null;
   description_html: string | null;
   cover_url: string | null;
+  cover_source_url: string | null;
   spotify_link: string | null;
   repository_url: string | null;
   cover_saved_at: string | null;

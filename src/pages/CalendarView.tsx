@@ -510,7 +510,7 @@ export default function CalendarView() {
                     </Button>
                     <Button variant="outline" className="flex-1 gap-2" onClick={() => {
                       const title = getSelectedTitle(selectedMaterial);
-                      setCoverImageUrl('');
+                      setCoverImageUrl(selectedMaterial.cover_source_url || '');
                       setCoverDialogOpen(true);
                     }}>
                       <Sparkles className="h-4 w-4" /> Gerar capa
@@ -672,8 +672,8 @@ export default function CalendarView() {
                       title,
                       onComplete: (dataUrl) => {
                         const coverSavedAt = new Date().toISOString();
-                        updateMaterial(selectedMaterial.id, { cover_url: dataUrl, cover_saved_at: coverSavedAt });
-                        setSelectedMaterial(prev => prev ? { ...prev, cover_url: dataUrl, cover_saved_at: coverSavedAt } : prev);
+                        updateMaterial(selectedMaterial.id, { cover_url: dataUrl, cover_saved_at: coverSavedAt, cover_source_url: coverImageUrl });
+                        setSelectedMaterial(prev => prev ? { ...prev, cover_url: dataUrl, cover_saved_at: coverSavedAt, cover_source_url: coverImageUrl } : prev);
                         setCoverThumbnails(prev => ({ ...prev, [selectedMaterial.id]: dataUrl }));
                         setCoverProgressItems([{ id: selectedMaterial.id, label: `Capa — ${title}`, status: 'done' }]);
                         setCoverGenerating(false);
