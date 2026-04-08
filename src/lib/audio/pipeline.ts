@@ -1,7 +1,7 @@
 import { mixAndTrim, concatenate } from './assembler';
 import { applyAutoDuck } from './auto-duck';
 import { decodeFile, audioBufferToMonoData, monoDataToAudioBuffer, ensureSampleRate } from './decoder';
-import { encodeBufferToMp3Blob, encodeToMp3, encodeToMp3Blob } from './encoder';
+import { downloadBlob, encodeBufferToMp3Blob, encodeToMp3 } from './encoder';
 import { VoiceWorkerClient } from './voice-worker-client';
 import {
   AudioParams,
@@ -342,12 +342,9 @@ export async function runBulkPipeline(
     onProgress(progressBase * 100, `Processando ${item.filename}...`);
     onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
 
-    // Always download each individual episode; if generating final episode,
-    // also collect blob for consolidation
-    const itemExportMode = 'download';
     const itemOptions: PipelineRunOptions = {
       ...options,
-      exportMode: itemExportMode,
+      exportMode: 'download',
     };
 
     const result = await runPipeline(
@@ -373,7 +370,6 @@ export async function runBulkPipeline(
     await options.onItemEncoded?.(item, index, result);
 
     if (input.generateFinalEpisode) {
-      // Encode a separate blob for consolidation (individual was already downloaded)
       const blob = await encodeBufferToMp3Blob(result.finalBuffer, onLog, params.outputBitrate);
       v1Blobs.push(blob);
     }
@@ -381,29 +377,17 @@ export async function runBulkPipeline(
 
   if (input.generateFinalEpisode && v1Blobs.length > 0) {
     onLog('Gerando episodio final consolidado...', 'step');
-    onProgress(78, 'Decodificando itens para consolidação...');
-    const decoded: AudioBuffer[] = [];
-    for (let i = 0; i < v1Blobs.length; i++) {
-      const file = new File([v1Blobs[i]], `bulk_${i}.mp3`, { type: 'audio/mpeg' });
-      decoded.push(ensureSampleRate(await decodeFile(file), 48000));
-    }
+    onProgress(78, 'Montando MP3 consolidado...');
 
-    const totalLength = introReady.length + outroReady.length + decoded.reduce((sum, buffer) => sum + buffer.length, 0);
-    const output = monoDataToAudioBuffer(new Float32Array(totalLength), 48000);
-    const dst = output.getChannelData(0);
-    let offset = 0;
-    dst.set(introReady.getChannelData(0), offset);
-    offset += introReady.length;
-    for (const buffer of decoded) {
-      dst.set(buffer.getChannelData(0), offset);
-      offset += buffer.length;
-    }
-    dst.set(outroReady.getChannelData(0), offset);
+    const finalBlob = new Blob([
+      input.intro,
+      ...v1Blobs,
+      input.outro,
+    ], { type: 'audio/mpeg' });
 
-    onProgress(88, 'Codificando episódio final...');
-    // Always download the final consolidated episode
-    await encodeToMp3(output, input.finalFilename || 'episodio_final', onLog, params.outputBitrate);
-    await options.onFinalEpisodeEncoded?.(new Blob([]));
+    downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
+    onLog('Episodio final consolidado exportado', 'success');
+    await options.onFinalEpisodeEncoded?.(finalBlob);
   }
 
   onProgress(100, 'Bulk finalizado');
