@@ -58,13 +58,13 @@ const Rivaldo = () => {
 
   const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
 
-  // Episode titles from finalized pautas, grouped by week
+  // Episode titles from all materials that have generated titles
   const episodeGroups = useMemo(() => {
-    const finalizedPautaIds = new Set(
-      pautas.filter(p => p.status === 'finalized').map(p => p.id)
-    );
     const eligibleMaterials = materials
-      .filter(m => m.source_pauta_id && finalizedPautaIds.has(m.source_pauta_id))
+      .filter(m => {
+        const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
+        return opts.length > 0 && opts.some(o => o.text);
+      })
       .map(m => {
         const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
         const title = (m.selected_title_index != null && opts[m.selected_title_index]?.text)

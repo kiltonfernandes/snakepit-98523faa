@@ -99,8 +99,8 @@ export function BulkModal({
     (async () => {
       const { data } = await supabase
         .from('episode_materials')
-        .select('id, title_options_json, selected_title_index, spotify_link')
-        .is('spotify_link', null);
+        .select('id, title_options_json, selected_title_index, spotify_link, episode_date')
+        .order('episode_date', { ascending: true });
       if (!data) return;
       const titles: { id: string; title: string }[] = [];
       for (const row of data) {
