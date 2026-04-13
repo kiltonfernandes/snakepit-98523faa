@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles } from 'lucide-react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
@@ -35,6 +35,33 @@ const BGM_PRESETS = [
   { label: 'BGM 8', url: '/presets/zzzzhhhhBGM_Heavynauta_2.0.mp3' },
 ];
 
+/** Maps filename keywords to JS getDay() values */
+const DAY_KEYWORD_MAP: { keywords: string[]; dayIndex: number }[] = [
+  { keywords: ['segunda'], dayIndex: 1 },
+  { keywords: ['terca', 'terça'], dayIndex: 2 },
+  { keywords: ['quarta'], dayIndex: 3 },
+  { keywords: ['quinta'], dayIndex: 4 },
+  { keywords: ['sexta'], dayIndex: 5 },
+  { keywords: ['sabado', 'sábado'], dayIndex: 6 },
+  { keywords: ['domingo'], dayIndex: 0 },
+];
+
+const DAY_NAMES: Record<number, string> = {
+  0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado',
+};
+
+function detectDayFromFilename(filename: string): number | null {
+  const normalized = filename.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const entry of DAY_KEYWORD_MAP) {
+    for (const kw of entry.keywords) {
+      const normalizedKw = kw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (normalized.includes(normalizedKw)) return entry.dayIndex;
+    }
+  }
+  return null;
+}
+
 interface QueueRow {
   id: string;
   masterMode: 'single' | 'multi';
@@ -43,6 +70,15 @@ interface QueueRow {
   bgmFile: File | null;
   bgmPreset: string | null;
   filename: string;
+  dayIndex: number | null; // for matching
+}
+
+interface EpisodeTitle {
+  id: string;
+  title: string;
+  label: string;
+  dayOfWeek: number;
+  weekId: string;
 }
 
 interface BulkModalProps {
@@ -59,7 +95,7 @@ interface BulkModalProps {
   onDesktopJobQueued?: (job: DesktopJob) => void;
 }
 
-function createEmptyRow(): QueueRow {
+function createEmptyRow(dayIndex: number | null = null): QueueRow {
   return {
     id: crypto.randomUUID(),
     masterMode: 'single',
@@ -68,6 +104,7 @@ function createEmptyRow(): QueueRow {
     bgmFile: null,
     bgmPreset: null,
     filename: '',
+    dayIndex,
   };
 }
 
@@ -84,7 +121,7 @@ export function BulkModal({
   desktopQueueStatusMessage = null,
   onDesktopJobQueued,
 }: BulkModalProps) {
-  const [rows, setRows] = useState<QueueRow[]>([createEmptyRow()]);
+  const [rows, setRows] = useState<QueueRow[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
@@ -92,35 +129,72 @@ export function BulkModal({
   const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
-  const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
-  const [episodeTitles, setEpisodeTitles] = useState<{ id: string; title: string; label: string; dayOfWeek: number }[]>([]);
+  const [allEpisodeTitles, setAllEpisodeTitles] = useState<EpisodeTitle[]>([]);
   const [finalEpisodeFilename, setFinalEpisodeFilename] = useState('');
+  const [selectedWeekId, setSelectedWeekId] = useState<string>('');
+  const [weeks, setWeeks] = useState<{ id: string; start_date: string }[]>([]);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
 
-  const sundayTitles = useMemo(() => episodeTitles.filter(t => t.dayOfWeek === 0), [episodeTitles]);
+  // Derived: episodes for the selected week
+  const weekEpisodes = useMemo(
+    () => allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId),
+    [allEpisodeTitles, selectedWeekId],
+  );
 
+  const sundayTitles = useMemo(() => weekEpisodes.filter(t => t.dayOfWeek === 0), [weekEpisodes]);
+
+  // Load weeks + all episodes on open
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data } = await supabase
-        .from('episode_materials')
-        .select('id, title_options_json, selected_title_index, spotify_link, episode_date')
-        .order('episode_date', { ascending: true });
-      if (!data) return;
-      const titles: { id: string; title: string; label: string; dayOfWeek: number }[] = [];
-      for (const row of data) {
-        const opts = Array.isArray(row.title_options_json) ? row.title_options_json : [];
-        const idx = row.selected_title_index ?? 0;
-        const selected = opts[idx] as { text?: string } | undefined;
-        const title = selected?.text || (opts[0] as { text?: string })?.text;
-        if (title) {
-          const d = new Date(`${row.episode_date}T12:00:00`);
-          const dayName = DAY_NAMES[d.getDay()] || '';
-          titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay() });
+      const [weeksRes, matsRes] = await Promise.all([
+        supabase.from('editorial_weeks').select('id, start_date').order('start_date', { ascending: false }),
+        supabase.from('episode_materials').select('id, title_options_json, selected_title_index, episode_date, week_id').order('episode_date', { ascending: true }),
+      ]);
+
+      if (weeksRes.data) setWeeks(weeksRes.data);
+
+      if (matsRes.data) {
+        const titles: EpisodeTitle[] = [];
+        for (const row of matsRes.data) {
+          const opts = Array.isArray(row.title_options_json) ? row.title_options_json : [];
+          const idx = row.selected_title_index ?? 0;
+          const selected = opts[idx] as { text?: string } | undefined;
+          const title = selected?.text || (opts[0] as { text?: string })?.text;
+          if (title) {
+            const d = new Date(`${row.episode_date}T12:00:00`);
+            const dayName = DAY_NAMES[d.getDay()] || '';
+            titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay(), weekId: row.week_id });
+          }
         }
+        setAllEpisodeTitles(titles);
       }
-      setEpisodeTitles(titles);
     })();
   }, [open]);
+
+  // When week changes, auto-create rows for each episode of that week (Mon-Sat, excluding Sunday which is the compiled)
+  useEffect(() => {
+    if (!selectedWeekId) { setRows([]); return; }
+    const eps = allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId && ep.dayOfWeek !== 0);
+    // Sort by day index (Mon=1 .. Sat=6)
+    const sorted = [...eps].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    const newRows: QueueRow[] = sorted.map(ep => ({
+      id: crypto.randomUUID(),
+      masterMode: 'single',
+      masterFile: null,
+      masterTracks: [],
+      bgmFile: null,
+      bgmPreset: null,
+      filename: ep.title,
+      dayIndex: ep.dayOfWeek,
+    }));
+    if (newRows.length === 0) newRows.push(createEmptyRow());
+    setRows(newRows);
+    // Auto-select sunday title for final episode
+    const sunday = allEpisodeTitles.find(ep => ep.weekId === selectedWeekId && ep.dayOfWeek === 0);
+    setFinalEpisodeFilename(sunday?.title || '');
+  }, [selectedWeekId, allEpisodeTitles]);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
@@ -130,7 +204,42 @@ export function BulkModal({
     setRows((prev) => prev.map((row) => row.id === id ? { ...row, ...updates } : row));
   };
 
-  const canStart = rows.every((row) => {
+  // Auto-match uploaded files to rows by day name in filename
+  const handleBulkFileDrop = useCallback((files: FileList | File[]) => {
+    const fileArray = Array.from(files).filter(f => f.type === 'audio/mpeg' || f.name.endsWith('.mp3'));
+    if (fileArray.length === 0) return;
+
+    setRows(prevRows => {
+      const updated = [...prevRows];
+      const unmatched: File[] = [];
+
+      for (const file of fileArray) {
+        const dayIdx = detectDayFromFilename(file.name);
+        if (dayIdx !== null) {
+          const rowIdx = updated.findIndex(r => r.dayIndex === dayIdx);
+          if (rowIdx !== -1) {
+            updated[rowIdx] = { ...updated[rowIdx], masterFile: file };
+            continue;
+          }
+        }
+        unmatched.push(file);
+      }
+
+      // Assign unmatched files to empty rows in order
+      for (const file of unmatched) {
+        const emptyIdx = updated.findIndex(r => !r.masterFile && r.masterMode === 'single');
+        if (emptyIdx !== -1) {
+          updated[emptyIdx] = { ...updated[emptyIdx], masterFile: file };
+        }
+      }
+
+      return updated;
+    });
+  }, []);
+
+  const matchedCount = rows.filter(r => r.masterFile).length;
+
+  const canStart = rows.length > 0 && rows.every((row) => {
     const masterReady = row.masterMode === 'single' ? !!row.masterFile : row.masterTracks.length > 0;
     return masterReady && (row.bgmFile || row.bgmPreset) && row.filename.trim();
   }) && introFile && outroFile && !isProcessing && (!desktopMode || (desktopQueueAvailable && !isQueueSubmitting));
@@ -233,6 +342,11 @@ export function BulkModal({
     }
   };
 
+  const weekLabel = (w: { start_date: string }) => {
+    const d = new Date(`${w.start_date}T12:00:00`);
+    return `Semana de ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
@@ -243,9 +357,7 @@ export function BulkModal({
           </DialogTitle>
           <DialogDescription className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-primary" />
-            {desktopMode
-              ? 'Cada item entra na fila desktop e pode renderizar com o app minimizado na bandeja.'
-              : 'Cada item usa o mesmo perfil RNNoise + WPE configurado na tela principal.'}
+            Selecione a semana e arraste os MP3s — o match é automático pelo nome do arquivo.
           </DialogDescription>
         </DialogHeader>
 
@@ -265,16 +377,97 @@ export function BulkModal({
           </div>
         )}
 
+        {/* Week Selector */}
+        <div className="space-y-1">
+          <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Semana</Label>
+          <Select value={selectedWeekId} onValueChange={setSelectedWeekId} disabled={isProcessing}>
+            <SelectTrigger className="h-9 text-sm font-mono">
+              <SelectValue placeholder="Selecione a semana..." />
+            </SelectTrigger>
+            <SelectContent>
+              {weeks.map(w => (
+                <SelectItem key={w.id} value={w.id} className="text-sm font-mono">
+                  {weekLabel(w)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Bulk File Drop Zone */}
+        {selectedWeekId && rows.length > 0 && (
+          <div
+            ref={dropRef}
+            onDragOver={(e) => { e.preventDefault(); setIsDraggingFiles(true); }}
+            onDragLeave={() => setIsDraggingFiles(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingFiles(false);
+              if (e.dataTransfer.files.length > 0) handleBulkFileDrop(e.dataTransfer.files);
+            }}
+            className={`relative border-2 border-dashed rounded-lg p-4 text-center transition-colors cursor-pointer ${
+              isDraggingFiles
+                ? 'border-primary bg-primary/5'
+                : matchedCount === rows.length && matchedCount > 0
+                ? 'border-primary/40 bg-primary/5'
+                : 'border-border hover:border-muted-foreground/50'
+            }`}
+          >
+            <input
+              type="file"
+              accept=".mp3,audio/mpeg"
+              multiple
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              disabled={isProcessing}
+              onChange={(e) => {
+                if (e.target.files) handleBulkFileDrop(e.target.files);
+                e.target.value = '';
+              }}
+            />
+            {matchedCount === rows.length && matchedCount > 0 ? (
+              <div className="flex items-center justify-center gap-2 text-primary">
+                <CheckCircle2 className="w-5 h-5" />
+                <span className="text-sm font-mono">{matchedCount}/{rows.length} episódios matched</span>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <Upload className="w-6 h-6 mx-auto text-muted-foreground" />
+                <p className="text-sm text-muted-foreground font-mono">
+                  Arraste os MP3s aqui (segunda.mp3, terca.mp3, ...)
+                </p>
+                {matchedCount > 0 && (
+                  <p className="text-xs text-primary font-mono">{matchedCount}/{rows.length} matched</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Episode Rows */}
         <div className="space-y-3 mt-2">
           {rows.map((row, idx) => (
             <motion.div
               key={row.id}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              className="border border-border rounded-lg p-3 space-y-2 bg-muted/30"
+              className={`border rounded-lg p-3 space-y-2 ${
+                row.masterFile
+                  ? 'border-primary/30 bg-primary/5'
+                  : 'border-border bg-muted/30'
+              }`}
             >
               <div className="flex items-center justify-between">
-                <span className="text-xs font-mono text-muted-foreground">Episódio {idx + 1}</span>
+                <span className="text-xs font-mono text-muted-foreground flex items-center gap-2">
+                  {row.dayIndex !== null && (
+                    <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider">
+                      {DAY_NAMES[row.dayIndex]}
+                    </span>
+                  )}
+                  Episódio {idx + 1}
+                  {row.masterFile && (
+                    <CheckCircle2 className="w-3 h-3 text-primary" />
+                  )}
+                </span>
                 <div className="flex items-center gap-2">
                   <Switch
                     checked={row.masterMode === 'multi'}
@@ -394,12 +587,12 @@ export function BulkModal({
                       <SelectValue placeholder="Selecionar episódio..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {episodeTitles.map((ep) => (
+                      {weekEpisodes.map((ep) => (
                         <SelectItem key={ep.id} value={ep.title} className="text-xs font-mono">
                           {ep.label}
                         </SelectItem>
                       ))}
-                      {episodeTitles.length === 0 && (
+                      {weekEpisodes.length === 0 && (
                         <div className="px-2 py-1.5 text-xs text-muted-foreground">Nenhum episódio disponível</div>
                       )}
                     </SelectContent>
