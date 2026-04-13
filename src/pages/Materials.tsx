@@ -1131,8 +1131,8 @@ export default function Materials() {
               weekLabel="Títulos da Semana"
               actions={
                 <Button size="sm" onClick={handleBulkTitles} disabled={generatingAllTitles}>
-                  {generatingAllTitles ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Sparkles className="mr-1 h-4 w-4" />}
-                  {generatingAllTitles ? 'Gerando...' : 'Gerar Todos (IA)'}
+                  {generatingAllTitles ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : weekMaterials.some(m => getTitleOptions(m).length > 0) ? <RefreshCw className="mr-1 h-4 w-4" /> : <Sparkles className="mr-1 h-4 w-4" />}
+                  {generatingAllTitles ? 'Gerando...' : weekMaterials.some(m => getTitleOptions(m).length > 0) ? 'Regenerar Todos (IA)' : 'Gerar Todos (IA)'}
                 </Button>
               }
               renderDay={(day) => {
