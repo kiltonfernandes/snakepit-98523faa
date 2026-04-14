@@ -174,6 +174,23 @@ export function BulkModal({
 
   const sundayTitles = useMemo(() => weekEpisodes.filter(t => t.dayOfWeek === 0), [weekEpisodes]);
 
+  // Auto-load intro/outro presets on open
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const [intro, outro] = await Promise.all([
+          loadPresetAsFile(INTRO_PRESET),
+          loadPresetAsFile(OUTRO_PRESET),
+        ]);
+        setAutoIntroFile(intro);
+        setAutoOutroFile(outro);
+      } catch (e) {
+        console.warn('[BulkModal] Failed to auto-load intro/outro presets', e);
+      }
+    })();
+  }, [open]);
+
   // Load weeks + all episodes on open
   useEffect(() => {
     if (!open) return;
@@ -203,7 +220,7 @@ export function BulkModal({
     })();
   }, [open]);
 
-  // When week changes, auto-create rows for each episode of that week (Mon-Sat, excluding Sunday which is the compiled)
+  // When week changes, auto-create rows with random non-repeating BGMs
   useEffect(() => {
     if (!selectedWeekId) { setRows([]); return; }
     const eps = allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId && ep.dayOfWeek !== 0);
