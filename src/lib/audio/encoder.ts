@@ -72,7 +72,7 @@ export async function encodeToMp3(
 ): Promise<void> {
   log(`Codificando para MP3 (${kbps}kbps)...`, 'step');
   const blob = await encodeBufferToMp3Blob(buffer, log, kbps, onSubProgress);
-  downloadBlob(blob, filename);
+  await downloadBlob(blob, filename);
   const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
   log(`MP3 exportado: ${filename}.mp3 (${sizeMB} MB)`, 'success');
 }
