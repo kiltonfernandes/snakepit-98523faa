@@ -50,15 +50,21 @@ export async function encodeBufferToMp3Blob(
   return new Blob(mp3Data as BlobPart[], { type: 'audio/mp3' });
 }
 
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename.endsWith('.mp3') ? filename : `${filename}.mp3`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.mp3') ? filename : `${filename}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Delay revoke so browser has time to start the download
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      resolve();
+    }, 1500);
+  });
 }
 
 export async function encodeToMp3(

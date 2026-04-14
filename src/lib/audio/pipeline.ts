@@ -400,8 +400,10 @@ export async function runBulkPipeline(
           throw new Error(`Falha ao gerar MP3 do episódio ${item.filename}.`);
         }
         if (downloadIndividualItems) {
-          downloadBlob(itemBlob, item.filename);
+          await downloadBlob(itemBlob, item.filename);
           onLog(`MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(1)} MB)`, 'success');
+          // Small delay between downloads to prevent browser throttling
+          await new Promise(r => setTimeout(r, 800));
         }
         v1Blobs.push(itemBlob);
       }
