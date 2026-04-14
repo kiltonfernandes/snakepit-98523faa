@@ -159,6 +159,12 @@ export function BulkModal({
   const [weeks, setWeeks] = useState<{ id: string; start_date: string }[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
+  const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
+
+  // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
+  const resolvedIntro = introFile || autoIntroFile;
+  const resolvedOutro = outroFile || autoOutroFile;
 
   // Derived: episodes for the selected week
   const weekEpisodes = useMemo(
