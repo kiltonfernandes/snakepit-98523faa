@@ -364,7 +364,7 @@ export function BulkModal({
       );
 
       await runBulkPipeline(
-        { items, intro: introFile!, outro: outroFile!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
+        { items, intro: resolvedIntro!, outro: resolvedOutro!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
         audioParams,
         (value, label) => {
           setProgress(value);
