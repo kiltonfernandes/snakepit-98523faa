@@ -1,51 +1,38 @@
 
-Objetivo: fazer a URL da imagem virar um dado persistido de verdade do episódio, independente da geração da capa.
 
-1. Confirmar e preservar a base atual
-- O campo `cover_source_url` já existe no banco e já está tipado.
-- O carregamento inicial de `episode_materials` já traz `cover_source_url`.
-- Portanto, não precisa nova migration; o problema é de comportamento na UI.
+## Problema
 
-2. Corrigir a lógica de persistência
-- Hoje a URL só é salva quando a capa é gerada com sucesso.
-- Vou ajustar para que a URL seja salva no episódio assim que o usuário editar o campo, sem depender do botão “Gerar Capa”.
-- Implementação recomendada:
-  - manter estado local do input;
-  - persistir com debounce curto ou no `blur`;
-  - salvar `''` como `null` no banco;
-  - reutilizar `updateMaterial(...)` para manter estado local + backend sincronizados.
+O bulk pipeline diz que gerou todos os episódios, mas o browser só baixa o primeiro. Há **3 bugs** no código:
 
-3. Aplicar isso nos 2 fluxos que usam o campo
-- `src/pages/Materials.tsx`
-  - sub-aba Capas: ao digitar/editar “URL da Imagem”, persistir em `episode_materials.cover_source_url`.
-  - ao abrir um episódio, preencher o input com a URL salva.
-  - ao clicar em gerar, usar a URL já persistida; a geração da capa continua salvando apenas `cover_url`/`cover_saved_at`.
-- `src/pages/CalendarView.tsx`
-  - modal “Gerar Capa”: mesmo comportamento.
-  - ao abrir o modal, carregar `selectedMaterial.cover_source_url`.
-  - se o usuário alterar a URL no modal, persistir imediatamente no mesmo registro do episódio.
+1. **`downloadBlob` do episódio final não tem `await`** (pipeline.ts linha 426) — o download é disparado mas não aguardado.
+2. **Browsers bloqueiam downloads programáticos rápidos em sequência** — o delay de 800ms entre downloads não é suficiente; a maioria dos browsers (Chrome/Edge) silenciosamente ignora o 2º+ `a.click()` se vierem muito rápido.
+3. **O BulkModal não passa `downloadIndividualItems: true`** explicitamente nas options quando `generateFinalEpisode` é true (linha 374-381) — ele confia no default, mas não há feedback visual por item.
 
-4. Garantir consistência do estado
-- Atualizar também `selectedMaterial` no modal do calendário quando a URL mudar, para evitar desencontro entre input e estado exibido.
-- Manter `weekMaterials/materials` sincronizados para que, ao reabrir a sub-aba Capas ou o modal, a URL reapareça corretamente.
-- Validar que materiais criados pelo fluxo de “repair” continuam com `cover_source_url: null` por padrão.
+## Plano
 
-5. Ajustes de UX
-- Opcionalmente mostrar feedback discreto de “URL salva” / “Salvando...” para deixar claro que o campo persistiu.
-- Não exigir que a capa exista para a URL permanecer gravada.
-- Se a geração falhar, a URL continua salva mesmo assim.
+### 1. Refatorar `downloadBlob` com retry e delay maior (`src/lib/audio/encoder.ts`)
+- Aumentar o delay de revoke para **3000ms**
+- Adicionar log para rastrear cada download disparado
 
-6. Verificação final
-- Fluxo 1: Materiais → Capas → colar URL → fechar → reabrir → URL continua lá.
-- Fluxo 2: Calendário → abrir modal do episódio → colar/editar URL → fechar → reabrir → URL continua lá.
-- Fluxo 3: salvar URL em um lugar e gerar capa no outro, confirmando que ambos usam o mesmo valor persistido.
-- Fluxo 4: limpar o campo, confirmar que o banco recebe `null` e o input volta vazio depois.
+### 2. Corrigir `runBulkPipeline` (`src/lib/audio/pipeline.ts`)
+- **`await`** no `downloadBlob` do episódio final (linha 426)
+- Aumentar delay entre downloads individuais de 800ms para **2500ms**
+- Adicionar `onLog` para cada download individual confirmando que foi disparado
 
-Detalhes técnicos
-- Arquivos principais:
-  - `src/pages/Materials.tsx`
-  - `src/pages/CalendarView.tsx`
-  - possivelmente um pequeno ajuste em `src/contexts/AppContext.tsx` apenas se precisar melhorar sincronização local, mas sem mudança estrutural.
-- Banco:
-  - usar o campo já existente `episode_materials.cover_source_url`.
-  - sem mudança de schema.
+### 3. Passar `downloadIndividualItems: true` explicitamente no BulkModal (`src/components/rivaldo/BulkModal.tsx`)
+- Na chamada `runBulkPipeline` quando `generateFinalEpisode` é true, passar `downloadIndividualItems: true` e `onItemEncoded` com feedback visual
+
+### Detalhes técnicos
+
+**pipeline.ts** — mudanças na função `runBulkPipeline`:
+- Linha 403: `await downloadBlob(...)` — já tem await, OK
+- Linha 406: delay `800ms` → `2500ms`  
+- Linha 426: adicionar `await` antes de `downloadBlob(...)`
+
+**encoder.ts** — `downloadBlob`:
+- Delay de revoke `1500ms` → `3000ms`
+
+**BulkModal.tsx** — options do `runBulkPipeline`:
+- Adicionar `downloadIndividualItems: true` nas options
+- Adicionar `onItemEncoded` callback para ambos os modos (com e sem `generateFinalEpisode`)
+
