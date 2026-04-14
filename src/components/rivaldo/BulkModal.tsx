@@ -226,13 +226,14 @@ export function BulkModal({
     const eps = allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId && ep.dayOfWeek !== 0);
     // Sort by day index (Mon=1 .. Sat=6)
     const sorted = [...eps].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-    const newRows: QueueRow[] = sorted.map(ep => ({
+    const bgmAssignments = assignRandomBgms(sorted.length);
+    const newRows: QueueRow[] = sorted.map((ep, i) => ({
       id: crypto.randomUUID(),
       masterMode: 'single',
       masterFile: null,
       masterTracks: [],
       bgmFile: null,
-      bgmPreset: null,
+      bgmPreset: bgmAssignments[i],
       filename: ep.title,
       dayIndex: ep.dayOfWeek,
     }));
