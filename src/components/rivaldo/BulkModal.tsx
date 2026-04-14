@@ -308,8 +308,8 @@ export function BulkModal({
       const payloadResult = await prepareDesktopBulkPayload({
         desktopState,
         rows,
-        introFile,
-        outroFile,
+        introFile: resolvedIntro,
+        outroFile: resolvedOutro,
         audioParams,
         processingProfile,
         generateFinalEpisode,
