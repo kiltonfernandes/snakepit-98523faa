@@ -403,7 +403,7 @@ export async function runBulkPipeline(
           await downloadBlob(itemBlob, item.filename);
           onLog(`MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(1)} MB)`, 'success');
           // Small delay between downloads to prevent browser throttling
-          if (i < items.length - 1) {
+          if (index < input.items.length - 1) {
             await new Promise(r => setTimeout(r, 2500));
           }
         }
