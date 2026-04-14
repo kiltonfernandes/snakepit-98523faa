@@ -35,6 +35,30 @@ const BGM_PRESETS = [
   { label: 'BGM 8', url: '/presets/zzzzhhhhBGM_Heavynauta_2.0.mp3' },
 ];
 
+const INTRO_PRESET: PresetDefinition = { label: 'Heavynauta', url: '/presets/Heavynauta_Intro.mp3' };
+const OUTRO_PRESET: PresetDefinition = { label: 'Heavynauta', url: '/presets/heavynaura_outro.mp3' };
+
+/** Shuffle array and return a copy */
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/** Assign non-repeating BGM presets to N rows */
+function assignRandomBgms(count: number): string[] {
+  if (count === 0) return [];
+  const shuffled = shuffleArray(BGM_PRESETS);
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(shuffled[i % shuffled.length].url);
+  }
+  return result;
+}
+
 /** Maps filename keywords to JS getDay() values */
 const DAY_KEYWORD_MAP: { keywords: string[]; dayIndex: number }[] = [
   { keywords: ['segunda'], dayIndex: 1 },
