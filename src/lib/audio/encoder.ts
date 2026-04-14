@@ -50,15 +50,21 @@ export async function encodeBufferToMp3Blob(
   return new Blob(mp3Data as BlobPart[], { type: 'audio/mp3' });
 }
 
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename.endsWith('.mp3') ? filename : `${filename}.mp3`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+function downloadBlob(blob: Blob, filename: string): Promise<void> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename.endsWith('.mp3') ? filename : `${filename}.mp3`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Delay revoke so browser has time to start the download
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      resolve();
+    }, 1500);
+  });
 }
 
 export async function encodeToMp3(
@@ -66,7 +72,7 @@ export async function encodeToMp3(
 ): Promise<void> {
   log(`Codificando para MP3 (${kbps}kbps)...`, 'step');
   const blob = await encodeBufferToMp3Blob(buffer, log, kbps, onSubProgress);
-  downloadBlob(blob, filename);
+  await downloadBlob(blob, filename);
   const sizeMB = (blob.size / (1024 * 1024)).toFixed(1);
   log(`MP3 exportado: ${filename}.mp3 (${sizeMB} MB)`, 'success');
 }
