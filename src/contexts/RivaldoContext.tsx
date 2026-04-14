@@ -18,6 +18,7 @@ interface RivaldoContextType extends RivaldoState {
   clearState: () => void;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
 const RivaldoContext = createContext<RivaldoContextType | null>(null);
 
 export function RivaldoProvider({ children }: { children: React.ReactNode }) {
