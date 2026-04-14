@@ -373,11 +373,10 @@ export function BulkModal({
         addLog,
         {
           exportMode: generateFinalEpisode ? 'blob' : 'download',
-          onItemEncoded: generateFinalEpisode
-            ? undefined
-            : async (_item, _index, _result) => {
-                addLog(`Download concluído: ${_item.filename}`, 'success');
-              },
+          downloadIndividualItems: true,
+          onItemEncoded: async (_item, _index, _result) => {
+            addLog(`Download concluído: ${_item.filename}`, 'success');
+          },
         }
       );
       addLog('Bulk finalizado com sucesso!', 'success');

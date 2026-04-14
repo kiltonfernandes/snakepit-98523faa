@@ -63,7 +63,7 @@ function downloadBlob(blob: Blob, filename: string): Promise<void> {
     setTimeout(() => {
       URL.revokeObjectURL(url);
       resolve();
-    }, 1500);
+    }, 3000);
   });
 }
 
