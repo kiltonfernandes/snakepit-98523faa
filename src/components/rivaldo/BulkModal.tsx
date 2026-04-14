@@ -19,7 +19,7 @@ import {
 import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile } from '@/lib/audio/types';
 import { ElapsedTimer } from '@/components/rivaldo/ElapsedTimer';
-import { loadPresetAsFile } from '@/lib/assets/presets';
+import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
