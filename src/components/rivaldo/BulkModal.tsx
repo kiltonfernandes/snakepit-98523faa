@@ -19,7 +19,7 @@ import {
 import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile } from '@/lib/audio/types';
 import { ElapsedTimer } from '@/components/rivaldo/ElapsedTimer';
-import { loadPresetAsFile } from '@/lib/assets/presets';
+import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
@@ -34,6 +34,30 @@ const BGM_PRESETS = [
   { label: 'BGM 7', url: '/presets/zzzzggggBGM_Heavynauta_2.0.mp3' },
   { label: 'BGM 8', url: '/presets/zzzzhhhhBGM_Heavynauta_2.0.mp3' },
 ];
+
+const INTRO_PRESET: PresetDefinition = { label: 'Heavynauta', url: '/presets/Heavynauta_Intro.mp3' };
+const OUTRO_PRESET: PresetDefinition = { label: 'Heavynauta', url: '/presets/heavynaura_outro.mp3' };
+
+/** Shuffle array and return a copy */
+function shuffleArray<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+/** Assign non-repeating BGM presets to N rows */
+function assignRandomBgms(count: number): string[] {
+  if (count === 0) return [];
+  const shuffled = shuffleArray(BGM_PRESETS);
+  const result: string[] = [];
+  for (let i = 0; i < count; i++) {
+    result.push(shuffled[i % shuffled.length].url);
+  }
+  return result;
+}
 
 /** Maps filename keywords to JS getDay() values */
 const DAY_KEYWORD_MAP: { keywords: string[]; dayIndex: number }[] = [
@@ -135,6 +159,12 @@ export function BulkModal({
   const [weeks, setWeeks] = useState<{ id: string; start_date: string }[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
+  const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
+
+  // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
+  const resolvedIntro = introFile || autoIntroFile;
+  const resolvedOutro = outroFile || autoOutroFile;
 
   // Derived: episodes for the selected week
   const weekEpisodes = useMemo(
@@ -143,6 +173,23 @@ export function BulkModal({
   );
 
   const sundayTitles = useMemo(() => weekEpisodes.filter(t => t.dayOfWeek === 0), [weekEpisodes]);
+
+  // Auto-load intro/outro presets on open
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const [intro, outro] = await Promise.all([
+          loadPresetAsFile(INTRO_PRESET),
+          loadPresetAsFile(OUTRO_PRESET),
+        ]);
+        setAutoIntroFile(intro);
+        setAutoOutroFile(outro);
+      } catch (e) {
+        console.warn('[BulkModal] Failed to auto-load intro/outro presets', e);
+      }
+    })();
+  }, [open]);
 
   // Load weeks + all episodes on open
   useEffect(() => {
@@ -173,19 +220,20 @@ export function BulkModal({
     })();
   }, [open]);
 
-  // When week changes, auto-create rows for each episode of that week (Mon-Sat, excluding Sunday which is the compiled)
+  // When week changes, auto-create rows with random non-repeating BGMs
   useEffect(() => {
     if (!selectedWeekId) { setRows([]); return; }
     const eps = allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId && ep.dayOfWeek !== 0);
     // Sort by day index (Mon=1 .. Sat=6)
     const sorted = [...eps].sort((a, b) => a.dayOfWeek - b.dayOfWeek);
-    const newRows: QueueRow[] = sorted.map(ep => ({
+    const bgmAssignments = assignRandomBgms(sorted.length);
+    const newRows: QueueRow[] = sorted.map((ep, i) => ({
       id: crypto.randomUUID(),
       masterMode: 'single',
       masterFile: null,
       masterTracks: [],
       bgmFile: null,
-      bgmPreset: null,
+      bgmPreset: bgmAssignments[i],
       filename: ep.title,
       dayIndex: ep.dayOfWeek,
     }));
@@ -242,7 +290,7 @@ export function BulkModal({
   const canStart = rows.length > 0 && rows.every((row) => {
     const masterReady = row.masterMode === 'single' ? !!row.masterFile : row.masterTracks.length > 0;
     return masterReady && (row.bgmFile || row.bgmPreset) && row.filename.trim();
-  }) && introFile && outroFile && !isProcessing && (!desktopMode || (desktopQueueAvailable && !isQueueSubmitting));
+  }) && resolvedIntro && resolvedOutro && !isProcessing && (!desktopMode || (desktopQueueAvailable && !isQueueSubmitting));
 
   const handleStart = async () => {
     if (!canStart) return;
@@ -260,8 +308,8 @@ export function BulkModal({
       const payloadResult = await prepareDesktopBulkPayload({
         desktopState,
         rows,
-        introFile,
-        outroFile,
+        introFile: resolvedIntro,
+        outroFile: resolvedOutro,
         audioParams,
         processingProfile,
         generateFinalEpisode,
@@ -316,7 +364,7 @@ export function BulkModal({
       );
 
       await runBulkPipeline(
-        { items, intro: introFile!, outro: outroFile!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
+        { items, intro: resolvedIntro!, outro: resolvedOutro!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
         audioParams,
         (value, label) => {
           setProgress(value);
