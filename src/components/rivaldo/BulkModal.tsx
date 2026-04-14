@@ -290,7 +290,7 @@ export function BulkModal({
   const canStart = rows.length > 0 && rows.every((row) => {
     const masterReady = row.masterMode === 'single' ? !!row.masterFile : row.masterTracks.length > 0;
     return masterReady && (row.bgmFile || row.bgmPreset) && row.filename.trim();
-  }) && introFile && outroFile && !isProcessing && (!desktopMode || (desktopQueueAvailable && !isQueueSubmitting));
+  }) && resolvedIntro && resolvedOutro && !isProcessing && (!desktopMode || (desktopQueueAvailable && !isQueueSubmitting));
 
   const handleStart = async () => {
     if (!canStart) return;
