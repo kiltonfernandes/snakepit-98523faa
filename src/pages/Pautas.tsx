@@ -962,7 +962,7 @@ export default function Pautas() {
                 className="h-7 text-xs"
               />
             </div>
-            <ScrollArea className="h-[300px]">
+            <ScrollArea className="h-[min(60vh,500px)]">
               {grouped.length > 0 ? (
                 <div className="p-1">
                   {grouped.map(week => (
@@ -1036,7 +1036,7 @@ export default function Pautas() {
           onChange={e => setSearch(e.target.value)}
           className="h-7 text-xs mb-1"
         />
-        <ScrollArea className="h-[200px]">
+        <ScrollArea className="h-[min(55vh,420px)]">
           {grouped.length > 0 ? (
             <div className="space-y-1">
               {grouped.map(week => (
