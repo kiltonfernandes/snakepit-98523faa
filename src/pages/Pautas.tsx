@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
+import { ExpandDayDialog } from '@/components/workspace/ExpandDayDialog';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
