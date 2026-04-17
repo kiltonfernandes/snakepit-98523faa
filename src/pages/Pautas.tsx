@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
+import { ExpandDayDialog } from '@/components/workspace/ExpandDayDialog';
 import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
@@ -1399,7 +1400,7 @@ export default function Pautas() {
                   const slot = getPautaSlot(pauta);
                   const sections = getSectionsForDay(slot);
 
-                  return (
+                  const body = (
                     <div className="space-y-3">
                       <div className="flex items-center gap-2">
                         <span className={`h-2.5 w-2.5 rounded-full ${trafficLight(pauta)}`} />
@@ -1504,6 +1505,18 @@ export default function Pautas() {
                         Salvar Inputs
                       </Button>
                     </div>
+                  );
+
+                  return (
+                    <>
+                      <ExpandDayDialog
+                        dayLabel={day.label}
+                        weekLabel={`Insumos – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
+                      >
+                        {body}
+                      </ExpandDayDialog>
+                      {body}
+                    </>
                   );
                 }}
               />
