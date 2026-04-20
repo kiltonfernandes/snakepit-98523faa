@@ -585,10 +585,14 @@ export default function CalendarView() {
                         onClick={() => {
                           setMentionedInput('');
                           if (selectedMaterial) {
-                            updateMaterial(selectedMaterial.id, { mentioned_in_episode: null });
-                            setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: null } : null));
+                            const cleanedHtml = stripMentionedSection(selectedMaterial.description_html || '');
+                            updateMaterial(selectedMaterial.id, {
+                              mentioned_in_episode: null,
+                              description_html: cleanedHtml,
+                            });
+                            setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: null, description_html: cleanedHtml } : null));
                           }
-                          toast.success('Mencionados limpos');
+                          toast.success('Mencionados removidos do campo e da descrição');
                         }}
                         disabled={!mentionedInput.trim() && !selectedMaterial?.mentioned_in_episode}
                       >
