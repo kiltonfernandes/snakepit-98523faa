@@ -240,6 +240,8 @@ export function BulkModal({
       bgmPreset: bgmAssignments[i],
       filename: ep.title,
       dayIndex: ep.dayOfWeek,
+      materialId: ep.id,
+      episodeDate: ep.episodeDate,
     }));
     if (newRows.length === 0) newRows.push(createEmptyRow());
     setRows(newRows);
