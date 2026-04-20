@@ -565,6 +565,47 @@ export default function CalendarView() {
 
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between gap-3">
+                    <Label className="flex items-center gap-2 text-sm font-medium">
+                      <Mic className="h-4 w-4 text-primary" />
+                      Mencionado no Episódio
+                    </Label>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleSaveMentioned}
+                      >
+                        Salvar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleEnrichDescription}
+                        disabled={!mentionedInput.trim() || enrichingDescription}
+                      >
+                        {enrichingDescription ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        Inserir na descrição (IA)
+                      </Button>
+                    </div>
+                  </div>
+                  <Textarea
+                    value={mentionedInput}
+                    onChange={(e) => setMentionedInput(e.target.value)}
+                    placeholder="Cole links, vídeos ou assuntos que você mencionou no episódio (um por linha)..."
+                    className="min-h-[100px] resize-y text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A IA gera uma seção "🎙️ Mencionado neste episódio" no topo da descrição. Reinserir substitui a seção anterior.
+                  </p>
+                </section>
+
+                <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center justify-between gap-3">
                     <Label className="text-sm font-medium">Descrição em HTML</Label>
                     <Button
                       variant="outline"
@@ -581,6 +622,55 @@ export default function CalendarView() {
                     placeholder="A descrição HTML aparecerá aqui..."
                     className="min-h-[260px] resize-none font-mono text-xs"
                   />
+                </section>
+
+                <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    {selectedMaterial.repository_url ? (
+                      <Cloud className="h-4 w-4 text-primary" />
+                    ) : (
+                      <CloudOff className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    Arquivo no OneDrive
+                  </Label>
+                  {selectedMaterial.repository_url ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge className="bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20">
+                          MP3 no Drive
+                        </Badge>
+                        {selectedMaterial.repository_uploaded_at && (
+                          <span className="text-xs text-muted-foreground">
+                            enviado em{' '}
+                            {new Date(selectedMaterial.repository_uploaded_at).toLocaleString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 gap-2"
+                          onClick={handleDownloadFromDrive}
+                        >
+                          <Download className="h-3.5 w-3.5" /> Baixar do Drive
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="flex-1 gap-2"
+                          onClick={() => setConfirmDeleteDriveOpen(true)}
+                          disabled={!selectedMaterial.repository_file_id}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir do Drive
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum MP3 enviado ainda. Use a aba <span className="font-medium text-foreground">Rivaldo</span> para gerar e subir.
+                    </p>
+                  )}
                 </section>
 
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
