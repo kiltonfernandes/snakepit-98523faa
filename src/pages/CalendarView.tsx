@@ -538,7 +538,7 @@ export default function CalendarView() {
 
       {/* Episode package modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pacote do episódio</DialogTitle>
             <DialogDescription>Copie título e HTML, baixe a capa e atualize o link do Spotify.</DialogDescription>
