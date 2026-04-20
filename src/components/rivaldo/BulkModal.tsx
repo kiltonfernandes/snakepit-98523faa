@@ -165,6 +165,9 @@ export function BulkModal({
   const dropRef = useRef<HTMLDivElement>(null);
   const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
   const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
+  const [uploadToCloud, setUploadToCloud] = useState(true);
+  type UploadStatus = { state: 'idle' | 'uploading' | 'done' | 'error'; webUrl?: string; error?: string; fileId?: string; folderPath?: string; uploadedFilename?: string };
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadStatus>>({});
 
   // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
   const resolvedIntro = introFile || autoIntroFile;
