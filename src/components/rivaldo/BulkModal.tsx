@@ -769,6 +769,19 @@ export function BulkModal({
           </Label>
         </div>
 
+        <div className="flex items-center gap-2 py-1">
+          <Checkbox
+            id="bulk-upload-cloud"
+            checked={uploadToCloud}
+            onCheckedChange={(checked) => setUploadToCloud(checked === true)}
+            disabled={isProcessing}
+          />
+          <Label htmlFor="bulk-upload-cloud" className="text-xs font-mono text-muted-foreground cursor-pointer flex items-center gap-1.5">
+            <Cloud className="w-3.5 h-3.5" />
+            Enviar todos para OneDrive (Snakepit/{new Date().getFullYear()}-W##/)
+          </Label>
+        </div>
+
         {generateFinalEpisode && (
           <div className="space-y-1">
             <Label className="text-xs font-mono text-muted-foreground">Nome do episódio consolidado</Label>
