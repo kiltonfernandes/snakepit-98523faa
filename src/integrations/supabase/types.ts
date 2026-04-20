@@ -146,6 +146,9 @@ export type Database = {
           description_html: string | null
           episode_date: string
           id: string
+          repository_file_id: string | null
+          repository_provider: string | null
+          repository_uploaded_at: string | null
           repository_url: string | null
           selected_title_index: number | null
           slot_key: string
@@ -163,6 +166,9 @@ export type Database = {
           description_html?: string | null
           episode_date: string
           id: string
+          repository_file_id?: string | null
+          repository_provider?: string | null
+          repository_uploaded_at?: string | null
           repository_url?: string | null
           selected_title_index?: number | null
           slot_key: string
@@ -180,6 +186,9 @@ export type Database = {
           description_html?: string | null
           episode_date?: string
           id?: string
+          repository_file_id?: string | null
+          repository_provider?: string | null
+          repository_uploaded_at?: string | null
           repository_url?: string | null
           selected_title_index?: number | null
           slot_key?: string
