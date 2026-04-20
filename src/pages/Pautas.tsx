@@ -310,6 +310,10 @@ export default function Pautas() {
       cover_source_url: null,
       spotify_link: null,
       repository_url: null,
+      repository_file_id: null,
+      repository_provider: null,
+      repository_uploaded_at: null,
+      mentioned_in_episode: null,
       cover_saved_at: null,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
@@ -1428,6 +1432,18 @@ export default function Pautas() {
                         value={inputs.comment_anniversary || ''}
                         onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
                       />
+
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Mencionado no Episódio
+                        </Label>
+                        <Textarea
+                          className="min-h-[60px] text-xs"
+                          placeholder="Cole links ou assuntos que você mencionou no episódio (um por linha)..."
+                          value={inputs.mentioned_in_episode || ''}
+                          onChange={e => updateRawInput(pauta.id, 'mentioned_in_episode', e.target.value)}
+                        />
+                      </div>
 
                       {slot !== 'saturday' && slot !== 'sunday' && (
                         <>

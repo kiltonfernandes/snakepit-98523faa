@@ -146,6 +146,7 @@ export type Database = {
           description_html: string | null
           episode_date: string
           id: string
+          mentioned_in_episode: string | null
           repository_file_id: string | null
           repository_provider: string | null
           repository_uploaded_at: string | null
@@ -166,6 +167,7 @@ export type Database = {
           description_html?: string | null
           episode_date: string
           id: string
+          mentioned_in_episode?: string | null
           repository_file_id?: string | null
           repository_provider?: string | null
           repository_uploaded_at?: string | null
@@ -186,6 +188,7 @@ export type Database = {
           description_html?: string | null
           episode_date?: string
           id?: string
+          mentioned_in_episode?: string | null
           repository_file_id?: string | null
           repository_provider?: string | null
           repository_uploaded_at?: string | null

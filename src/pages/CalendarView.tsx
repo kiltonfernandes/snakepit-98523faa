@@ -3,6 +3,8 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  Cloud,
+  CloudOff,
   Copy,
   Disc,
   Download,
@@ -13,9 +15,12 @@ import {
   Image,
   Link as LinkIcon,
   Loader2,
+  Mic,
   Search,
   Share2,
   Sparkles,
+  Trash2,
+  Wand2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +29,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { EpisodeMaterial, Release, Pauta } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +47,8 @@ import { getSectionsForDay } from '@/lib/constants';
 import { resolveAllLinks } from '@/lib/dynamic-links';
 import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
+import { supabase } from '@/integrations/supabase/client';
+import { injectMentionedSection } from '@/lib/episode/inject-mentioned';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -89,6 +106,12 @@ export default function CalendarView() {
   const [coverGenerating, setCoverGenerating] = useState(false);
   const [coverProgressItems, setCoverProgressItems] = useState<GenerationItem[]>([]);
   const [coverProgressOpen, setCoverProgressOpen] = useState(false);
+
+  // Mencionado / OneDrive state
+  const [mentionedInput, setMentionedInput] = useState('');
+  const [enrichingDescription, setEnrichingDescription] = useState(false);
+  const [confirmDeleteDriveOpen, setConfirmDeleteDriveOpen] = useState(false);
+  const [deletingFromDrive, setDeletingFromDrive] = useState(false);
 
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -160,6 +183,7 @@ export default function CalendarView() {
   const openMaterialModal = (mat: EpisodeMaterial) => {
     setSelectedMaterial(mat);
     setSpotifyInput(mat.spotify_link || '');
+    setMentionedInput(mat.mentioned_in_episode || '');
     setModalOpen(true);
   };
 
@@ -191,6 +215,91 @@ export default function CalendarView() {
     updateMaterial(selectedMaterial.id, { spotify_link: spotifyInput || null });
     setSelectedMaterial((prev) => (prev ? { ...prev, spotify_link: spotifyInput || null } : null));
     toast.success('Link do Spotify salvo');
+  };
+
+  const handleSaveMentioned = () => {
+    if (!selectedMaterial) return;
+    const value = mentionedInput.trim() || null;
+    updateMaterial(selectedMaterial.id, { mentioned_in_episode: value });
+    setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: value } : null));
+    toast.success('Mencionados salvos');
+  };
+
+  const handleEnrichDescription = async () => {
+    if (!selectedMaterial) return;
+    const mentioned = mentionedInput.trim();
+    if (!mentioned) {
+      toast.error('Adicione conteúdo no campo Mencionado primeiro');
+      return;
+    }
+    setEnrichingDescription(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-episode-description', {
+        body: { mentioned, currentDescriptionHtml: selectedMaterial.description_html || '' },
+      });
+      if (error) throw new Error(error.message || 'Falha na IA');
+      const errMsg = (data as any)?.error;
+      if (errMsg) throw new Error(errMsg);
+      const sectionHtml = (data as any)?.html;
+      if (!sectionHtml) throw new Error('IA não retornou HTML');
+      const newHtml = injectMentionedSection(selectedMaterial.description_html || '', sectionHtml);
+      updateMaterial(selectedMaterial.id, {
+        description_html: newHtml,
+        mentioned_in_episode: mentioned,
+      });
+      setSelectedMaterial((prev) => (prev ? { ...prev, description_html: newHtml, mentioned_in_episode: mentioned } : prev));
+      toast.success('Seção "Mencionado" inserida na descrição');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao gerar';
+      toast.error(msg);
+    } finally {
+      setEnrichingDescription(false);
+    }
+  };
+
+  const handleDownloadFromDrive = () => {
+    if (!selectedMaterial?.repository_url) return;
+    window.open(selectedMaterial.repository_url, '_blank', 'noopener');
+  };
+
+  const handleConfirmDeleteFromDrive = async () => {
+    if (!selectedMaterial?.repository_file_id) {
+      setConfirmDeleteDriveOpen(false);
+      return;
+    }
+    setDeletingFromDrive(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('upload-episode-to-onedrive', {
+        body: { action: 'delete', fileId: selectedMaterial.repository_file_id },
+      });
+      if (error) throw new Error(error.message || 'Falha ao excluir');
+      const errMsg = (data as any)?.error;
+      if (errMsg) throw new Error(errMsg);
+      updateMaterial(selectedMaterial.id, {
+        repository_url: null,
+        repository_file_id: null,
+        repository_provider: null,
+        repository_uploaded_at: null,
+      });
+      setSelectedMaterial((prev) =>
+        prev
+          ? {
+              ...prev,
+              repository_url: null,
+              repository_file_id: null,
+              repository_provider: null,
+              repository_uploaded_at: null,
+            }
+          : prev,
+      );
+      toast.success('Arquivo removido do OneDrive');
+      setConfirmDeleteDriveOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao excluir';
+      toast.error(msg);
+    } finally {
+      setDeletingFromDrive(false);
+    }
   };
 
   const handleSaveRelease = () => {
@@ -456,6 +565,47 @@ export default function CalendarView() {
 
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between gap-3">
+                    <Label className="flex items-center gap-2 text-sm font-medium">
+                      <Mic className="h-4 w-4 text-primary" />
+                      Mencionado no Episódio
+                    </Label>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleSaveMentioned}
+                      >
+                        Salvar
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="gap-2"
+                        onClick={handleEnrichDescription}
+                        disabled={!mentionedInput.trim() || enrichingDescription}
+                      >
+                        {enrichingDescription ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Wand2 className="h-3.5 w-3.5" />
+                        )}
+                        Inserir na descrição (IA)
+                      </Button>
+                    </div>
+                  </div>
+                  <Textarea
+                    value={mentionedInput}
+                    onChange={(e) => setMentionedInput(e.target.value)}
+                    placeholder="Cole links, vídeos ou assuntos que você mencionou no episódio (um por linha)..."
+                    className="min-h-[100px] resize-y text-xs"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A IA gera uma seção "🎙️ Mencionado neste episódio" no topo da descrição. Reinserir substitui a seção anterior.
+                  </p>
+                </section>
+
+                <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+                  <div className="flex items-center justify-between gap-3">
                     <Label className="text-sm font-medium">Descrição em HTML</Label>
                     <Button
                       variant="outline"
@@ -472,6 +622,55 @@ export default function CalendarView() {
                     placeholder="A descrição HTML aparecerá aqui..."
                     className="min-h-[260px] resize-none font-mono text-xs"
                   />
+                </section>
+
+                <section className="space-y-2 rounded-xl border border-border bg-card p-4">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    {selectedMaterial.repository_url ? (
+                      <Cloud className="h-4 w-4 text-primary" />
+                    ) : (
+                      <CloudOff className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    Arquivo no OneDrive
+                  </Label>
+                  {selectedMaterial.repository_url ? (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="secondary" className="text-xs">
+                          MP3 no Drive
+                        </Badge>
+                        {selectedMaterial.repository_uploaded_at && (
+                          <span className="text-xs text-muted-foreground">
+                            enviado em{' '}
+                            {new Date(selectedMaterial.repository_uploaded_at).toLocaleString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1 gap-2"
+                          onClick={handleDownloadFromDrive}
+                        >
+                          <Download className="h-3.5 w-3.5" /> Baixar do Drive
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          className="flex-1 gap-2"
+                          onClick={() => setConfirmDeleteDriveOpen(true)}
+                          disabled={!selectedMaterial.repository_file_id}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir do Drive
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhum MP3 enviado ainda. Use a aba <span className="font-medium text-foreground">Rivaldo</span> para gerar e subir.
+                    </p>
+                  )}
                 </section>
 
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
@@ -712,6 +911,33 @@ export default function CalendarView() {
         title="Gerando capa..."
         items={coverProgressItems}
       />
+
+      {/* Confirm delete from OneDrive */}
+      <AlertDialog open={confirmDeleteDriveOpen} onOpenChange={setConfirmDeleteDriveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir arquivo do OneDrive?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O MP3 será removido permanentemente do OneDrive. Esta ação não pode ser desfeita.
+              Você pode reenviar pela aba Rivaldo depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingFromDrive}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteFromDrive}
+              disabled={deletingFromDrive}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingFromDrive ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Excluindo...</>
+              ) : (
+                <>Excluir do Drive</>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

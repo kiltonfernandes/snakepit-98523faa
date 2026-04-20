@@ -109,7 +109,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // Exclude cover_url from initial load — it can be multi-MB base64 and causes timeouts
     const { data, error } = await supabase
       .from('episode_materials' as any)
-      .select('id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,created_at,updated_at');
+      .select('id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,repository_url,repository_file_id,repository_provider,repository_uploaded_at,mentioned_in_episode,cover_saved_at,created_at,updated_at');
     if (error) console.error('[loadMaterials] error:', error.message);
     if (data) {
       // Preserve any cover_url already in local state (loaded on demand)
@@ -269,7 +269,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return {
         id: uid(), week_id: week.id, slot_key: slot.key, episode_date: epDate.toISOString().slice(0, 10),
         source_pauta_id: newPautas[i].id, title_options_json: [], selected_title_index: null,
-        description_html: null, cover_url: null, cover_source_url: null, spotify_link: null, repository_url: null, cover_saved_at: null, created_at: now(), updated_at: now(),
+        description_html: null, cover_url: null, cover_source_url: null, spotify_link: null, repository_url: null,
+        repository_file_id: null, repository_provider: null, repository_uploaded_at: null, mentioned_in_episode: null,
+        cover_saved_at: null, created_at: now(), updated_at: now(),
       };
     });
     setMaterials(prev => [...prev, ...newMaterials]);

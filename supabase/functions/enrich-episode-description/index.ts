@@ -1,0 +1,127 @@
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+const SYSTEM_PROMPT = `Você é um analisador de conteúdo e formatador HTML para o podcast Heavynauta.
+
+Sua tarefa: dado um conjunto de itens "mencionados no episódio" (texto livre, links ou misto), gerar uma seção HTML pronta para colar na descrição final do episódio.
+
+REGRAS OBRIGATÓRIAS:
+1. Sempre responda em Português (BR).
+2. Saída APENAS em HTML válido, sem markdown, sem code blocks, sem comentários.
+3. Use exatamente esta estrutura:
+   <h3>🎙️ Mencionado neste episódio</h3>
+   <ul>
+     <li>... item 1 ...</li>
+     <li>... item 2 ...</li>
+   </ul>
+4. Para cada item:
+   - Inicie com 1 emoji relevante ao tema (🎵 música, 🎬 vídeo, 📰 notícia, 📺 canal, 🎸 banda, 🔗 link genérico, 📖 leitura, 🎙️ podcast, 🛒 produto, 📅 evento etc.).
+   - Em seguida, 1 a 2 frases curtas em PT-BR descrevendo de forma envolvente o conteúdo.
+   - Se houver URL no item, embuta um <a href="URL" target="_blank" rel="noopener">Texto descritivo</a> no final do <li>.
+   - Se NÃO houver URL, apenas descreva o assunto (sem link).
+5. Se você não conseguir analisar uma URL, ainda assim crie um <li> usando o domínio/título visível como rótulo do link (não pule itens).
+6. Não invente URLs nem fatos. Não copie textos longos das fontes — sempre parafraseie em 1-2 frases.
+7. Não inclua nada além da seção <h3>...<ul>...</ul>. Sem <html>, sem <body>, sem texto solto.`;
+
+function extractContent(payload: any): string {
+  // Standard OpenAI-compatible response
+  const choice = payload?.choices?.[0]?.message?.content;
+  if (typeof choice === "string") return choice;
+  if (Array.isArray(choice)) {
+    return choice
+      .map((c: any) => (typeof c === "string" ? c : c?.text || ""))
+      .join("");
+  }
+  return "";
+}
+
+function sanitizeHtml(raw: string): string {
+  if (!raw) return "";
+  let txt = raw.trim();
+  // Strip code fences if model wrapped output
+  txt = txt.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "");
+  // Strip surrounding text outside the <h3> block, if any
+  const match = txt.match(/<h3[\s\S]*<\/ul>/i);
+  if (match) return match[0].trim();
+  return txt.trim();
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return jsonResponse({ error: "LOVABLE_API_KEY is not configured" }, 500);
+    }
+
+    const body = await req.json().catch(() => ({}));
+    const mentioned = typeof body?.mentioned === "string" ? body.mentioned.trim() : "";
+    if (!mentioned) {
+      return jsonResponse({ error: "mentioned is required" }, 400);
+    }
+
+    const userPrompt = `Itens mencionados no episódio (cada linha ou parágrafo é um item separado, podem conter links):\n\n${mentioned}`;
+
+    const aiRes = await fetch(AI_GATEWAY_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+      }),
+    });
+
+    if (!aiRes.ok) {
+      if (aiRes.status === 429) {
+        return jsonResponse(
+          { error: "Limite de requisições atingido. Tente novamente em alguns instantes." },
+          429,
+        );
+      }
+      if (aiRes.status === 402) {
+        return jsonResponse(
+          { error: "Créditos esgotados. Adicione créditos na sua workspace Lovable AI." },
+          402,
+        );
+      }
+      const text = await aiRes.text().catch(() => "");
+      console.error("[enrich-episode-description] AI gateway error", aiRes.status, text);
+      return jsonResponse({ error: `AI gateway error [${aiRes.status}]` }, 500);
+    }
+
+    const data = await aiRes.json();
+    const rawHtml = extractContent(data);
+    const html = sanitizeHtml(rawHtml);
+    if (!html) {
+      return jsonResponse({ error: "Resposta vazia da IA" }, 502);
+    }
+
+    return jsonResponse({ html });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    console.error("[enrich-episode-description]", msg);
+    return jsonResponse({ error: msg }, 500);
+  }
+});
