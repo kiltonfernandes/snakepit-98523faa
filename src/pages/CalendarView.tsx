@@ -48,7 +48,7 @@ import { resolveAllLinks } from '@/lib/dynamic-links';
 import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
-import { injectMentionedSection } from '@/lib/episode/inject-mentioned';
+import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
