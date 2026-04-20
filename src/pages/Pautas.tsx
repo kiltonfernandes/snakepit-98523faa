@@ -1434,9 +1434,20 @@ export default function Pautas() {
                       />
 
                       <div className="space-y-1">
-                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          Mencionado no Episódio
-                        </Label>
+                        <div className="flex items-center justify-between gap-2">
+                          <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            Mencionado no Episódio
+                          </Label>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-5 px-1.5 text-[10px] text-destructive hover:text-destructive"
+                            onClick={() => updateRawInput(pauta.id, 'mentioned_in_episode', '')}
+                            disabled={!inputs.mentioned_in_episode}
+                          >
+                            Limpar
+                          </Button>
+                        </div>
                         <Textarea
                           className="min-h-[60px] text-xs"
                           placeholder="Cole links ou assuntos que você mencionou no episódio (um por linha)..."
