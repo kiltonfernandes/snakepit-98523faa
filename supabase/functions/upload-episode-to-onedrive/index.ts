@@ -88,7 +88,6 @@ async function createUploadSession(folderItemId: string, filename: string) {
       body: JSON.stringify({
         item: {
           "@microsoft.graph.conflictBehavior": "replace",
-          name: filename,
         },
       }),
     },
