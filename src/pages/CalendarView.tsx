@@ -579,6 +579,22 @@ export default function CalendarView() {
                         Salvar
                       </Button>
                       <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 text-destructive hover:text-destructive"
+                        onClick={() => {
+                          setMentionedInput('');
+                          if (selectedMaterial) {
+                            updateMaterial(selectedMaterial.id, { mentioned_in_episode: null });
+                            setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: null } : null));
+                          }
+                          toast.success('Mencionados limpos');
+                        }}
+                        disabled={!mentionedInput.trim() && !selectedMaterial?.mentioned_in_episode}
+                      >
+                        Limpar
+                      </Button>
+                      <Button
                         size="sm"
                         className="gap-2"
                         onClick={handleEnrichDescription}
