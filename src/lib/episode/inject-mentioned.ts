@@ -17,6 +17,14 @@ const SECTION_START_RE =
 const INSTITUTIONAL_MARKER =
   '<p><b>Heavynauta — Papo Sério Sobre Música Pesada</b></p>';
 
+/**
+ * Flexible regex: matches any <p> (with or without <b>) that mentions
+ * "Heavynauta" + "Papo Sério" — covers both the strict marker and the
+ * "⛧ Heavynauta, Papo Sério Sobre Música Pesada" variant the AI emits.
+ */
+const INSTITUTIONAL_RE =
+  /<p[^>]*>[\s\S]*?Heavynauta[^<]*Papo\s+Sério[\s\S]*?<\/p>/i;
+
 /** Removes any existing "Mencionado neste episódio" section. */
 export function stripMentionedSection(html: string): string {
   if (!html) return '';
@@ -35,11 +43,17 @@ export function injectMentionedSection(html: string, sectionHtml: string): strin
   const trimmedSection = (sectionHtml || '').trim();
   if (!trimmedSection) return cleaned;
 
+  // Try strict marker first (exact AI-generated block)
   if (cleaned.includes(INSTITUTIONAL_MARKER)) {
     return cleaned.replace(
       INSTITUTIONAL_MARKER,
       `${trimmedSection}\n\n${INSTITUTIONAL_MARKER}`,
     );
+  }
+  // Fallback: flexible match for variants like "⛧ Heavynauta, Papo Sério..."
+  const match = cleaned.match(INSTITUTIONAL_RE);
+  if (match) {
+    return cleaned.replace(match[0], `${trimmedSection}\n\n${match[0]}`);
   }
   return `${trimmedSection}\n\n${cleaned}`.trim();
 }
