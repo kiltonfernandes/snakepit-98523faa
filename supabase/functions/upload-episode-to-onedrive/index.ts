@@ -5,6 +5,7 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/microsoft_onedrive";
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504]);
 
 interface InitiatePayload {
   action: "initiate";
@@ -30,6 +31,38 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
+function okResponse(data: Record<string, unknown>) {
+  return jsonResponse({ ok: true, ...data }, 200);
+}
+
+function errorResponse(error: string, diagnostics?: Record<string, unknown>) {
+  return jsonResponse({ ok: false, error, diagnostics }, 200);
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetry(input: string, init: RequestInit, stage: string, attempts = 3) {
+  let lastError = "Unknown error";
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      const res = await fetch(input, init);
+      if (res.ok || !RETRYABLE_STATUSES.has(res.status) || attempt === attempts) {
+        return res;
+      }
+      lastError = await res.text().catch(() => `HTTP ${res.status}`);
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : "Network failure";
+      if (attempt === attempts) {
+        throw new Error(`OneDrive ${stage} failed after ${attempts} attempts: ${lastError}`);
+      }
+    }
+    await sleep(attempt * 400);
+  }
+  throw new Error(`OneDrive ${stage} failed: ${lastError}`);
+}
+
 function getAuthHeaders() {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
   if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -48,9 +81,10 @@ async function ensureFolderPath(folderPath: string): Promise<string> {
   let parentId = "root";
   for (const segment of segments) {
     // Try to find child by name
-    const childrenRes = await fetch(
+    const childrenRes = await fetchWithRetry(
       `${GATEWAY_URL}/me/drive/items/${parentId}/children?$filter=name eq '${encodeURIComponent(segment).replace(/'/g, "''")}'&$select=id,name,folder`,
       { headers },
+      "list children",
     );
     if (!childrenRes.ok) {
       const text = await childrenRes.text();
@@ -63,11 +97,11 @@ async function ensureFolderPath(folderPath: string): Promise<string> {
       continue;
     }
     // Create folder
-    const createRes = await fetch(`${GATEWAY_URL}/me/drive/items/${parentId}/children`, {
+    const createRes = await fetchWithRetry(`${GATEWAY_URL}/me/drive/items/${parentId}/children`, {
       method: "POST",
       headers: { ...headers, "Content-Type": "application/json" },
       body: JSON.stringify({ name: segment, folder: {}, "@microsoft.graph.conflictBehavior": "rename" }),
-    });
+    }, "create folder");
     if (!createRes.ok) {
       const text = await createRes.text();
       throw new Error(`OneDrive create folder failed [${createRes.status}]: ${text}`);
@@ -80,7 +114,7 @@ async function ensureFolderPath(folderPath: string): Promise<string> {
 
 async function createUploadSession(folderItemId: string, filename: string) {
   const headers = getAuthHeaders();
-  const res = await fetch(
+  const res = await fetchWithRetry(
     `${GATEWAY_URL}/me/drive/items/${folderItemId}:/${encodeURIComponent(filename)}:/createUploadSession`,
     {
       method: "POST",
@@ -91,6 +125,7 @@ async function createUploadSession(folderItemId: string, filename: string) {
         },
       }),
     },
+    "create upload session",
   );
   if (!res.ok) {
     const text = await res.text();
@@ -102,7 +137,7 @@ async function createUploadSession(folderItemId: string, filename: string) {
 
 async function getFileMeta(fileId: string) {
   const headers = getAuthHeaders();
-  const res = await fetch(`${GATEWAY_URL}/me/drive/items/${fileId}?$select=id,name,webUrl,size`, { headers });
+  const res = await fetchWithRetry(`${GATEWAY_URL}/me/drive/items/${fileId}?$select=id,name,webUrl,size`, { headers }, "get item");
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`OneDrive get item failed [${res.status}]: ${text}`);
@@ -112,10 +147,10 @@ async function getFileMeta(fileId: string) {
 
 async function deleteFile(fileId: string): Promise<void> {
   const headers = getAuthHeaders();
-  const res = await fetch(`${GATEWAY_URL}/me/drive/items/${fileId}`, {
+  const res = await fetchWithRetry(`${GATEWAY_URL}/me/drive/items/${fileId}`, {
     method: "DELETE",
     headers,
-  });
+  }, "delete item");
   // 204 No Content on success; 404 also treated as "already gone" so we don't
   // block the UI from cleaning up the metadata.
   if (!res.ok && res.status !== 204 && res.status !== 404) {
@@ -133,12 +168,12 @@ Deno.serve(async (req) => {
     if (body.action === "initiate") {
       const { folderPath, filename, fileSize } = body as InitiatePayload;
       if (!folderPath || !filename || typeof fileSize !== "number") {
-        return jsonResponse({ error: "folderPath, filename and fileSize are required" }, 400);
+        return errorResponse("folderPath, filename and fileSize are required", { action: "initiate" });
       }
       const safeFilename = filename.replace(/[<>:"/\\|?*\x00-\x1F]/g, "_").slice(0, 200);
       const folderItemId = await ensureFolderPath(folderPath);
       const session = await createUploadSession(folderItemId, safeFilename);
-      return jsonResponse({
+      return okResponse({
         uploadUrl: session.uploadUrl,
         expirationDateTime: session.expirationDateTime,
         folderItemId,
@@ -148,9 +183,9 @@ Deno.serve(async (req) => {
 
     if (body.action === "finalize") {
       const { fileId } = body as FinalizePayload;
-      if (!fileId) return jsonResponse({ error: "fileId is required" }, 400);
+      if (!fileId) return errorResponse("fileId is required", { action: "finalize" });
       const meta = await getFileMeta(fileId);
-      return jsonResponse({
+      return okResponse({
         id: meta.id,
         name: meta.name,
         webUrl: meta.webUrl,
@@ -160,15 +195,15 @@ Deno.serve(async (req) => {
 
     if (body.action === "delete") {
       const { fileId } = body as DeletePayload;
-      if (!fileId) return jsonResponse({ error: "fileId is required" }, 400);
+      if (!fileId) return errorResponse("fileId is required", { action: "delete" });
       await deleteFile(fileId);
-      return jsonResponse({ success: true });
+      return okResponse({ success: true });
     }
 
-    return jsonResponse({ error: "Unknown action" }, 400);
+    return errorResponse("Unknown action", { action: body?.action ?? null });
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Unknown error";
     console.error("[upload-episode-to-onedrive]", msg);
-    return jsonResponse({ error: msg }, 500);
+    return errorResponse(msg, { stage: "handler" });
   }
 });

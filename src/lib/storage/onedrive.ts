@@ -58,7 +58,10 @@ export function sanitizeFilename(name: string): string {
 async function callEdgeFunction(payload: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('upload-episode-to-onedrive', { body: payload });
   if (error) throw new Error(error.message || 'Falha ao chamar edge function');
-  if (data?.error) throw new Error(data.error);
+  if (data?.ok === false || data?.error) {
+    const details = data?.diagnostics ? ` (${JSON.stringify(data.diagnostics)})` : '';
+    throw new Error(`${data.error || 'Falha no upload OneDrive'}${details}`);
+  }
   return data;
 }
 
