@@ -216,7 +216,7 @@ export function BulkModal({
           if (title) {
             const d = new Date(`${row.episode_date}T12:00:00`);
             const dayName = DAY_NAMES[d.getDay()] || '';
-            titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay(), weekId: row.week_id });
+            titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay(), weekId: row.week_id, episodeDate: row.episode_date });
           }
         }
         setAllEpisodeTitles(titles);
