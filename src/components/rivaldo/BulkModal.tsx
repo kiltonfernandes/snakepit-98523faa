@@ -96,6 +96,8 @@ interface QueueRow {
   bgmPreset: string | null;
   filename: string;
   dayIndex: number | null; // for matching
+  materialId?: string;    // episode_materials.id for the matched episode
+  episodeDate?: string;   // YYYY-MM-DD for folder structure
 }
 
 interface EpisodeTitle {
@@ -104,6 +106,7 @@ interface EpisodeTitle {
   label: string;
   dayOfWeek: number;
   weekId: string;
+  episodeDate: string;
 }
 
 interface BulkModalProps {
