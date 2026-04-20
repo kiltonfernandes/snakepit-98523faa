@@ -1,0 +1,1 @@
+ALTER TABLE public.episode_materials ADD COLUMN IF NOT EXISTS mentioned_in_episode text;
