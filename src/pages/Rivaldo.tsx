@@ -65,6 +65,8 @@ const Rivaldo = () => {
     const eligibleMaterials = materials
       .filter(m => {
         const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
+        // Skip episodes already uploaded to OneDrive
+        if (m.repository_url) return false;
         return opts.length > 0 && opts.some(o => o.text);
       })
       .map(m => {
@@ -99,7 +101,8 @@ const Rivaldo = () => {
     groups.sort((a, b) => {
       const wa = weeks.find(w => w.id === a.weekId);
       const wb = weeks.find(w => w.id === b.weekId);
-      return (wb?.start_date || '').localeCompare(wa?.start_date || '');
+      // Oldest → newest
+      return (wa?.start_date || '').localeCompare(wb?.start_date || '');
     });
 
     return groups;
