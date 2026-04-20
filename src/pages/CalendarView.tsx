@@ -636,7 +636,7 @@ export default function CalendarView() {
                   {selectedMaterial.repository_url ? (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <Badge className="bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20">
+                        <Badge variant="secondary" className="text-xs">
                           MP3 no Drive
                         </Badge>
                         {selectedMaterial.repository_uploaded_at && (
@@ -911,6 +911,33 @@ export default function CalendarView() {
         title="Gerando capa..."
         items={coverProgressItems}
       />
+
+      {/* Confirm delete from OneDrive */}
+      <AlertDialog open={confirmDeleteDriveOpen} onOpenChange={setConfirmDeleteDriveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir arquivo do OneDrive?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O MP3 será removido permanentemente do OneDrive. Esta ação não pode ser desfeita.
+              Você pode reenviar pela aba Rivaldo depois.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingFromDrive}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDeleteFromDrive}
+              disabled={deletingFromDrive}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingFromDrive ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Excluindo...</>
+              ) : (
+                <>Excluir do Drive</>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
