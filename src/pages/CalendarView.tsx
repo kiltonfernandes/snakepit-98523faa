@@ -107,6 +107,12 @@ export default function CalendarView() {
   const [coverProgressItems, setCoverProgressItems] = useState<GenerationItem[]>([]);
   const [coverProgressOpen, setCoverProgressOpen] = useState(false);
 
+  // Mencionado / OneDrive state
+  const [mentionedInput, setMentionedInput] = useState('');
+  const [enrichingDescription, setEnrichingDescription] = useState(false);
+  const [confirmDeleteDriveOpen, setConfirmDeleteDriveOpen] = useState(false);
+  const [deletingFromDrive, setDeletingFromDrive] = useState(false);
+
   const year = date.getFullYear();
   const month = date.getMonth();
   const today = new Date();
@@ -177,6 +183,7 @@ export default function CalendarView() {
   const openMaterialModal = (mat: EpisodeMaterial) => {
     setSelectedMaterial(mat);
     setSpotifyInput(mat.spotify_link || '');
+    setMentionedInput(mat.mentioned_in_episode || '');
     setModalOpen(true);
   };
 
@@ -208,6 +215,91 @@ export default function CalendarView() {
     updateMaterial(selectedMaterial.id, { spotify_link: spotifyInput || null });
     setSelectedMaterial((prev) => (prev ? { ...prev, spotify_link: spotifyInput || null } : null));
     toast.success('Link do Spotify salvo');
+  };
+
+  const handleSaveMentioned = () => {
+    if (!selectedMaterial) return;
+    const value = mentionedInput.trim() || null;
+    updateMaterial(selectedMaterial.id, { mentioned_in_episode: value });
+    setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: value } : null));
+    toast.success('Mencionados salvos');
+  };
+
+  const handleEnrichDescription = async () => {
+    if (!selectedMaterial) return;
+    const mentioned = mentionedInput.trim();
+    if (!mentioned) {
+      toast.error('Adicione conteúdo no campo Mencionado primeiro');
+      return;
+    }
+    setEnrichingDescription(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enrich-episode-description', {
+        body: { mentioned, currentDescriptionHtml: selectedMaterial.description_html || '' },
+      });
+      if (error) throw new Error(error.message || 'Falha na IA');
+      const errMsg = (data as any)?.error;
+      if (errMsg) throw new Error(errMsg);
+      const sectionHtml = (data as any)?.html;
+      if (!sectionHtml) throw new Error('IA não retornou HTML');
+      const newHtml = injectMentionedSection(selectedMaterial.description_html || '', sectionHtml);
+      updateMaterial(selectedMaterial.id, {
+        description_html: newHtml,
+        mentioned_in_episode: mentioned,
+      });
+      setSelectedMaterial((prev) => (prev ? { ...prev, description_html: newHtml, mentioned_in_episode: mentioned } : prev));
+      toast.success('Seção "Mencionado" inserida na descrição');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao gerar';
+      toast.error(msg);
+    } finally {
+      setEnrichingDescription(false);
+    }
+  };
+
+  const handleDownloadFromDrive = () => {
+    if (!selectedMaterial?.repository_url) return;
+    window.open(selectedMaterial.repository_url, '_blank', 'noopener');
+  };
+
+  const handleConfirmDeleteFromDrive = async () => {
+    if (!selectedMaterial?.repository_file_id) {
+      setConfirmDeleteDriveOpen(false);
+      return;
+    }
+    setDeletingFromDrive(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('upload-episode-to-onedrive', {
+        body: { action: 'delete', fileId: selectedMaterial.repository_file_id },
+      });
+      if (error) throw new Error(error.message || 'Falha ao excluir');
+      const errMsg = (data as any)?.error;
+      if (errMsg) throw new Error(errMsg);
+      updateMaterial(selectedMaterial.id, {
+        repository_url: null,
+        repository_file_id: null,
+        repository_provider: null,
+        repository_uploaded_at: null,
+      });
+      setSelectedMaterial((prev) =>
+        prev
+          ? {
+              ...prev,
+              repository_url: null,
+              repository_file_id: null,
+              repository_provider: null,
+              repository_uploaded_at: null,
+            }
+          : prev,
+      );
+      toast.success('Arquivo removido do OneDrive');
+      setConfirmDeleteDriveOpen(false);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro ao excluir';
+      toast.error(msg);
+    } finally {
+      setDeletingFromDrive(false);
+    }
   };
 
   const handleSaveRelease = () => {
