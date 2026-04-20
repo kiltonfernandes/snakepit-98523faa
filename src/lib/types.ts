@@ -74,6 +74,10 @@ export interface EpisodeMaterial {
   cover_source_url: string | null;
   spotify_link: string | null;
   repository_url: string | null;
+  repository_file_id: string | null;
+  repository_provider: string | null;
+  repository_uploaded_at: string | null;
+  mentioned_in_episode: string | null;
   cover_saved_at: string | null;
   created_at: string;
   updated_at: string;
