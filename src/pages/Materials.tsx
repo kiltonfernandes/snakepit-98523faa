@@ -535,7 +535,16 @@ export default function Materials() {
         html = `${html}\n${brandBlock}`;
       }
 
-      updateMaterial(materialId, { description_html: html });
+      // Sync mentioned_in_episode from pauta → material (SSOT) when present
+      const pautaInputs = (pauta.raw_inputs_json || {}) as Record<string, any>;
+      const pautaMentioned = typeof pautaInputs.mentioned_in_episode === 'string'
+        ? pautaInputs.mentioned_in_episode.trim()
+        : '';
+      const updatePayload: any = { description_html: html };
+      if (pautaMentioned && !mat.mentioned_in_episode) {
+        updatePayload.mentioned_in_episode = pautaMentioned;
+      }
+      updateMaterial(materialId, updatePayload);
       toast.success('Descrição gerada');
     } catch (err: any) {
       console.error('Description generation error:', err);
