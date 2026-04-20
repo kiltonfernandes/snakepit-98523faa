@@ -315,14 +315,20 @@ export async function runPipeline(
 
     if (exportMode !== 'none') {
       stepProgress(0.9, 0.1, 0.2, onProgress, 'Codificando MP3...');
+      // Always produce a blob so callers can decide between download / upload / both
+      outputBlob = await encodeBufferToMp3Blob(finalMaster, onLog, params.outputBitrate, (fraction) => {
+        stepProgress(0.9, 0.1, fraction, onProgress, 'Codificando MP3...');
+      });
       if (exportMode === 'download') {
-        await encodeToMp3(finalMaster, input.filename, onLog, params.outputBitrate, (fraction) => {
-          stepProgress(0.9, 0.1, fraction, onProgress, 'Codificando MP3...');
-        });
-      } else {
-        outputBlob = await encodeBufferToMp3Blob(finalMaster, onLog, params.outputBitrate, (fraction) => {
-          stepProgress(0.9, 0.1, fraction, onProgress, 'Codificando MP3...');
-        });
+        const a = document.createElement('a');
+        const url = URL.createObjectURL(outputBlob);
+        a.href = url;
+        a.download = input.filename.endsWith('.mp3') ? input.filename : `${input.filename}.mp3`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        onLog(`Download disparado: ${a.download}`, 'info');
       }
     }
 
