@@ -3,6 +3,8 @@ import {
   Calendar as CalendarIcon,
   ChevronLeft,
   ChevronRight,
+  Cloud,
+  CloudOff,
   Copy,
   Disc,
   Download,
@@ -13,9 +15,12 @@ import {
   Image,
   Link as LinkIcon,
   Loader2,
+  Mic,
   Search,
   Share2,
   Sparkles,
+  Trash2,
+  Wand2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +29,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { EpisodeMaterial, Release, Pauta } from '@/lib/types';
 import { useNavigate } from 'react-router-dom';
@@ -32,6 +47,8 @@ import { getSectionsForDay } from '@/lib/constants';
 import { resolveAllLinks } from '@/lib/dynamic-links';
 import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
+import { supabase } from '@/integrations/supabase/client';
+import { injectMentionedSection } from '@/lib/episode/inject-mentioned';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
