@@ -372,6 +372,11 @@ export function BulkModal({
         })
       );
 
+      // Reset upload statuses
+      const initial: Record<string, UploadStatus> = {};
+      rows.forEach(r => { initial[r.id] = { state: 'idle' }; });
+      setUploadStatuses(initial);
+
       await runBulkPipeline(
         { items, intro: resolvedIntro!, outro: resolvedOutro!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
         audioParams,
@@ -381,10 +386,43 @@ export function BulkModal({
         },
         addLog,
         {
-          exportMode: generateFinalEpisode ? 'blob' : 'download',
-          downloadIndividualItems: true,
-          onItemEncoded: async (_item, _index, _result) => {
-            addLog(`Download concluído: ${_item.filename}`, 'success');
+          exportMode: 'blob',
+          downloadIndividualItems: !uploadToCloud,
+          onItemEncoded: async (_item, index, result) => {
+            const row = rows[index];
+            if (!row) return;
+            if (uploadToCloud && result.outputBlob) {
+              setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
+              try {
+                const folderPath = buildEpisodeFolderPath(row.episodeDate);
+                const filename = sanitizeFilename(row.filename.trim());
+                addLog(`Upload OneDrive: ${folderPath}/${filename}...`, 'step');
+                const uploaded = await uploadEpisodeToOneDrive({
+                  folderPath,
+                  filename,
+                  blob: result.outputBlob,
+                  onProgress: ({ fraction }) => {
+                    setProgressLabel(`Upload ${row.filename}: ${Math.round(fraction * 100)}%`);
+                  },
+                });
+                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
+                addLog(`OneDrive: ${uploaded.filename} → ${uploaded.webUrl}`, 'success');
+                if (row.materialId) {
+                  await supabase.from('episode_materials').update({
+                    repository_provider: 'onedrive',
+                    repository_url: uploaded.webUrl,
+                    repository_file_id: uploaded.fileId,
+                    repository_uploaded_at: new Date().toISOString(),
+                  }).eq('id', row.materialId);
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Falha no upload';
+                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
+                addLog(`OneDrive falhou (${row.filename}): ${msg}`, 'error');
+              }
+            } else {
+              addLog(`Download concluído: ${_item.filename}`, 'success');
+            }
           },
         }
       );
