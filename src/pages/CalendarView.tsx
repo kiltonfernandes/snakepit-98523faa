@@ -48,7 +48,7 @@ import { resolveAllLinks } from '@/lib/dynamic-links';
 import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator';
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
-import { injectMentionedSection } from '@/lib/episode/inject-mentioned';
+import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -585,10 +585,14 @@ export default function CalendarView() {
                         onClick={() => {
                           setMentionedInput('');
                           if (selectedMaterial) {
-                            updateMaterial(selectedMaterial.id, { mentioned_in_episode: null });
-                            setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: null } : null));
+                            const cleanedHtml = stripMentionedSection(selectedMaterial.description_html || '');
+                            updateMaterial(selectedMaterial.id, {
+                              mentioned_in_episode: null,
+                              description_html: cleanedHtml,
+                            });
+                            setSelectedMaterial((prev) => (prev ? { ...prev, mentioned_in_episode: null, description_html: cleanedHtml } : null));
                           }
-                          toast.success('Mencionados limpos');
+                          toast.success('Mencionados removidos do campo e da descrição');
                         }}
                         disabled={!mentionedInput.trim() && !selectedMaterial?.mentioned_in_episode}
                       >
