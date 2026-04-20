@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, CheckCircle2, Layers, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Cloud, CloudUpload, ExternalLink, Layers, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
 import { useApp } from '@/contexts/AppContext';
 import { useRivaldo } from '@/contexts/RivaldoContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
@@ -75,7 +77,7 @@ const Rivaldo = () => {
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const label = `[${dayName}] - ${title}`;
-        return { value: title, label, date: m.episode_date, week_id: m.week_id };
+        return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url };
       })
       .filter(o => o.value);
 
@@ -104,6 +106,7 @@ const Rivaldo = () => {
   }, [materials, pautas, weeks]);
   const rivaldo = useRivaldo();
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [uploadToCloud, setUploadToCloud] = useState(true); // default ON per user preference
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
   const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>({ ...DEFAULT_PROCESSING_PROFILE });
   const [desktopState, setDesktopState] = useState<DesktopState | null>(null);
@@ -113,6 +116,15 @@ const Rivaldo = () => {
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
   const desktopMode = isDesktopRuntime();
   const desktopApi = getDesktopApi();
+
+  // Find the matching material/episode for the selected filename
+  const selectedEpisode = useMemo(() => {
+    for (const group of episodeGroups) {
+      const found = group.items.find(it => it.value === filename);
+      if (found) return found;
+    }
+    return null;
+  }, [episodeGroups, filename]);
 
   // Use context state for browser mode, local state for desktop mode
   const progress = desktopMode ? (desktopState?.jobs[0]?.progress ?? 0) : rivaldo.progress;
@@ -176,7 +188,8 @@ const Rivaldo = () => {
     // Browser mode: use RivaldoContext for background processing
     await rivaldo.startPipeline(
       { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
-      audioParams
+      audioParams,
+      { enabled: uploadToCloud, episodeMaterialId: selectedEpisode?.materialId, episodeDate: selectedEpisode?.date }
     );
 
     // Memory purge: clear file references after export
@@ -185,7 +198,7 @@ const Rivaldo = () => {
     } else {
       setMasterTracks([]);
     }
-  }, [addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile, rivaldo]);
+  }, [addUiLog, allFilesReady, audioParams, desktopApi, desktopMode, desktopState, files, filename, masterFile, masterMode, masterTracks, processingProfile, rivaldo, uploadToCloud, selectedEpisode]);
 
   return (
     <div className="flex flex-col h-full">
@@ -249,6 +262,33 @@ const Rivaldo = () => {
                 <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" />Process & Export 3.2</span>
               )}
             </Button>
+            {!desktopMode && (
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="upload-cloud" checked={uploadToCloud} onCheckedChange={(v) => setUploadToCloud(v === true)} disabled={isProcessing} />
+                  <Label htmlFor="upload-cloud" className="text-xs font-mono cursor-pointer flex items-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5" /> Enviar para OneDrive
+                    <span className="text-muted-foreground">(Snakepit/{new Date().getFullYear()}-W##)</span>
+                  </Label>
+                </div>
+                {selectedEpisode?.repositoryUrl && (
+                  <a href={selectedEpisode.repositoryUrl} target="_blank" rel="noreferrer" className="text-xs font-mono text-primary hover:underline flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3" /> Já no Drive
+                  </a>
+                )}
+              </div>
+            )}
+            {rivaldo.lastUpload && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-mono">
+                <div className="flex items-center gap-2 text-primary truncate">
+                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{rivaldo.lastUpload.filename}</span>
+                </div>
+                <a href={rivaldo.lastUpload.webUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 shrink-0">
+                  <ExternalLink className="w-3 h-3" /> Abrir
+                </a>
+              </div>
+            )}
             <ElapsedTimer isRunning={isProcessing} />
             <GranularProgress progress={progress} label={progressLabel} isRunning={isProcessing} />
           </div>

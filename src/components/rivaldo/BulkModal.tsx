@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2 } from 'lucide-react';
+import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2, Cloud, ExternalLink, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
@@ -23,6 +23,7 @@ import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
+import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive, OneDriveUploadResult } from '@/lib/storage/onedrive';
 
 const BGM_PRESETS = [
   { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
@@ -95,6 +96,8 @@ interface QueueRow {
   bgmPreset: string | null;
   filename: string;
   dayIndex: number | null; // for matching
+  materialId?: string;    // episode_materials.id for the matched episode
+  episodeDate?: string;   // YYYY-MM-DD for folder structure
 }
 
 interface EpisodeTitle {
@@ -103,6 +106,7 @@ interface EpisodeTitle {
   label: string;
   dayOfWeek: number;
   weekId: string;
+  episodeDate: string;
 }
 
 interface BulkModalProps {
@@ -161,6 +165,9 @@ export function BulkModal({
   const dropRef = useRef<HTMLDivElement>(null);
   const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
   const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
+  const [uploadToCloud, setUploadToCloud] = useState(true);
+  type UploadStatus = { state: 'idle' | 'uploading' | 'done' | 'error'; webUrl?: string; error?: string; fileId?: string; folderPath?: string; uploadedFilename?: string };
+  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadStatus>>({});
 
   // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
   const resolvedIntro = introFile || autoIntroFile;
@@ -212,7 +219,7 @@ export function BulkModal({
           if (title) {
             const d = new Date(`${row.episode_date}T12:00:00`);
             const dayName = DAY_NAMES[d.getDay()] || '';
-            titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay(), weekId: row.week_id });
+            titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay(), weekId: row.week_id, episodeDate: row.episode_date });
           }
         }
         setAllEpisodeTitles(titles);
@@ -236,6 +243,8 @@ export function BulkModal({
       bgmPreset: bgmAssignments[i],
       filename: ep.title,
       dayIndex: ep.dayOfWeek,
+      materialId: ep.id,
+      episodeDate: ep.episodeDate,
     }));
     if (newRows.length === 0) newRows.push(createEmptyRow());
     setRows(newRows);
@@ -251,6 +260,61 @@ export function BulkModal({
   const updateRow = (id: string, updates: Partial<QueueRow>) => {
     setRows((prev) => prev.map((row) => row.id === id ? { ...row, ...updates } : row));
   };
+
+  /** Retry uploading a single row's blob — re-encodes via runPipeline of just that item. */
+  const retryUpload = useCallback(async (row: QueueRow) => {
+    if (!resolvedIntro || !resolvedOutro) return;
+    setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
+    try {
+      let bgm = row.bgmFile;
+      if (!bgm && row.bgmPreset) {
+        const preset = BGM_PRESETS.find((p) => p.url === row.bgmPreset);
+        bgm = await loadPresetAsFile(preset ?? { label: 'BGM', url: row.bgmPreset });
+      }
+      if (!bgm) throw new Error('BGM não disponível');
+      addLog(`Reprocessando ${row.filename} para reupload...`, 'step');
+      const { runPipeline } = await import('@/lib/audio/pipeline');
+      const result = await runPipeline(
+        {
+          masterMode: row.masterMode,
+          master: row.masterFile,
+          masterTracks: row.masterTracks,
+          processingProfile,
+          bgm,
+          intro: resolvedIntro,
+          outro: resolvedOutro,
+          filename: row.filename.trim(),
+        },
+        audioParams,
+        () => undefined,
+        addLog,
+        { exportMode: 'blob', returnFinalBuffer: false }
+      );
+      if (!result.outputBlob) throw new Error('Encode não retornou blob');
+      const folderPath = buildEpisodeFolderPath(row.episodeDate);
+      const filename = sanitizeFilename(row.filename.trim());
+      const uploaded = await uploadEpisodeToOneDrive({
+        folderPath,
+        filename,
+        blob: result.outputBlob,
+        onProgress: ({ fraction }) => setProgressLabel(`Reupload: ${Math.round(fraction * 100)}%`),
+      });
+      setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
+      if (row.materialId) {
+        await supabase.from('episode_materials').update({
+          repository_provider: 'onedrive',
+          repository_url: uploaded.webUrl,
+          repository_file_id: uploaded.fileId,
+          repository_uploaded_at: new Date().toISOString(),
+        }).eq('id', row.materialId);
+      }
+      addLog(`Reupload concluído: ${uploaded.filename}`, 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Falha';
+      setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
+      addLog(`Falha no reupload de ${row.filename}: ${msg}`, 'error');
+    }
+  }, [addLog, audioParams, processingProfile, resolvedIntro, resolvedOutro]);
 
   // Auto-match uploaded files to rows by day name in filename
   const handleBulkFileDrop = useCallback((files: FileList | File[]) => {
@@ -363,6 +427,11 @@ export function BulkModal({
         })
       );
 
+      // Reset upload statuses
+      const initial: Record<string, UploadStatus> = {};
+      rows.forEach(r => { initial[r.id] = { state: 'idle' }; });
+      setUploadStatuses(initial);
+
       await runBulkPipeline(
         { items, intro: resolvedIntro!, outro: resolvedOutro!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
         audioParams,
@@ -372,10 +441,43 @@ export function BulkModal({
         },
         addLog,
         {
-          exportMode: generateFinalEpisode ? 'blob' : 'download',
-          downloadIndividualItems: true,
-          onItemEncoded: async (_item, _index, _result) => {
-            addLog(`Download concluído: ${_item.filename}`, 'success');
+          exportMode: 'blob',
+          downloadIndividualItems: !uploadToCloud,
+          onItemEncoded: async (_item, index, result) => {
+            const row = rows[index];
+            if (!row) return;
+            if (uploadToCloud && result.outputBlob) {
+              setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
+              try {
+                const folderPath = buildEpisodeFolderPath(row.episodeDate);
+                const filename = sanitizeFilename(row.filename.trim());
+                addLog(`Upload OneDrive: ${folderPath}/${filename}...`, 'step');
+                const uploaded = await uploadEpisodeToOneDrive({
+                  folderPath,
+                  filename,
+                  blob: result.outputBlob,
+                  onProgress: ({ fraction }) => {
+                    setProgressLabel(`Upload ${row.filename}: ${Math.round(fraction * 100)}%`);
+                  },
+                });
+                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
+                addLog(`OneDrive: ${uploaded.filename} → ${uploaded.webUrl}`, 'success');
+                if (row.materialId) {
+                  await supabase.from('episode_materials').update({
+                    repository_provider: 'onedrive',
+                    repository_url: uploaded.webUrl,
+                    repository_file_id: uploaded.fileId,
+                    repository_uploaded_at: new Date().toISOString(),
+                  }).eq('id', row.materialId);
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : 'Falha no upload';
+                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
+                addLog(`OneDrive falhou (${row.filename}): ${msg}`, 'error');
+              }
+            } else {
+              addLog(`Download concluído: ${_item.filename}`, 'success');
+            }
           },
         }
       );
@@ -514,6 +616,27 @@ export function BulkModal({
                   {row.masterFile && (
                     <CheckCircle2 className="w-3 h-3 text-primary" />
                   )}
+                  {(() => {
+                    const status = uploadStatuses[row.id];
+                    if (!status || status.state === 'idle') return null;
+                    if (status.state === 'uploading') return (
+                      <span className="flex items-center gap-1 text-[10px] text-primary"><Loader2 className="w-3 h-3 animate-spin" /> upload...</span>
+                    );
+                    if (status.state === 'done') return (
+                      <a href={status.webUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-primary hover:underline">
+                        <Cloud className="w-3 h-3" /> no Drive <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    );
+                    if (status.state === 'error') return (
+                      <span className="flex items-center gap-1 text-[10px] text-destructive" title={status.error}>
+                        <AlertCircle className="w-3 h-3" /> falhou
+                        <button onClick={() => retryUpload(row)} className="ml-1 underline hover:text-primary inline-flex items-center gap-0.5">
+                          <RefreshCw className="w-2.5 h-2.5" /> retry
+                        </button>
+                      </span>
+                    );
+                    return null;
+                  })()}
                 </span>
                 <div className="flex items-center gap-2">
                   <Switch
@@ -664,6 +787,19 @@ export function BulkModal({
           />
           <Label htmlFor="final-episode" className="text-xs font-mono text-muted-foreground cursor-pointer">
             Gerar episódio final consolidado
+          </Label>
+        </div>
+
+        <div className="flex items-center gap-2 py-1">
+          <Checkbox
+            id="bulk-upload-cloud"
+            checked={uploadToCloud}
+            onCheckedChange={(checked) => setUploadToCloud(checked === true)}
+            disabled={isProcessing}
+          />
+          <Label htmlFor="bulk-upload-cloud" className="text-xs font-mono text-muted-foreground cursor-pointer flex items-center gap-1.5">
+            <Cloud className="w-3.5 h-3.5" />
+            Enviar todos para OneDrive (Snakepit/{new Date().getFullYear()}-W##/)
           </Label>
         </div>
 
