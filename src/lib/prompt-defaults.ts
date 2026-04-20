@@ -193,6 +193,19 @@ const MATERIAL_DESCRIPTIONS_INSTRUCTIONS = `Regras de descrição:
 const MATERIAL_BRAND_BLOCK = `<p><b>Heavynauta — Papo Sério Sobre Música Pesada</b></p>
 <p>Diariamente, o Heavynauta traz notícias, reviews e análises do universo do heavy metal. De clássicos atemporais a lançamentos frescos, nosso compromisso é com informação de qualidade e paixão pela música pesada.</p>`;
 
+const MATERIAL_MENTIONED_INSTRUCTIONS = `Regra para "Mencionado neste episódio":
+- Quando o <ep> contiver a tag <mentioned>...</mentioned> com conteúdo, INSIRA no TOPO da descrição HTML (antes do bloco institucional Heavynauta) uma seção:
+  <h3>🎙️ Mencionado neste episódio</h3>
+  <ul>
+    <li>EMOJI + 1-2 frases curtas em PT-BR + (se houver URL) <a href="URL" target="_blank" rel="noopener">texto descritivo</a></li>
+    ... um <li> por item ...
+  </ul>
+- Use 1 emoji relevante por item (🎵 música, 🎬 vídeo, 📰 notícia, 📺 canal, 🎸 banda, 🔗 link, 📖 leitura, 🎙️ podcast, 🛒 produto, 📅 evento etc.).
+- Cada linha/parágrafo de <mentioned> é um item separado.
+- Se houver URL, embuta como <a>; se não houver, apenas descreva.
+- Nunca invente URLs nem fatos. Parafraseie em 1-2 frases.
+- Se <mentioned> estiver ausente ou vazio, IGNORE essa seção (não adicione nada).`;
+
 // ─── Registry ───────────────────────────────────────────────────────────────
 
 export const PROMPT_BLOCKS: PromptBlock[] = [
@@ -211,6 +224,7 @@ export const PROMPT_BLOCKS: PromptBlock[] = [
   // Output - materials
   { key: 'material_titles_instructions', label: 'Títulos de Materiais', category: 'output', group: 'Materiais', defaultText: MATERIAL_TITLES_INSTRUCTIONS },
   { key: 'material_descriptions_instructions', label: 'Descrições de Materiais', category: 'output', group: 'Materiais', defaultText: MATERIAL_DESCRIPTIONS_INSTRUCTIONS },
+  { key: 'material_mentioned_instructions', label: 'Mencionado no Episódio', category: 'output', group: 'Materiais', defaultText: MATERIAL_MENTIONED_INSTRUCTIONS },
   { key: 'material_brand_block', label: 'Bloco Institucional', category: 'output', group: 'Materiais', defaultText: MATERIAL_BRAND_BLOCK },
 ];
 

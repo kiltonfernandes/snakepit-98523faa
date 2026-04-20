@@ -402,7 +402,12 @@ export function buildMaterialDescriptionsPrompt(
       ? (m.title_options_json[m.selected_title_index] as any)?.text || '' : '';
     const filled = Object.entries(sections).filter(([, v]) => v?.trim())
       .map(([k, v]) => `  <s name="${k}">${v.slice(0, 200)}</s>`).join('\n');
-    return `<ep slot="${m.slot_key}" date="${m.episode_date}" title="${selTitle}">\n${filled || '  <s name="none">N/A</s>'}\n</ep>`;
+    const pautaInputs = pauta ? ((pauta.raw_inputs_json || {}) as Record<string, any>) : {};
+    const mentionedRaw = (m.mentioned_in_episode || pautaInputs.mentioned_in_episode || '').toString().trim();
+    const mentionedTag = mentionedRaw
+      ? `\n  <mentioned>${mentionedRaw.replace(/]]>/g, ']]&gt;')}</mentioned>`
+      : '';
+    return `<ep slot="${m.slot_key}" date="${m.episode_date}" title="${selTitle}">\n${filled || '  <s name="none">N/A</s>'}${mentionedTag}\n</ep>`;
   }).join('\n');
 
   return [
@@ -410,6 +415,7 @@ export function buildMaterialDescriptionsPrompt(
     renderBrandVoice(tone, ctx.settings.brand_tone_temperature, overrides),
     `ESCOPO: DESCRIÇÕES week=${weekStart}${slotKey ? ` slot=${slotKey}` : ''}`,
     getPromptText('material_descriptions_instructions', overrides),
+    getPromptText('material_mentioned_instructions', overrides),
     `BLOCO INSTITUCIONAL:\n${getPromptText('material_brand_block', overrides)}`,
     materialDescriptionsContract(weekStart, slots),
     episodeCtx,

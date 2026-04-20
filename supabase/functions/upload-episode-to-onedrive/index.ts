@@ -18,6 +18,11 @@ interface FinalizePayload {
   fileId: string;
 }
 
+interface DeletePayload {
+  action: "delete";
+  fileId: string;
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -106,6 +111,20 @@ async function getFileMeta(fileId: string) {
   return await res.json();
 }
 
+async function deleteFile(fileId: string): Promise<void> {
+  const headers = getAuthHeaders();
+  const res = await fetch(`${GATEWAY_URL}/me/drive/items/${fileId}`, {
+    method: "DELETE",
+    headers,
+  });
+  // 204 No Content on success; 404 also treated as "already gone" so we don't
+  // block the UI from cleaning up the metadata.
+  if (!res.ok && res.status !== 204 && res.status !== 404) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`OneDrive delete failed [${res.status}]: ${text}`);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
@@ -138,6 +157,13 @@ Deno.serve(async (req) => {
         webUrl: meta.webUrl,
         size: meta.size,
       });
+    }
+
+    if (body.action === "delete") {
+      const { fileId } = body as DeletePayload;
+      if (!fileId) return jsonResponse({ error: "fileId is required" }, 400);
+      await deleteFile(fileId);
+      return jsonResponse({ success: true });
     }
 
     return jsonResponse({ error: "Unknown action" }, 400);
