@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle,
   ChevronDown, ChevronRight as ChevronRightIcon, BarChart3, TrendingUp,
-  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy,
+  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy, ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
@@ -534,13 +534,21 @@ export default function Dashboard() {
           Calendário <Calendar className="h-4 w-4" />
         </Button>
         {currentWeek && (
-          <Button variant="outline" className="gap-2" onClick={() => {
-            const url = `${window.location.origin}/week/${currentWeek.id}`;
-            navigator.clipboard.writeText(url);
-            toast.success('Link copiado!');
-          }}>
-            <Link2 className="h-4 w-4" /> Copiar Link da Semana
-          </Button>
+          <>
+            <Button variant="outline" className="gap-2" onClick={() => {
+              const url = `${window.location.origin}/week/${currentWeek.id}`;
+              window.open(url, '_blank', 'noopener,noreferrer');
+            }}>
+              <ExternalLink className="h-4 w-4" /> Abrir Pauta Pública
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => {
+              const url = `${window.location.origin}/week/${currentWeek.id}`;
+              navigator.clipboard.writeText(url);
+              toast.success('Link copiado!');
+            }}>
+              <Link2 className="h-4 w-4" /> Copiar Link da Semana
+            </Button>
+          </>
         )}
       </div>
     </div>

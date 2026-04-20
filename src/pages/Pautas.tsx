@@ -1684,17 +1684,29 @@ export default function Pautas() {
                 </h3>
 
                 {/* Shared link */}
-                <Button
-                  variant="outline"
-                  className="gap-2"
-                  onClick={() => {
-                    const url = `${window.location.origin}/week/${selectedWeek.id}`;
-                    navigator.clipboard.writeText(url);
-                    toast.success('Link copiado');
-                  }}
-                >
-                  <Link2 className="h-4 w-4" /> Copiar link compartilhável
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      const url = `${window.location.origin}/week/${selectedWeek.id}`;
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    }}
+                  >
+                    <ExternalLink className="h-4 w-4" /> Abrir pauta pública
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => {
+                      const url = `${window.location.origin}/week/${selectedWeek.id}`;
+                      navigator.clipboard.writeText(url);
+                      toast.success('Link copiado');
+                    }}
+                  >
+                    <Link2 className="h-4 w-4" /> Copiar link compartilhável
+                  </Button>
+                </div>
 
                 {/* Progress cards grid */}
                 <WorkspaceShell
