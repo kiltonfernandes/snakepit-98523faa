@@ -1,6 +1,14 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { AudioParams, DEFAULT_PARAMS, DEFAULT_PROCESSING_PROFILE, LogEntry, MasterReport, ProcessingProfile, TrackReport } from '@/lib/audio/types';
 import { runPipeline, PipelineInput } from '@/lib/audio/pipeline';
+import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface PipelineUploadOptions {
+  enabled: boolean;
+  episodeMaterialId?: string;
+  episodeDate?: string; // YYYY-MM-DD
+}
 
 interface RivaldoState {
   isProcessing: boolean;
@@ -10,10 +18,11 @@ interface RivaldoState {
   trackReports: TrackReport[];
   masterReport: MasterReport | null;
   currentFilename: string;
+  lastUpload: { fileId: string; webUrl: string; filename: string } | null;
 }
 
 interface RivaldoContextType extends RivaldoState {
-  startPipeline: (input: PipelineInput, params: AudioParams) => Promise<void>;
+  startPipeline: (input: PipelineInput, params: AudioParams, upload?: PipelineUploadOptions) => Promise<void>;
   addLog: (message: string, type?: LogEntry['type']) => void;
   clearState: () => void;
 }
@@ -29,6 +38,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
   const [trackReports, setTrackReports] = useState<TrackReport[]>([]);
   const [masterReport, setMasterReport] = useState<MasterReport | null>(null);
   const [currentFilename, setCurrentFilename] = useState('');
+  const [lastUpload, setLastUpload] = useState<{ fileId: string; webUrl: string; filename: string } | null>(null);
   const processingRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -42,9 +52,10 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
     setProgress(0);
     setProgressLabel('');
     setCurrentFilename('');
+    setLastUpload(null);
   }, []);
 
-  const startPipeline = useCallback(async (input: PipelineInput, params: AudioParams) => {
+  const startPipeline = useCallback(async (input: PipelineInput, params: AudioParams, upload?: PipelineUploadOptions) => {
     if (processingRef.current) return;
     processingRef.current = true;
     setIsProcessing(true);
@@ -52,17 +63,58 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
     setLogs([]);
     setTrackReports([]);
     setMasterReport(null);
+    setLastUpload(null);
     setCurrentFilename(input.filename);
 
     try {
+      const uploadEnabled = upload?.enabled ?? false;
       const result = await runPipeline(
         input,
         params,
         (value, label) => { setProgress(value); setProgressLabel(label); },
-        (message, type) => { setLogs(prev => [...prev, { timestamp: Date.now(), message, type: type || 'info' }]); }
+        (message, type) => { setLogs(prev => [...prev, { timestamp: Date.now(), message, type: type || 'info' }]); },
+        { exportMode: uploadEnabled ? 'blob' : 'download', returnFinalBuffer: false }
       );
       setTrackReports(result.trackReports);
       setMasterReport(result.masterReport);
+
+      if (uploadEnabled && result.outputBlob) {
+        try {
+          addLog('Enviando para OneDrive...', 'step');
+          setProgressLabel('Enviando para OneDrive...');
+          const folderPath = buildEpisodeFolderPath(upload?.episodeDate);
+          const filename = sanitizeFilename(input.filename);
+          const uploaded = await uploadEpisodeToOneDrive({
+            folderPath,
+            filename,
+            blob: result.outputBlob,
+            onProgress: ({ fraction }) => {
+              setProgress(95 + fraction * 5);
+              setProgressLabel(`Upload OneDrive ${Math.round(fraction * 100)}%`);
+            },
+          });
+          setLastUpload(uploaded);
+          addLog(`OneDrive: ${uploaded.filename} (${(uploaded.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
+
+          if (upload?.episodeMaterialId) {
+            const { error: updErr } = await supabase
+              .from('episode_materials')
+              .update({
+                repository_provider: 'onedrive',
+                repository_url: uploaded.webUrl,
+                repository_file_id: uploaded.fileId,
+                repository_uploaded_at: new Date().toISOString(),
+              })
+              .eq('id', upload.episodeMaterialId);
+            if (updErr) addLog(`Aviso: link salvo localmente, falha em sincronizar materials (${updErr.message})`, 'error');
+            else addLog('Link salvo no episódio', 'success');
+          }
+        } catch (uploadErr) {
+          const msg = uploadErr instanceof Error ? uploadErr.message : 'Falha no upload OneDrive';
+          addLog(`OneDrive: ${msg}`, 'error');
+        }
+      }
+
       addLog('Memória liberada após export', 'info');
     } catch (error) {
       addLog(error instanceof Error ? error.message : 'Erro no pipeline 3.2', 'error');
@@ -74,7 +126,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <RivaldoContext.Provider value={{
-      isProcessing, progress, progressLabel, logs, trackReports, masterReport, currentFilename,
+      isProcessing, progress, progressLabel, logs, trackReports, masterReport, currentFilename, lastUpload,
       startPipeline, addLog, clearState,
     }}>
       {children}
