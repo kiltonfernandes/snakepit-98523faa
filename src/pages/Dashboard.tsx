@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle,
   ChevronDown, ChevronRight as ChevronRightIcon, BarChart3, TrendingUp,
-  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy,
+  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy, ExternalLink,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
