@@ -262,6 +262,33 @@ const Rivaldo = () => {
                 <span className="flex items-center gap-2"><Sparkles className="w-4 h-4" />Process & Export 3.2</span>
               )}
             </Button>
+            {!desktopMode && (
+              <div className="flex items-center justify-between gap-3 px-1">
+                <div className="flex items-center gap-2">
+                  <Checkbox id="upload-cloud" checked={uploadToCloud} onCheckedChange={(v) => setUploadToCloud(v === true)} disabled={isProcessing} />
+                  <Label htmlFor="upload-cloud" className="text-xs font-mono cursor-pointer flex items-center gap-1.5">
+                    <Cloud className="w-3.5 h-3.5" /> Enviar para OneDrive
+                    <span className="text-muted-foreground">(Snakepit/{new Date().getFullYear()}-W##)</span>
+                  </Label>
+                </div>
+                {selectedEpisode?.repositoryUrl && (
+                  <a href={selectedEpisode.repositoryUrl} target="_blank" rel="noreferrer" className="text-xs font-mono text-primary hover:underline flex items-center gap-1">
+                    <ExternalLink className="w-3 h-3" /> Já no Drive
+                  </a>
+                )}
+              </div>
+            )}
+            {rivaldo.lastUpload && (
+              <div className="flex items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs font-mono">
+                <div className="flex items-center gap-2 text-primary truncate">
+                  <CloudUpload className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{rivaldo.lastUpload.filename}</span>
+                </div>
+                <a href={rivaldo.lastUpload.webUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline flex items-center gap-1 shrink-0">
+                  <ExternalLink className="w-3 h-3" /> Abrir
+                </a>
+              </div>
+            )}
             <ElapsedTimer isRunning={isProcessing} />
             <GranularProgress progress={progress} label={progressLabel} isRunning={isProcessing} />
           </div>
