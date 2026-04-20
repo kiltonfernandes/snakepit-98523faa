@@ -30,11 +30,14 @@ REGRAS OBRIGATÓRIAS:
 4. Para cada item:
    - Inicie com 1 emoji relevante ao tema (🎵 música, 🎬 vídeo, 📰 notícia, 📺 canal, 🎸 banda, 🔗 link genérico, 📖 leitura, 🎙️ podcast, 🛒 produto, 📅 evento etc.).
    - Em seguida, 1 a 2 frases curtas em PT-BR descrevendo de forma envolvente o conteúdo.
-   - Se houver URL no item, embuta um <a href="URL" target="_blank" rel="noopener">Texto descritivo</a> no final do <li>.
+   - Se houver URL no item, OBRIGATORIAMENTE embuta a URL completa em um <a href="URL_COMPLETA_AQUI" target="_blank" rel="noopener">Texto descritivo</a> no final do <li>. NUNCA escreva o texto do link sem o atributo href. NUNCA use caracteres invisíveis (U+2060, U+200B etc.) no lugar do <a>.
    - Se NÃO houver URL, apenas descreva o assunto (sem link).
 5. Se você não conseguir analisar uma URL, ainda assim crie um <li> usando o domínio/título visível como rótulo do link (não pule itens).
 6. Não invente URLs nem fatos. Não copie textos longos das fontes — sempre parafraseie em 1-2 frases.
-7. Não inclua nada além da seção <h3>...<ul>...</ul>. Sem <html>, sem <body>, sem texto solto.`;
+7. Não inclua nada além da seção <h3>...<ul>...</ul>. Sem <html>, sem <body>, sem texto solto.
+8. EXEMPLO CORRETO de <li> com URL:
+   <li>🎵 Versão bossa nova do clássico Holy Land do Angra. <a href="https://youtu.be/abc123" target="_blank" rel="noopener">Ouça no YouTube</a></li>
+   EXEMPLO ERRADO (NUNCA FAÇA): <li>🎵 ... ⁠Holy Bossa⁠</li>  ← sem href, com U+2060.`;
 
 function extractContent(payload: any): string {
   // Standard OpenAI-compatible response
@@ -51,6 +54,8 @@ function extractContent(payload: any): string {
 function sanitizeHtml(raw: string): string {
   if (!raw) return "";
   let txt = raw.trim();
+  // Strip word-joiner / zero-width chars that some models emit instead of <a>
+  txt = txt.replace(/[\u2060\u200B\u200C\u200D\uFEFF]/g, "");
   // Strip code fences if model wrapped output
   txt = txt.replace(/^```(?:html)?\s*/i, "").replace(/```\s*$/i, "");
   // Strip surrounding text outside the <h3> block, if any
