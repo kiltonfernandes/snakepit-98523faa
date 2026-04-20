@@ -616,6 +616,27 @@ export function BulkModal({
                   {row.masterFile && (
                     <CheckCircle2 className="w-3 h-3 text-primary" />
                   )}
+                  {(() => {
+                    const status = uploadStatuses[row.id];
+                    if (!status || status.state === 'idle') return null;
+                    if (status.state === 'uploading') return (
+                      <span className="flex items-center gap-1 text-[10px] text-primary"><Loader2 className="w-3 h-3 animate-spin" /> upload...</span>
+                    );
+                    if (status.state === 'done') return (
+                      <a href={status.webUrl} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] text-primary hover:underline">
+                        <Cloud className="w-3 h-3" /> no Drive <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    );
+                    if (status.state === 'error') return (
+                      <span className="flex items-center gap-1 text-[10px] text-destructive" title={status.error}>
+                        <AlertCircle className="w-3 h-3" /> falhou
+                        <button onClick={() => retryUpload(row)} className="ml-1 underline hover:text-primary inline-flex items-center gap-0.5">
+                          <RefreshCw className="w-2.5 h-2.5" /> retry
+                        </button>
+                      </span>
+                    );
+                    return null;
+                  })()}
                 </span>
                 <div className="flex items-center gap-2">
                   <Switch
