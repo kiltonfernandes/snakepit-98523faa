@@ -1433,6 +1433,18 @@ export default function Pautas() {
                         onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
                       />
 
+                      <div className="space-y-1">
+                        <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          Mencionado no Episódio
+                        </Label>
+                        <Textarea
+                          className="min-h-[60px] text-xs"
+                          placeholder="Cole links ou assuntos que você mencionou no episódio (um por linha)..."
+                          value={inputs.mentioned_in_episode || ''}
+                          onChange={e => updateRawInput(pauta.id, 'mentioned_in_episode', e.target.value)}
+                        />
+                      </div>
+
                       {slot !== 'saturday' && slot !== 'sunday' && (
                         <>
                           <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
