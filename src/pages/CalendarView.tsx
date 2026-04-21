@@ -260,9 +260,39 @@ export default function CalendarView() {
     }
   };
 
-  const handleDownloadFromDrive = () => {
-    if (!selectedMaterial?.repository_url) return;
-    window.open(selectedMaterial.repository_url, '_blank', 'noopener');
+  const fetchDriveDownloadUrl = async (fileId: string): Promise<string | null> => {
+    const { data, error } = await supabase.functions.invoke('upload-episode-to-onedrive', {
+      body: { action: 'download', fileId },
+    });
+    if (error) throw new Error(error.message);
+    if (data?.ok === false) throw new Error(data?.error || 'Falha ao obter link de download');
+    return data?.downloadUrl || null;
+  };
+
+  const handleDownloadFromDrive = async () => {
+    if (!selectedMaterial?.repository_file_id && !selectedMaterial?.repository_url) return;
+    if (downloadingFromDrive) return;
+    setDownloadingFromDrive(true);
+    try {
+      let url: string | null = null;
+      if (selectedMaterial.repository_file_id) {
+        url = await fetchDriveDownloadUrl(selectedMaterial.repository_file_id);
+      }
+      if (!url) url = selectedMaterial.repository_url || null;
+      if (!url) throw new Error('Sem URL para download');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedMaterial.slot_key}_${selectedMaterial.episode_date}.mp3`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao baixar do Drive');
+    } finally {
+      setDownloadingFromDrive(false);
+    }
   };
 
   const handleConfirmDeleteFromDrive = async () => {
