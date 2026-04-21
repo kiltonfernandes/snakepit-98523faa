@@ -854,8 +854,18 @@ export default function CalendarView() {
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={goToWorkspace}>
                     <FileText className="h-4 w-4" /> Abrir workspace
                   </Button>
-                  <Button variant="outline" className="w-full justify-start gap-2" onClick={handleDownloadPackage}>
-                    <Download className="h-4 w-4" /> Baixar pacote
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={handleDownloadPackage}
+                    disabled={downloadingPackage}
+                  >
+                    {downloadingPackage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Baixar pacote (MP3 + capa + descrição)
                   </Button>
                   <Button className="w-full justify-start gap-2" onClick={() => window.open('https://podcasters.spotify.com/', '_blank')}>
                     <ExternalLink className="h-4 w-4" /> Spotify for Creators
