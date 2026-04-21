@@ -6,6 +6,7 @@ const CHUNK_SIZE = 10 * 1024 * 1024;
 export interface OneDriveUploadResult {
   fileId: string;
   webUrl: string;
+  downloadUrl?: string | null;
   filename: string;
   size: number;
 }
@@ -106,9 +107,21 @@ export async function uploadEpisodeToOneDrive(opts: OneDriveUploadOptions): Prom
   const finalJson = await lastResponse.json().catch(() => null) as { id?: string; webUrl?: string; name?: string; size?: number } | null;
   if (!finalJson?.id) throw new Error('Resposta final do OneDrive sem fileId');
 
+  // Finalize via edge function to create the anonymous public share link.
+  let publicWebUrl = finalJson.webUrl || '';
+  let publicDownloadUrl: string | null = null;
+  try {
+    const finalized = await callEdgeFunction({ action: 'finalize', fileId: finalJson.id }) as { webUrl?: string; downloadUrl?: string | null };
+    publicWebUrl = finalized.webUrl || publicWebUrl;
+    publicDownloadUrl = finalized.downloadUrl || null;
+  } catch (e) {
+    console.warn('Falha ao criar link público OneDrive', e);
+  }
+
   return {
     fileId: finalJson.id,
-    webUrl: finalJson.webUrl || '',
+    webUrl: publicWebUrl,
+    downloadUrl: publicDownloadUrl,
     filename: finalJson.name || filename,
     size: finalJson.size || total,
   };

@@ -150,6 +150,35 @@ async function getFileMeta(fileId: string) {
   return await res.json();
 }
 
+/** Creates an anonymous view link for the file and converts it to a direct download URL. */
+async function createPublicLink(fileId: string): Promise<{ webUrl: string; downloadUrl: string }> {
+  const headers = getAuthHeaders();
+  const res = await fetchWithRetry(
+    `${GATEWAY_URL}/me/drive/items/${fileId}/createLink`,
+    {
+      method: "POST",
+      headers: { ...headers, "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "view", scope: "anonymous" }),
+    },
+    "create public link",
+  );
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`OneDrive createLink failed [${res.status}]: ${text}`);
+  }
+  const data = await res.json();
+  const webUrl: string = data?.link?.webUrl || "";
+  // OneDrive trick: appending ?download=1 turns a share view link into a direct download.
+  // For 1drv.ms short links we can also use the redirected download endpoint.
+  let downloadUrl = webUrl;
+  if (webUrl) {
+    const u = new URL(webUrl);
+    u.searchParams.set("download", "1");
+    downloadUrl = u.toString();
+  }
+  return { webUrl, downloadUrl };
+}
+
 async function deleteFile(fileId: string): Promise<void> {
   const headers = getAuthHeaders();
   const res = await fetchWithRetry(`${GATEWAY_URL}/me/drive/items/${fileId}`, {
@@ -190,10 +219,21 @@ Deno.serve(async (req) => {
       const { fileId } = body as FinalizePayload;
       if (!fileId) return errorResponse("fileId is required", { action: "finalize" });
       const meta = await getFileMeta(fileId);
+      // Make the file publicly accessible and capture the share + direct download URLs.
+      let publicWebUrl = meta.webUrl;
+      let publicDownloadUrl: string | null = meta["@microsoft.graph.downloadUrl"] || null;
+      try {
+        const link = await createPublicLink(fileId);
+        publicWebUrl = link.webUrl || publicWebUrl;
+        publicDownloadUrl = link.downloadUrl || publicDownloadUrl;
+      } catch (e) {
+        console.warn("[onedrive] createPublicLink failed", e);
+      }
       return okResponse({
         id: meta.id,
         name: meta.name,
-        webUrl: meta.webUrl,
+        webUrl: publicWebUrl,
+        downloadUrl: publicDownloadUrl,
         size: meta.size,
       });
     }
@@ -209,12 +249,22 @@ Deno.serve(async (req) => {
       const { fileId } = body as DownloadPayload;
       if (!fileId) return errorResponse("fileId is required", { action: "download" });
       const meta = await getFileMeta(fileId);
+      // Always return the anonymous public download URL when possible.
+      let publicWebUrl = meta.webUrl;
+      let publicDownloadUrl: string | null = meta["@microsoft.graph.downloadUrl"] || null;
+      try {
+        const link = await createPublicLink(fileId);
+        publicWebUrl = link.webUrl || publicWebUrl;
+        publicDownloadUrl = link.downloadUrl || publicDownloadUrl;
+      } catch (e) {
+        console.warn("[onedrive] createPublicLink (download) failed", e);
+      }
       return okResponse({
         id: meta.id,
         name: meta.name,
-        webUrl: meta.webUrl,
+        webUrl: publicWebUrl,
         size: meta.size,
-        downloadUrl: meta["@microsoft.graph.downloadUrl"] || null,
+        downloadUrl: publicDownloadUrl,
       });
     }
 
