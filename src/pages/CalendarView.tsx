@@ -758,17 +758,33 @@ export default function CalendarView() {
                           size="sm"
                           className="flex-1 gap-2"
                           onClick={handleDownloadFromDrive}
+                          disabled={downloadingFromDrive}
                         >
-                          <Download className="h-3.5 w-3.5" /> Baixar do Drive
+                          {downloadingFromDrive ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          Baixar MP3
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          asChild
+                        >
+                          <a href={selectedMaterial.repository_url} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                          </a>
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="flex-1 gap-2"
+                          className="gap-2"
                           onClick={() => setConfirmDeleteDriveOpen(true)}
                           disabled={!selectedMaterial.repository_file_id}
                         >
-                          <Trash2 className="h-3.5 w-3.5" /> Excluir do Drive
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
                         </Button>
                       </div>
                     </div>
