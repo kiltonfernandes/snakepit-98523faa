@@ -49,6 +49,7 @@ import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
+import JSZip from 'jszip';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -112,6 +113,8 @@ export default function CalendarView() {
   const [enrichingDescription, setEnrichingDescription] = useState(false);
   const [confirmDeleteDriveOpen, setConfirmDeleteDriveOpen] = useState(false);
   const [deletingFromDrive, setDeletingFromDrive] = useState(false);
+  const [downloadingFromDrive, setDownloadingFromDrive] = useState(false);
+  const [downloadingPackage, setDownloadingPackage] = useState(false);
 
   const year = date.getFullYear();
   const month = date.getMonth();
