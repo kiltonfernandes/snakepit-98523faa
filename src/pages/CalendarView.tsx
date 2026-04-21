@@ -49,6 +49,7 @@ import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
+import JSZip from 'jszip';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -112,6 +113,8 @@ export default function CalendarView() {
   const [enrichingDescription, setEnrichingDescription] = useState(false);
   const [confirmDeleteDriveOpen, setConfirmDeleteDriveOpen] = useState(false);
   const [deletingFromDrive, setDeletingFromDrive] = useState(false);
+  const [downloadingFromDrive, setDownloadingFromDrive] = useState(false);
+  const [downloadingPackage, setDownloadingPackage] = useState(false);
 
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -257,9 +260,39 @@ export default function CalendarView() {
     }
   };
 
-  const handleDownloadFromDrive = () => {
-    if (!selectedMaterial?.repository_url) return;
-    window.open(selectedMaterial.repository_url, '_blank', 'noopener');
+  const fetchDriveDownloadUrl = async (fileId: string): Promise<string | null> => {
+    const { data, error } = await supabase.functions.invoke('upload-episode-to-onedrive', {
+      body: { action: 'download', fileId },
+    });
+    if (error) throw new Error(error.message);
+    if (data?.ok === false) throw new Error(data?.error || 'Falha ao obter link de download');
+    return data?.downloadUrl || null;
+  };
+
+  const handleDownloadFromDrive = async () => {
+    if (!selectedMaterial?.repository_file_id && !selectedMaterial?.repository_url) return;
+    if (downloadingFromDrive) return;
+    setDownloadingFromDrive(true);
+    try {
+      let url: string | null = null;
+      if (selectedMaterial.repository_file_id) {
+        url = await fetchDriveDownloadUrl(selectedMaterial.repository_file_id);
+      }
+      if (!url) url = selectedMaterial.repository_url || null;
+      if (!url) throw new Error('Sem URL para download');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedMaterial.slot_key}_${selectedMaterial.episode_date}.mp3`;
+      a.target = '_blank';
+      a.rel = 'noopener';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao baixar do Drive');
+    } finally {
+      setDownloadingFromDrive(false);
+    }
   };
 
   const handleConfirmDeleteFromDrive = async () => {
@@ -309,17 +342,70 @@ export default function CalendarView() {
     toast.success('Release atualizado');
   };
 
-  const handleDownloadPackage = () => {
-    if (!selectedMaterial) return;
-    const title = getSelectedTitle(selectedMaterial);
-    const content = `Episódio: ${title}\nData: ${selectedMaterial.episode_date}\nDescrição: ${selectedMaterial.description_html || 'Sem descrição'}\nSpotify: ${selectedMaterial.spotify_link || 'Não agendado'}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `episodio_${selectedMaterial.slot_key}_${selectedMaterial.episode_date}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadPackage = async () => {
+    if (!selectedMaterial || downloadingPackage) return;
+    setDownloadingPackage(true);
+    const t = toast.loading('Montando pacote do episódio...');
+    try {
+      const zip = new JSZip();
+      const title = getSelectedTitle(selectedMaterial);
+      const baseName = `${selectedMaterial.slot_key}_${selectedMaterial.episode_date}`;
+
+      // 1. Description + metadata
+      const meta = `Episódio: ${title}\nData: ${selectedMaterial.episode_date}\nSpotify: ${selectedMaterial.spotify_link || 'Não agendado'}\nOneDrive: ${selectedMaterial.repository_url || 'Não enviado'}\n`;
+      zip.file('episodio.txt', meta);
+      if (selectedMaterial.description_html) {
+        zip.file('descricao.html', selectedMaterial.description_html);
+      }
+
+      // 2. Cover image
+      let coverUrl = selectedMaterial.cover_url;
+      if (!coverUrl) coverUrl = await loadMaterialCover(selectedMaterial.id);
+      if (coverUrl) {
+        try {
+          const res = await fetch(coverUrl);
+          const blob = await res.blob();
+          const ext = blob.type.includes('jpeg') ? 'jpg' : 'png';
+          zip.file(`capa.${ext}`, blob);
+        } catch (e) {
+          console.warn('Falha ao baixar capa', e);
+        }
+      }
+
+      // 3. MP3 from OneDrive
+      if (selectedMaterial.repository_file_id) {
+        try {
+          toast.loading('Baixando MP3 do OneDrive...', { id: t });
+          const dlUrl = await fetchDriveDownloadUrl(selectedMaterial.repository_file_id);
+          if (dlUrl) {
+            const res = await fetch(dlUrl);
+            if (res.ok) {
+              const blob = await res.blob();
+              zip.file(`${baseName}.mp3`, blob);
+            }
+          }
+        } catch (e) {
+          console.warn('Falha ao baixar MP3 do OneDrive', e);
+          toast.warning('MP3 não pôde ser incluído no pacote (Drive indisponível)');
+        }
+      }
+
+      toast.loading('Compactando pacote...', { id: t });
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pacote_${baseName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Pacote baixado', { id: t });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar pacote', { id: t });
+    } finally {
+      setDownloadingPackage(false);
+    }
   };
 
   const handleDownloadCover = () => {
@@ -672,17 +758,33 @@ export default function CalendarView() {
                           size="sm"
                           className="flex-1 gap-2"
                           onClick={handleDownloadFromDrive}
+                          disabled={downloadingFromDrive}
                         >
-                          <Download className="h-3.5 w-3.5" /> Baixar do Drive
+                          {downloadingFromDrive ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Download className="h-3.5 w-3.5" />
+                          )}
+                          Baixar MP3
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="gap-2"
+                          asChild
+                        >
+                          <a href={selectedMaterial.repository_url} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5" /> Abrir
+                          </a>
                         </Button>
                         <Button
                           variant="destructive"
                           size="sm"
-                          className="flex-1 gap-2"
+                          className="gap-2"
                           onClick={() => setConfirmDeleteDriveOpen(true)}
                           disabled={!selectedMaterial.repository_file_id}
                         >
-                          <Trash2 className="h-3.5 w-3.5" /> Excluir do Drive
+                          <Trash2 className="h-3.5 w-3.5" /> Excluir
                         </Button>
                       </div>
                     </div>
@@ -752,8 +854,18 @@ export default function CalendarView() {
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={goToWorkspace}>
                     <FileText className="h-4 w-4" /> Abrir workspace
                   </Button>
-                  <Button variant="outline" className="w-full justify-start gap-2" onClick={handleDownloadPackage}>
-                    <Download className="h-4 w-4" /> Baixar pacote
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start gap-2"
+                    onClick={handleDownloadPackage}
+                    disabled={downloadingPackage}
+                  >
+                    {downloadingPackage ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4" />
+                    )}
+                    Baixar pacote (MP3 + capa + descrição)
                   </Button>
                   <Button className="w-full justify-start gap-2" onClick={() => window.open('https://podcasters.spotify.com/', '_blank')}>
                     <ExternalLink className="h-4 w-4" /> Spotify for Creators

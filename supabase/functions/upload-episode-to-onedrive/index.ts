@@ -24,6 +24,11 @@ interface DeletePayload {
   fileId: string;
 }
 
+interface DownloadPayload {
+  action: "download";
+  fileId: string;
+}
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -137,7 +142,7 @@ async function createUploadSession(folderItemId: string, filename: string) {
 
 async function getFileMeta(fileId: string) {
   const headers = getAuthHeaders();
-  const res = await fetchWithRetry(`${GATEWAY_URL}/me/drive/items/${fileId}?$select=id,name,webUrl,size`, { headers }, "get item");
+  const res = await fetchWithRetry(`${GATEWAY_URL}/me/drive/items/${fileId}?$select=id,name,webUrl,size,@microsoft.graph.downloadUrl`, { headers }, "get item");
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`OneDrive get item failed [${res.status}]: ${text}`);
@@ -198,6 +203,19 @@ Deno.serve(async (req) => {
       if (!fileId) return errorResponse("fileId is required", { action: "delete" });
       await deleteFile(fileId);
       return okResponse({ success: true });
+    }
+
+    if (body.action === "download") {
+      const { fileId } = body as DownloadPayload;
+      if (!fileId) return errorResponse("fileId is required", { action: "download" });
+      const meta = await getFileMeta(fileId);
+      return okResponse({
+        id: meta.id,
+        name: meta.name,
+        webUrl: meta.webUrl,
+        size: meta.size,
+        downloadUrl: meta["@microsoft.graph.downloadUrl"] || null,
+      });
     }
 
     return errorResponse("Unknown action", { action: body?.action ?? null });
