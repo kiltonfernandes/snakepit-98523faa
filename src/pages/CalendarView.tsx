@@ -342,17 +342,70 @@ export default function CalendarView() {
     toast.success('Release atualizado');
   };
 
-  const handleDownloadPackage = () => {
-    if (!selectedMaterial) return;
-    const title = getSelectedTitle(selectedMaterial);
-    const content = `Episódio: ${title}\nData: ${selectedMaterial.episode_date}\nDescrição: ${selectedMaterial.description_html || 'Sem descrição'}\nSpotify: ${selectedMaterial.spotify_link || 'Não agendado'}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `episodio_${selectedMaterial.slot_key}_${selectedMaterial.episode_date}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleDownloadPackage = async () => {
+    if (!selectedMaterial || downloadingPackage) return;
+    setDownloadingPackage(true);
+    const t = toast.loading('Montando pacote do episódio...');
+    try {
+      const zip = new JSZip();
+      const title = getSelectedTitle(selectedMaterial);
+      const baseName = `${selectedMaterial.slot_key}_${selectedMaterial.episode_date}`;
+
+      // 1. Description + metadata
+      const meta = `Episódio: ${title}\nData: ${selectedMaterial.episode_date}\nSpotify: ${selectedMaterial.spotify_link || 'Não agendado'}\nOneDrive: ${selectedMaterial.repository_url || 'Não enviado'}\n`;
+      zip.file('episodio.txt', meta);
+      if (selectedMaterial.description_html) {
+        zip.file('descricao.html', selectedMaterial.description_html);
+      }
+
+      // 2. Cover image
+      let coverUrl = selectedMaterial.cover_url;
+      if (!coverUrl) coverUrl = await loadMaterialCover(selectedMaterial.id);
+      if (coverUrl) {
+        try {
+          const res = await fetch(coverUrl);
+          const blob = await res.blob();
+          const ext = blob.type.includes('jpeg') ? 'jpg' : 'png';
+          zip.file(`capa.${ext}`, blob);
+        } catch (e) {
+          console.warn('Falha ao baixar capa', e);
+        }
+      }
+
+      // 3. MP3 from OneDrive
+      if (selectedMaterial.repository_file_id) {
+        try {
+          toast.loading('Baixando MP3 do OneDrive...', { id: t });
+          const dlUrl = await fetchDriveDownloadUrl(selectedMaterial.repository_file_id);
+          if (dlUrl) {
+            const res = await fetch(dlUrl);
+            if (res.ok) {
+              const blob = await res.blob();
+              zip.file(`${baseName}.mp3`, blob);
+            }
+          }
+        } catch (e) {
+          console.warn('Falha ao baixar MP3 do OneDrive', e);
+          toast.warning('MP3 não pôde ser incluído no pacote (Drive indisponível)');
+        }
+      }
+
+      toast.loading('Compactando pacote...', { id: t });
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `pacote_${baseName}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success('Pacote baixado', { id: t });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao gerar pacote', { id: t });
+    } finally {
+      setDownloadingPackage(false);
+    }
   };
 
   const handleDownloadCover = () => {
