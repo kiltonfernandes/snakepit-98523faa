@@ -352,91 +352,20 @@ export function BulkModal({
       return;
     }
 
-    setIsProcessing(true);
-    setProgress(0);
-    setLogs([]);
-
-    try {
-      const items: BulkItem[] = await Promise.all(
-        rows.map(async (row) => {
-          let bgm = row.bgmFile;
-          if (!bgm && row.bgmPreset) {
-            const preset = BGM_PRESETS.find((item) => item.url === row.bgmPreset);
-            bgm = await loadPresetAsFile(preset ?? { label: 'BGM', url: row.bgmPreset });
-          }
-          return {
-            masterMode: row.masterMode,
-            master: row.masterFile,
-            masterTracks: row.masterTracks,
-            processingProfile,
-            bgm: bgm!,
-            filename: row.filename.trim(),
-          };
-        })
-      );
-
-      // Reset upload statuses
-      const initial: Record<string, UploadStatus> = {};
-      rows.forEach(r => { initial[r.id] = { state: 'idle' }; });
-      setUploadStatuses(initial);
-
-      await runBulkPipeline(
-        { items, intro: resolvedIntro!, outro: resolvedOutro!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
-        audioParams,
-        (value, label) => {
-          setProgress(value);
-          setProgressLabel(label);
-        },
-        addLog,
-        {
-          exportMode: 'blob',
-          downloadIndividualItems: !uploadToCloud,
-          onItemEncoded: async (_item, index, result) => {
-            const row = rows[index];
-            if (!row) return;
-            if (uploadToCloud && result.outputBlob) {
-              setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
-              try {
-                const folderPath = buildEpisodeFolderPath(row.episodeDate);
-                const filename = sanitizeFilename(row.filename.trim());
-                addLog(`Upload OneDrive: ${folderPath}/${filename}...`, 'step');
-                const uploaded = await uploadEpisodeToOneDrive({
-                  folderPath,
-                  filename,
-                  blob: result.outputBlob,
-                  onProgress: ({ fraction }) => {
-                    setProgressLabel(`Upload ${row.filename}: ${Math.round(fraction * 100)}%`);
-                  },
-                });
-                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
-                addLog(`OneDrive: ${uploaded.filename} → ${uploaded.webUrl}`, 'success');
-                if (row.materialId) {
-                  await supabase.from('episode_materials').update({
-                    repository_provider: 'onedrive',
-                    repository_url: uploaded.webUrl,
-                    repository_file_id: uploaded.fileId,
-                    repository_uploaded_at: new Date().toISOString(),
-                  }).eq('id', row.materialId);
-                }
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : 'Falha no upload';
-                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
-                addLog(`OneDrive falhou (${row.filename}): ${msg}`, 'error');
-              }
-            } else {
-              addLog(`Download concluído: ${_item.filename}`, 'success');
-            }
-          },
-        }
-      );
-      addLog('Bulk finalizado com sucesso!', 'success');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro desconhecido no bulk pipeline';
-      addLog(message, 'error');
-      console.error('[Bulk Pipeline Error]', error);
-    } finally {
-      setIsProcessing(false);
-    }
+    if (!resolvedIntro || !resolvedOutro) return;
+    const week = weeks.find(w => w.id === selectedWeekId);
+    const batchName = week ? `Semana de ${new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : undefined;
+    await startBulk({
+      rows: rows as BulkQueueRow[],
+      intro: resolvedIntro,
+      outro: resolvedOutro,
+      audioParams,
+      processingProfile,
+      generateFinalEpisode,
+      finalFilename: finalEpisodeFilename || undefined,
+      uploadToCloud,
+      batchName,
+    });
   };
 
   const weekLabel = (w: { start_date: string }) => {
