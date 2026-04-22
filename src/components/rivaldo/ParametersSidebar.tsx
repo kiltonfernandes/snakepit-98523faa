@@ -5,6 +5,7 @@ import { AudioParams, DEFAULT_PARAMS, DEFAULT_PROCESSING_PROFILE, ProcessingProf
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { HeavynautaBrand } from '@/components/rivaldo/HeavynautaBrand';
+import { PresetManager } from '@/components/rivaldo/PresetManager';
 import { cn } from '@/lib/utils';
 
 interface ParametersSidebarProps {
@@ -136,6 +137,16 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
             <RotateCcw className="w-3 h-3" />
           </Button>
         </div>
+
+        {/* Preset manager */}
+        <PresetManager
+          currentParams={params}
+          currentProfile={profile}
+          onApplyPreset={(p, pr) => {
+            onParamsChange(p);
+            onProfileChange(pr);
+          }}
+        />
 
         {/* Auto Enhance toggle */}
         <div className="rounded-md border border-primary/20 bg-primary/5 p-2.5 flex items-center justify-between">
