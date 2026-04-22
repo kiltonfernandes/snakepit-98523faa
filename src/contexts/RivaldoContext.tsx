@@ -125,7 +125,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
       setIsProcessing(false);
       processingRef.current = false;
     }
-  }, [addLog]);
+  }, [addLog, updateMaterial]);
 
   return (
     <RivaldoContext.Provider value={{
