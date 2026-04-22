@@ -220,7 +220,7 @@ export default function Dashboard() {
     return FC ? <FC className="h-3.5 w-4.5 rounded-[2px] overflow-hidden" /> : null;
   };
 
-  const INDICATOR_LABELS = ['Pauta', 'Título', 'Desc.', 'Capa', 'Agend.', 'Salvo'];
+  const INDICATOR_LABELS = ['Pauta', 'Título', 'Desc.', 'Capa', 'Salvo', 'Agend.'];
 
   const filteredWeeksForTree = (wks: EditorialWeek[]) => {
     if (filterStatus === 'all') return wks;
