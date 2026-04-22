@@ -410,6 +410,22 @@ export function BulkModal({
     });
   };
 
+  const handleCompile = async () => {
+    if (!canCompile || !selectedWeekId) return;
+    const days: CompileCloudDayInput[] = compileDays.map(d => ({
+      dayIndex: d.ep.dayOfWeek,
+      materialId: d.ep.id,
+      fileId: d.ep.repositoryFileId,
+      override: d.override,
+      label: `${DAY_NAMES[d.ep.dayOfWeek]} — ${d.ep.title}`,
+    }));
+    await compileFromCloud({
+      weekId: selectedWeekId,
+      finalFilename: compileFinalFilename.trim(),
+      days,
+    });
+  };
+
   const weekLabel = (w: { start_date: string }) => {
     const d = new Date(`${w.start_date}T12:00:00`);
     return `Semana de ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
