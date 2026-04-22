@@ -4,6 +4,8 @@ import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile, DEFAULT_PROCE
 import { loadPresetAsFile } from '@/lib/assets/presets';
 import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { useApp } from '@/contexts/AppContext';
+import { supabase } from '@/integrations/supabase/client';
+import { downloadBlob } from '@/lib/audio/encoder';
 
 const BGM_PRESETS = [
   { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
@@ -59,6 +61,20 @@ export interface StartBulkInput {
   batchName?: string;
 }
 
+export interface CompileCloudDayInput {
+  dayIndex: number; // 1=Mon..6=Sat
+  materialId?: string;
+  fileId?: string | null; // OneDrive file id (preferred source)
+  override?: File | null; // local file fallback
+  label: string; // human label e.g. "Segunda — Título"
+}
+
+export interface CompileFromCloudInput {
+  weekId: string;
+  finalFilename: string;
+  days: CompileCloudDayInput[];
+}
+
 interface RivaldoBulkContextType {
   // persistent state
   isProcessing: boolean;
@@ -74,6 +90,12 @@ interface RivaldoBulkContextType {
   currentBatchName: string | null;
   finalEpisodeStatus: FinalEpisodeUploadStatus;
 
+  // compile-from-cloud state
+  isCompiling: boolean;
+  compileProgress: number;
+  compileProgressLabel: string;
+  compileLogs: LogEntry[];
+
   // setters (UI config persistence)
   setRows: React.Dispatch<React.SetStateAction<BulkQueueRow[]>>;
   updateRow: (id: string, updates: Partial<BulkQueueRow>) => void;
@@ -85,6 +107,7 @@ interface RivaldoBulkContextType {
   // actions
   startBulk: (input: StartBulkInput) => Promise<void>;
   retryUpload: (rowId: string, ctx: { intro: File; outro: File; audioParams?: AudioParams; processingProfile: ProcessingProfile }) => Promise<void>;
+  compileFromCloud: (input: CompileFromCloudInput) => Promise<void>;
   clearBulkState: () => void;
   addLog: (message: string, type?: LogEntry['type']) => void;
 }
