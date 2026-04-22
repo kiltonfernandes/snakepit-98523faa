@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   LayoutDashboard, Disc, FileText, Palette, Calendar, ArrowRight, Check, Circle,
   ChevronDown, ChevronRight as ChevronRightIcon, BarChart3, TrendingUp,
-  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy, ExternalLink,
+  Globe, Music, Flame, AlertCircle, Clock, Zap, Eye, Link2, Copy, ExternalLink, Cloud,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
@@ -58,8 +58,9 @@ export default function Dashboard() {
         pauta: !!pauta && !['pesquisa', 'draft'].includes(pauta.status),
         title: mat?.selected_title_index != null,
         description: !!mat?.description_html,
-        cover: !!mat?.cover_url,
+        cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
         scheduling: !!mat?.spotify_link,
+        saved: !!mat?.repository_url,
       };
       const count = Object.values(indicators).filter(Boolean).length;
       return { day, indicators, count, pauta };
@@ -68,7 +69,7 @@ export default function Dashboard() {
 
   function weekProgress(week: EditorialWeek): number {
     const indicators = getWeekIndicators(week);
-    const total = indicators.length * 5;
+    const total = indicators.length * 6;
     const done = indicators.reduce((s, i) => s + i.count, 0);
     return total > 0 ? Math.round((done / total) * 100) : 0;
   }
@@ -219,7 +220,7 @@ export default function Dashboard() {
     return FC ? <FC className="h-3.5 w-4.5 rounded-[2px] overflow-hidden" /> : null;
   };
 
-  const INDICATOR_LABELS = ['Pauta', 'Título', 'Desc.', 'Capa', 'Agend.'];
+  const INDICATOR_LABELS = ['Pauta', 'Título', 'Desc.', 'Capa', 'Agend.', 'Salvo'];
 
   const filteredWeeksForTree = (wks: EditorialWeek[]) => {
     if (filterStatus === 'all') return wks;
@@ -296,7 +297,7 @@ export default function Dashboard() {
               {/* Day-by-day grid */}
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {currentIndicators.map(({ day, indicators, count, pauta }) => {
-                  const pct = Math.round((count / 5) * 100);
+                  const pct = Math.round((count / 6) * 100);
                   return (
                     <motion.div key={day.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                       <Card className={cn("hover:border-primary/30 transition-all cursor-pointer", pct === 100 && "border-emerald-500/30")}
@@ -305,15 +306,17 @@ export default function Dashboard() {
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-sm font-semibold">{day.label}</span>
                             <div className="flex items-center gap-1.5">
-                              <span className={cn("text-xs font-mono font-bold", trafficColor(pct))}>{count}/5</span>
+                              <span className={cn("text-xs font-mono font-bold", trafficColor(pct))}>{count}/6</span>
                               <span className={cn("h-2 w-2 rounded-full", trafficLight(pct))} />
                             </div>
                           </div>
                           <Progress value={pct} className="h-1 mb-2" />
-                          <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground flex-wrap">
                             {Object.entries(indicators).map(([key, val]) => (
                               <span key={key} className={cn("flex items-center gap-0.5", val && "text-emerald-400")}>
-                                {val ? <Check className="h-2.5 w-2.5" /> : <Circle className="h-2.5 w-2.5" />}
+                                {key === 'saved'
+                                  ? <Cloud className={cn("h-2.5 w-2.5", !val && "text-muted-foreground/30")} />
+                                  : (val ? <Check className="h-2.5 w-2.5" /> : <Circle className="h-2.5 w-2.5" />)}
                                 {INDICATOR_LABELS[Object.keys(indicators).indexOf(key)]}
                               </span>
                             ))}
@@ -440,20 +443,25 @@ export default function Dashboard() {
 
                                             {isExpanded && (
                                               <div className="border-t border-border/30 bg-muted/10 p-2.5">
-                                                <div className="grid grid-cols-[100px_repeat(5,1fr)_60px] gap-1 text-[10px] text-muted-foreground font-medium mb-1 px-1">
+                                                <div className="grid grid-cols-[100px_repeat(6,1fr)_60px] gap-1 text-[10px] text-muted-foreground font-medium mb-1 px-1">
                                                   <span>Episódio</span>
                                                   {INDICATOR_LABELS.map(l => <span key={l} className="text-center">{l}</span>)}
                                                   <span className="text-right">Score</span>
                                                 </div>
                                                 {dayIndicators.map(({ day, indicators, count }) => (
-                                                  <div key={day.key} className="grid grid-cols-[100px_repeat(5,1fr)_60px] gap-1 items-center py-1 px-1 rounded hover:bg-muted/20">
+                                                  <div key={day.key} className="grid grid-cols-[100px_repeat(6,1fr)_60px] gap-1 items-center py-1 px-1 rounded hover:bg-muted/20">
                                                     <span className="text-xs font-medium">{day.label}</span>
                                                     <span className="flex justify-center"><Dot active={indicators.pauta} /></span>
                                                     <span className="flex justify-center"><Dot active={indicators.title} /></span>
                                                     <span className="flex justify-center"><Dot active={indicators.description} /></span>
                                                     <span className="flex justify-center"><Dot active={indicators.cover} /></span>
                                                     <span className="flex justify-center"><Dot active={indicators.scheduling} /></span>
-                                                    <span className="text-right text-[10px] font-mono text-muted-foreground">{count}/5</span>
+                                                    <span className="flex justify-center">
+                                                      {indicators.saved
+                                                        ? <Cloud className="h-3 w-3 text-emerald-400" />
+                                                        : <Cloud className="h-3 w-3 text-muted-foreground/30" />}
+                                                    </span>
+                                                    <span className="text-right text-[10px] font-mono text-muted-foreground">{count}/6</span>
                                                   </div>
                                                 ))}
                                               </div>
