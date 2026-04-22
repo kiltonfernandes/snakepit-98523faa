@@ -432,8 +432,11 @@ export async function runBulkPipeline(
         input.outro,
       ], { type: 'audio/mpeg' });
 
-      await downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
-      onLog('Episodio final consolidado exportado', 'success');
+      const shouldDownloadFinal = options.downloadFinalEpisode ?? true;
+      if (shouldDownloadFinal) {
+        await downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
+        onLog('Episodio final consolidado exportado', 'success');
+      }
       await options.onFinalEpisodeEncoded?.(finalBlob);
     }
 
