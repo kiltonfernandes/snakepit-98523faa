@@ -464,7 +464,7 @@ export function BulkModal({
         {/* Week Selector */}
         <div className="space-y-1">
           <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Semana</Label>
-          <Select value={selectedWeekId} onValueChange={setSelectedWeekId} disabled={isProcessing}>
+          <Select value={selectedWeekId} onValueChange={setSelectedWeekId} disabled={isProcessing || isCompiling}>
             <SelectTrigger className="h-9 text-sm font-mono">
               <SelectValue placeholder="Selecione a semana..." />
             </SelectTrigger>
@@ -477,6 +477,18 @@ export function BulkModal({
             </SelectContent>
           </Select>
         </div>
+
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'process' | 'compile')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="process" disabled={isCompiling}>
+              <Layers className="w-3.5 h-3.5 mr-1.5" /> Processar do zero
+            </TabsTrigger>
+            <TabsTrigger value="compile" disabled={isProcessing}>
+              <Download className="w-3.5 h-3.5 mr-1.5" /> Compilar da nuvem
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="process" className="space-y-3 mt-3">
 
         {/* Bulk File Drop Zone */}
         {selectedWeekId && rows.length > 0 && (
