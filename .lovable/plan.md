@@ -1,72 +1,65 @@
 
 
-## O que vamos construir
+# Plano Revisado: Indicador "Salvo" + Auto-Duck + Capa Pronta
 
-5 melhorias no fluxo do episódio, conectando OneDrive, descrição com IA, pauta compartilhável e calendário.
+## 1. Dashboard — 6º indicador "Salvo" (OneDrive)
 
-### 1. Botão "Baixar do Drive" no modal do calendário
-No modal do episódio (CalendarView), **acima** do campo "Link do Spotify", aparece uma seção `Arquivo no OneDrive`:
-- Se `repository_url` existir: badge verde "MP3 no Drive · enviado em <data>", botão **Baixar do Drive** (abre `repository_url`) e botão **Excluir do Drive** (vermelho).
-- Se não existir: estado vazio com mensagem "Nenhum MP3 enviado ainda. Use a aba Rivaldo para gerar e subir."
+Adicionar etapa **"Salvo"** ao lado dos 5 indicadores atuais (Pauta, Título, Desc., Capa, Agend.) → barra passa de `X/5` para `X/6`.
 
-### 2. Excluir arquivo do Drive (com confirmação)
-- Botão **Excluir do Drive** abre um `AlertDialog` (padrão do projeto): *"Tem certeza? O arquivo será removido permanentemente do OneDrive."*
-- Confirmação chama nova action no edge function `upload-episode-to-onedrive` (action: `delete`, recebe `fileId`) que faz `DELETE /me/drive/items/{fileId}` no Graph.
-- Após sucesso: limpa `repository_url`, `repository_file_id`, `repository_provider`, `repository_uploaded_at` no `episode_materials` e mostra toast.
+**Arquivos:**
+- `src/lib/types.ts` → adicionar `saved: boolean` em `EpisodeCompletionIndicators`.
+- `src/pages/Dashboard.tsx`:
+  - `getWeekIndicators`: `saved: !!material?.repository_url`.
+  - `weekProgress`: dividir por 6.
+  - `INDICATOR_LABELS`: incluir `'Salvo'` com ícone `Cloud`.
+  - Ajustar grid do tree de `repeat(5,1fr)` para `repeat(6,1fr)`.
+- `src/pages/Pautas.tsx` (aba Management) → mesma sincronização para 6/6.
 
-### 3. Campo "Mencionado no Episódio" + ação IA (no modal do calendário)
-**Acima** do campo "Descrição em HTML" no modal:
-- Novo `Textarea` "Mencionado no Episódio" (multilinha) — aceita texto livre, URLs ou misto.
-- Botão **Inserir na descrição (IA)** — habilitado **somente** quando o campo tem conteúdo.
-- Persiste em `episode_materials.mentioned_in_episode` (nova coluna `text`).
+## 2. Capa Pronta — Critério corrigido
 
-**Comportamento da IA**:
-- Edge function nova `enrich-episode-description` recebe `{ mentioned: string, currentDescriptionHtml: string }`.
-- Roda Lovable AI (`google/gemini-2.5-flash`) com o prompt traduzido para PT-BR baseado no fornecido pelo usuário (analisar links/texto, criar 1-2 frases por item, emoji relevante, HTML válido com `<a>`).
-- Resultado HTML é **inserido no início** do `description_html` (antes do bloco institucional `<p><b>Heavynauta — Papo Sério...`), dentro de uma seção `<h3>🎙️ Mencionado neste episódio</h3>` + `<ul>...</ul>`.
-- Se já existir uma seção "Mencionado neste episódio" anterior, **substitui** (idempotente).
+**Hoje:** `cover: !!material?.cover_url` — fica verde só quando há blob carregado em memória.
 
-### 4. Campo "Mencionado no Episódio" também na aba Pautas (por dia)
-- Em `Pautas.tsx` → aba `inputs` (e dentro do flow wizard se aplicável), cada card de dia ganha um `Textarea` "Mencionado no episódio (links/assuntos)".
-- Salvo em `pauta.raw_inputs_json.mentioned_in_episode`.
-- **Sincronização**: quando o material é gerado/regerado a partir da pauta, o campo da pauta é copiado para `episode_materials.mentioned_in_episode`. Edição posterior no calendário sobrepõe e fica como SSOT do material.
+**Correção:** o indicador deve refletir que **existe uma capa salva no banco** (link persistido), independente de já ter sido carregada na sessão. Assim o usuário pode regerar quando quiser sem perder o "verde".
 
-### 5. Integração na geração da descrição (consistência)
-- `buildMaterialDescriptionsPrompt` em `prompt-builder.ts` passa a incluir, por episódio, um bloco `<mentioned>...</mentioned>` no `<ep>` quando `mentioned_in_episode` (do material ou da pauta) tiver conteúdo.
-- Novo bloco em `prompt-defaults.ts` (`material_mentioned_instructions`) com a regra: *"Se houver conteúdo em <mentioned>, criar uma seção `🎙️ Mencionado neste episódio` no topo do HTML, antes do bloco institucional, com 1-2 frases por item + emoji + `<a>` quando houver URL. Se vazio, ignorar."*
-- Garante que **gerar a descrição com o campo preenchido** produz o mesmo resultado que **inserir depois pelo botão IA no calendário**.
+**Mudança em `src/pages/Dashboard.tsx`:**
+- `cover: !!(material?.cover_url || material?.cover_source_url || material?.cover_saved_at)` — qualquer evidência de capa salva no DB conta.
+- Aplicar o mesmo critério em `src/pages/Pautas.tsx` (Management) e em `src/pages/Materials.tsx` se houver checagem equivalente.
 
-## Detalhes técnicos
+## 3. Auto-Duck — Eliminar subida da BGM em pausas curtas
 
-**Migration**:
-```sql
-ALTER TABLE public.episode_materials ADD COLUMN IF NOT EXISTS mentioned_in_episode text;
--- raw_inputs_json.mentioned_in_episode em pautas usa o JSONB existente, sem migration.
-```
+**Diagnóstico:** `detectVoiceRegionsForDuck` em `src/lib/audio/auto-duck.ts` mescla janelas com `params.maxPause = 1.2s`. Pausas naturais entre frases (1.5–3s) quebram a região, e `getDuckGainAtSample` aplica `fadeUp` (0.3s) + `fadeDown` (1.23s) na brecha → BGM sobe no meio da fala.
 
-**Edge Functions**:
-- `upload-episode-to-onedrive`: adicionar `action: "delete"` (DELETE no Graph via gateway).
-- `enrich-episode-description` (nova): Lovable AI gateway, retorna `{ html: string }` com a seção pronta. Faz fetch dos URLs com tolerância a falhas (link inválido vira só "🔗 título do link").
+**Mudanças:**
 
-**Frontend**:
-- `CalendarView.tsx`: nova seção OneDrive + nova seção Mencionado + AlertDialog de exclusão. Reordenar: `[Mencionado] → [Descrição HTML] → [OneDrive] → [Spotify]`.
-- `Pautas.tsx`: novo `Textarea` por dia no tab `inputs`, salvando em `raw_inputs_json.mentioned_in_episode`.
-- `PublicWeekView.tsx`: a descrição do material já renderiza o HTML completo, então o conteúdo aparece automaticamente quando inserido.
-- `AppContext.tsx`: incluir `mentioned_in_episode` em `updateMaterial` payload e no template inicial.
-- Helper utilitário `injectMentionedSection(html, mentionedHtml)` que insere/substitui o bloco `<h3>🎙️ Mencionado neste episódio</h3>` antes do marcador institucional.
+- **`src/lib/audio/types.ts`**:
+  - `DEFAULT_PARAMS.maxPause`: `1.2` → `4.0` (alinhar com o print de referência).
+  - Novo campo `duckHoldDuration: 0.5` (segura BGM por 500ms após última fala antes do fade-up).
 
-**Memória**: atualizar `mem://features/onedrive-upload.md` (action delete) e criar `mem://features/episode-mentioned-section.md` documentando o fluxo.
+- **`src/lib/audio/auto-duck.ts`**:
+  - **Pós-mesclagem**: após detectar regiões, fundir adjacentes se `gap < fadeDownSamples + fadeUpSamples + holdSamples`. Garante duck contínuo em buracos curtos.
+  - **Hold após fala**: `getDuckGainAtSample` só inicia `fadeUp` em `region.end + holdSamples`.
 
-## Layout do modal (depois)
+- **`src/components/rivaldo/ParametersSidebar.tsx`**:
+  - Novo slider "Hold após fala (s)" na seção Auto-Duck (modo avançado), 0–2s, default 0.5s.
+
+## Resumo visual
 
 ```text
-┌─ Pacote do episódio ─────────────────────────────┐
-│ [Badges]                                         │
-│ Título selecionado                               │
-│ Mencionado no Episódio    [Inserir na descrição]│
-│ Descrição em HTML          [Copy to clipboard]  │
-│ Arquivo no OneDrive  [Baixar] [Excluir]         │
-│ Link do Spotify           [Salvar]              │
-└──────────────────────────────────────────────────┘
+Antes:  fala ─╮      ╭─ fala ─╮      ╭─ fala
+              └duck up┘ down  └ up   └ down
+                  BGM SOBE ❌
+
+Depois: fala ─┬──────┬─ fala ─┬──────┬─ fala
+              └─ duck contínuo + hold ✅
 ```
+
+## Arquivos tocados
+
+- `src/lib/types.ts` — campo `saved`
+- `src/pages/Dashboard.tsx` — 6º indicador + critério novo de capa
+- `src/pages/Pautas.tsx` — sincronizar Management
+- `src/pages/Materials.tsx` — alinhar critério de capa (se aplicável)
+- `src/lib/audio/types.ts` — `maxPause: 4`, `duckHoldDuration`
+- `src/lib/audio/auto-duck.ts` — merge agressivo + hold
+- `src/components/rivaldo/ParametersSidebar.tsx` — slider hold
 
