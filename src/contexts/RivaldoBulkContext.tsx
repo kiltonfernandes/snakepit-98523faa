@@ -72,6 +72,7 @@ interface RivaldoBulkContextType {
   generateFinalEpisode: boolean;
   uploadToCloud: boolean;
   currentBatchName: string | null;
+  finalEpisodeStatus: FinalEpisodeUploadStatus;
 
   // setters (UI config persistence)
   setRows: React.Dispatch<React.SetStateAction<BulkQueueRow[]>>;
