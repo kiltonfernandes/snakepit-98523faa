@@ -85,16 +85,16 @@ export function PresetManager({ currentParams, currentProfile, onApplyPreset }: 
     setSaving(true);
     const id = genId();
     const now = new Date().toISOString().slice(0, 19) + 'Z';
-    const { error } = await supabase.from('rivaldo_presets').insert({
+    const { error } = await supabase.from('rivaldo_presets').insert([{
       id,
       name,
       description: newDescription.trim() || null,
-      audio_params_json: currentParams as unknown as Record<string, unknown>,
-      processing_profile_json: currentProfile as unknown as Record<string, unknown>,
+      audio_params_json: currentParams as unknown as never,
+      processing_profile_json: currentProfile as unknown as never,
       is_default: false,
       created_at: now,
       updated_at: now,
-    });
+    }]);
     setSaving(false);
     if (error) {
       toast.error('Falha ao salvar preset');
@@ -113,8 +113,8 @@ export function PresetManager({ currentParams, currentProfile, onApplyPreset }: 
     const { error } = await supabase
       .from('rivaldo_presets')
       .update({
-        audio_params_json: currentParams as unknown as Record<string, unknown>,
-        processing_profile_json: currentProfile as unknown as Record<string, unknown>,
+        audio_params_json: currentParams as unknown as never,
+        processing_profile_json: currentProfile as unknown as never,
         updated_at: now,
       })
       .eq('id', preset.id);
