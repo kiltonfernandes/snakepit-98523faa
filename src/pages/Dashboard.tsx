@@ -59,8 +59,8 @@ export default function Dashboard() {
         title: mat?.selected_title_index != null,
         description: !!mat?.description_html,
         cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
-        scheduling: !!mat?.spotify_link,
         saved: !!mat?.repository_url,
+        scheduling: !!mat?.spotify_link,
       };
       const count = Object.values(indicators).filter(Boolean).length;
       return { day, indicators, count, pauta };
@@ -220,7 +220,7 @@ export default function Dashboard() {
     return FC ? <FC className="h-3.5 w-4.5 rounded-[2px] overflow-hidden" /> : null;
   };
 
-  const INDICATOR_LABELS = ['Pauta', 'Título', 'Desc.', 'Capa', 'Agend.', 'Salvo'];
+  const INDICATOR_LABELS = ['Pauta', 'Título', 'Desc.', 'Capa', 'Salvo', 'Agend.'];
 
   const filteredWeeksForTree = (wks: EditorialWeek[]) => {
     if (filterStatus === 'all') return wks;

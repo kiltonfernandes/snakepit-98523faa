@@ -1727,8 +1727,8 @@ export default function Pautas() {
                       title: mat?.selected_title_index != null,
                       description: !!mat?.description_html,
                       cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
-                      scheduling: !!mat?.spotify_link,
                       saved: !!mat?.repository_url,
+                      scheduling: !!mat?.spotify_link,
                     };
                     const doneCount = Object.values(indicators).filter(Boolean).length;
                     const total = 6;
@@ -1755,8 +1755,8 @@ export default function Pautas() {
                             { key: 'title', label: 'Título', done: indicators.title },
                             { key: 'desc', label: 'Desc.', done: indicators.description },
                             { key: 'cover', label: 'Capa', done: indicators.cover },
-                            { key: 'sched', label: 'Agend.', done: indicators.scheduling },
                             { key: 'saved', label: 'Salvo', done: indicators.saved },
+                            { key: 'sched', label: 'Agend.', done: indicators.scheduling },
                           ] as const).map(item => (
                             <span key={item.key} className="flex items-center gap-0.5">
                               {item.done
