@@ -24,6 +24,7 @@ On success, updates `episode_materials`:
 ### UI behavior
 - Single Rivaldo: checkbox "Enviar para OneDrive" (default ON), shows "Já no Drive" badge when material already has `repository_url`.
 - BulkModal: same checkbox, per-row status badge (uploading / done with link / error+retry button). When upload is ON, individual MP3 downloads are skipped.
+- Bulk consolidated episode: when "Gerar episódio consolidado" + "Enviar para OneDrive" are both ON, the final concatenated MP3 is uploaded to the same `Snakepit/{YYYY}-W{NN}/` folder (anchored to the latest row's `episode_date`, typically Sunday) instead of triggering a browser download. It syncs `repository_*` fields on the anchor row's `episode_materials` so the calendar/Dashboard show "Salvo" + download link for the consolidated episode. A status banner in the modal shows uploading/done/error with an "abrir" link.
 - Calendar modal: "Arquivo no OneDrive" section above Spotify with **Baixar do Drive** (opens `repository_url`) and **Excluir do Drive** (AlertDialog confirmation → `action: delete` → clears all `repository_*` fields).
 - Retry: re-encodes the row's pipeline and re-uploads.
 
