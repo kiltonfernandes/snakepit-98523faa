@@ -130,6 +130,17 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
   const [finalEpisodeStatus, setFinalEpisodeStatus] = useState<FinalEpisodeUploadStatus>({ state: 'idle' });
   const processingRef = useRef(false);
 
+  // Compile-from-cloud state
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [compileProgress, setCompileProgress] = useState(0);
+  const [compileProgressLabel, setCompileProgressLabel] = useState('');
+  const [compileLogs, setCompileLogs] = useState<LogEntry[]>([]);
+  const compilingRef = useRef(false);
+
+  const addCompileLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
+    setCompileLogs(prev => [...prev, { timestamp: Date.now(), message, type }]);
+  }, []);
+
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setLogs(prev => [...prev, { timestamp: Date.now(), message, type }]);
   }, []);
@@ -139,13 +150,16 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
   }, []);
 
   const clearBulkState = useCallback(() => {
-    if (processingRef.current) return;
+    if (processingRef.current || compilingRef.current) return;
     setLogs([]);
     setProgress(0);
     setProgressLabel('');
     setUploadStatuses({});
     setCurrentBatchName(null);
     setFinalEpisodeStatus({ state: 'idle' });
+    setCompileLogs([]);
+    setCompileProgress(0);
+    setCompileProgressLabel('');
   }, []);
 
   const startBulk = useCallback(async (input: StartBulkInput) => {
