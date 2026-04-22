@@ -250,68 +250,19 @@ export function BulkModal({
     setFinalEpisodeFilename(sunday?.title || '');
   }, [selectedWeekId, allEpisodeTitles]);
 
-  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-    setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
-  }, []);
+  const addLog = bulk.addLog;
+  const updateRow = updateRowCtx;
 
-  const updateRow = (id: string, updates: Partial<QueueRow>) => {
-    setRows((prev) => prev.map((row) => row.id === id ? { ...row, ...updates } : row));
-  };
-
-  /** Retry uploading a single row's blob — re-encodes via runPipeline of just that item. */
+  /** Retry uploading a single row — delegated to context. */
   const retryUpload = useCallback(async (row: QueueRow) => {
     if (!resolvedIntro || !resolvedOutro) return;
-    setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
-    try {
-      let bgm = row.bgmFile;
-      if (!bgm && row.bgmPreset) {
-        const preset = BGM_PRESETS.find((p) => p.url === row.bgmPreset);
-        bgm = await loadPresetAsFile(preset ?? { label: 'BGM', url: row.bgmPreset });
-      }
-      if (!bgm) throw new Error('BGM não disponível');
-      addLog(`Reprocessando ${row.filename} para reupload...`, 'step');
-      const { runPipeline } = await import('@/lib/audio/pipeline');
-      const result = await runPipeline(
-        {
-          masterMode: row.masterMode,
-          master: row.masterFile,
-          masterTracks: row.masterTracks,
-          processingProfile,
-          bgm,
-          intro: resolvedIntro,
-          outro: resolvedOutro,
-          filename: row.filename.trim(),
-        },
-        audioParams,
-        () => undefined,
-        addLog,
-        { exportMode: 'blob', returnFinalBuffer: false }
-      );
-      if (!result.outputBlob) throw new Error('Encode não retornou blob');
-      const folderPath = buildEpisodeFolderPath(row.episodeDate);
-      const filename = sanitizeFilename(row.filename.trim());
-      const uploaded = await uploadEpisodeToOneDrive({
-        folderPath,
-        filename,
-        blob: result.outputBlob,
-        onProgress: ({ fraction }) => setProgressLabel(`Reupload: ${Math.round(fraction * 100)}%`),
-      });
-      setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
-      if (row.materialId) {
-        await supabase.from('episode_materials').update({
-          repository_provider: 'onedrive',
-          repository_url: uploaded.webUrl,
-          repository_file_id: uploaded.fileId,
-          repository_uploaded_at: new Date().toISOString(),
-        }).eq('id', row.materialId);
-      }
-      addLog(`Reupload concluído: ${uploaded.filename}`, 'success');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Falha';
-      setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
-      addLog(`Falha no reupload de ${row.filename}: ${msg}`, 'error');
-    }
-  }, [addLog, audioParams, processingProfile, resolvedIntro, resolvedOutro]);
+    await retryUploadCtx(row.id, {
+      intro: resolvedIntro,
+      outro: resolvedOutro,
+      audioParams,
+      processingProfile,
+    });
+  }, [retryUploadCtx, resolvedIntro, resolvedOutro, audioParams, processingProfile]);
 
   // Auto-match uploaded files to rows by day name in filename
   const handleBulkFileDrop = useCallback((files: FileList | File[]) => {
