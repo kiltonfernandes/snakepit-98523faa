@@ -173,6 +173,8 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
             onChange={(v) => onParamsChange({ ...params, fadeDownDuration: v })} unit="s" />
           <SliderField label="Fade up" value={params.fadeUpDuration} min={0.05} max={2} step={0.01}
             onChange={(v) => onParamsChange({ ...params, fadeUpDuration: v })} unit="s" />
+          <SliderField label="Hold após fala" value={params.duckHoldDuration} min={0} max={2} step={0.05}
+            onChange={(v) => onParamsChange({ ...params, duckHoldDuration: v })} unit="s" />
           <SliderField label="BGM tail" value={params.bgmTailAfterMaster} min={0} max={30} step={1}
             onChange={(v) => onParamsChange({ ...params, bgmTailAfterMaster: v })} unit="s" />
 

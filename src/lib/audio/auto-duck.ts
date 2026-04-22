@@ -9,7 +9,7 @@ export interface VoiceRegion {
 }
 
 export function getDuckGainAtSample(
-  sample: number, voiceRegions: VoiceRegion[], fadeDownSamples: number, fadeUpSamples: number, duckGain: number
+  sample: number, voiceRegions: VoiceRegion[], fadeDownSamples: number, fadeUpSamples: number, duckGain: number, holdSamples: number = 0
 ): number {
   let gain = 1;
   for (let index = 0; index < voiceRegions.length; index++) {
@@ -22,8 +22,11 @@ export function getDuckGainAtSample(
       continue;
     }
     if (sample >= region.start && sample < region.end) return duckGain;
-    if (sample >= region.end && sample < region.end + fadeUpSamples) {
-      const t = (sample - region.end) / Math.max(1, fadeUpSamples);
+    // Hold the duck for `holdSamples` after the region ends, then fade up.
+    const holdEnd = region.end + holdSamples;
+    if (sample >= region.end && sample < holdEnd) return duckGain;
+    if (sample >= holdEnd && sample < holdEnd + fadeUpSamples) {
+      const t = (sample - holdEnd) / Math.max(1, fadeUpSamples);
       gain = Math.min(gain, duckGain + t * (1 - duckGain));
     }
   }
@@ -85,7 +88,22 @@ export function applyAutoDuck(
   const duckGain = dbToGain(params.duckReductionDb);
   const fadeDownSamples = Math.max(1, Math.floor(params.fadeDownDuration * sampleRate));
   const fadeUpSamples = Math.max(1, Math.floor(params.fadeUpDuration * sampleRate));
-  const voiceRegions = detectVoiceRegionsForDuck(masterData, sampleRate, params, onSubProgress);
+  const holdSamples = Math.max(0, Math.floor((params.duckHoldDuration ?? 0) * sampleRate));
+  const rawRegions = detectVoiceRegionsForDuck(masterData, sampleRate, params, onSubProgress);
+
+  // Aggressive merge: if the gap between two regions is shorter than the
+  // total time needed for fadeUp + hold + fadeDown, merge them so the BGM
+  // never rises in the brief silences between sentences.
+  const mergeThreshold = fadeUpSamples + holdSamples + fadeDownSamples;
+  const voiceRegions: VoiceRegion[] = [];
+  for (const region of rawRegions) {
+    const last = voiceRegions[voiceRegions.length - 1];
+    if (last && region.start - last.end < mergeThreshold) {
+      last.end = region.end;
+    } else {
+      voiceRegions.push({ start: region.start, end: region.end });
+    }
+  }
 
   log(`Detectadas ${voiceRegions.length} regioes de voz para duck continuo`, 'info');
   onSubProgress?.(0.35);
@@ -103,7 +121,7 @@ export function applyAutoDuck(
       const windowStart = windowIndex * windowSamples;
       const windowEnd = Math.min(windowStart + windowSamples, bgmLength);
       const midSample = windowStart + Math.floor((windowEnd - windowStart) / 2);
-      const gain = getDuckGainAtSample(midSample, voiceRegions, fadeDownSamples, fadeUpSamples, duckGain);
+      const gain = getDuckGainAtSample(midSample, voiceRegions, fadeDownSamples, fadeUpSamples, duckGain, holdSamples);
       if (gain === 1) {
         dstData.set(srcData.subarray(windowStart, windowEnd), windowStart);
       } else {
