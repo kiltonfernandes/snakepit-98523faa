@@ -108,6 +108,7 @@ interface EpisodeTitle {
   dayOfWeek: number;
   weekId: string;
   episodeDate: string;
+  repositoryFileId?: string | null;
 }
 
 interface BulkModalProps {
