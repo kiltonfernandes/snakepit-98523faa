@@ -1726,11 +1726,12 @@ export default function Pautas() {
                       pauta: allSectionsFilled,
                       title: mat?.selected_title_index != null,
                       description: !!mat?.description_html,
-                      cover: !!mat?.cover_url,
+                      cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
                       scheduling: !!mat?.spotify_link,
+                      saved: !!mat?.repository_url,
                     };
                     const doneCount = Object.values(indicators).filter(Boolean).length;
-                    const total = 5;
+                    const total = 6;
                     const pct = Math.round((doneCount / total) * 100);
 
                     return (
@@ -1755,6 +1756,7 @@ export default function Pautas() {
                             { key: 'desc', label: 'Desc.', done: indicators.description },
                             { key: 'cover', label: 'Capa', done: indicators.cover },
                             { key: 'sched', label: 'Agend.', done: indicators.scheduling },
+                            { key: 'saved', label: 'Salvo', done: indicators.saved },
                           ] as const).map(item => (
                             <span key={item.key} className="flex items-center gap-0.5">
                               {item.done
