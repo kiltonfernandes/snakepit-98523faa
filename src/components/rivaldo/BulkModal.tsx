@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2, Cloud, ExternalLink, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2, Cloud, ExternalLink, RefreshCw, AlertCircle, Loader2, Download, CloudOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
@@ -9,6 +9,8 @@ import { ProcessLog } from '@/components/rivaldo/ProcessLog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +24,7 @@ import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
-import { useRivaldoBulk, BulkQueueRow } from '@/contexts/RivaldoBulkContext';
+import { useRivaldoBulk, BulkQueueRow, CompileCloudDayInput } from '@/contexts/RivaldoBulkContext';
 
 const BGM_PRESETS = [
   { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
@@ -106,6 +108,7 @@ interface EpisodeTitle {
   dayOfWeek: number;
   weekId: string;
   episodeDate: string;
+  repositoryFileId?: string | null;
 }
 
 interface BulkModalProps {
@@ -157,6 +160,8 @@ export function BulkModal({
     setRows, updateRow: updateRowCtx, setSelectedWeekId, setFinalEpisodeFilename,
     setGenerateFinalEpisode, setUploadToCloud,
     startBulk, retryUpload: retryUploadCtx,
+    isCompiling, compileProgress, compileProgressLabel, compileLogs,
+    compileFromCloud,
   } = bulk;
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
@@ -166,6 +171,13 @@ export function BulkModal({
   const dropRef = useRef<HTMLDivElement>(null);
   const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
   const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
+
+  // Modal-local mode toggle (not persisted between sessions)
+  const [mode, setMode] = useState<'process' | 'compile'>('process');
+
+  // Compile mode: per-day local file overrides (when cloud file missing or user prefers)
+  const [compileOverrides, setCompileOverrides] = useState<Record<number, File | null>>({});
+  const [compileFinalFilename, setCompileFinalFilename] = useState('');
 
   // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
   const resolvedIntro = introFile || autoIntroFile;
@@ -178,6 +190,28 @@ export function BulkModal({
   );
 
   const sundayTitles = useMemo(() => weekEpisodes.filter(t => t.dayOfWeek === 0), [weekEpisodes]);
+
+  // Compile mode: weekday episodes (Mon=1..Sat=6), sorted, with cloud presence info
+  const compileDays = useMemo(() => {
+    const filtered = weekEpisodes
+      .filter(t => t.dayOfWeek >= 1 && t.dayOfWeek <= 6)
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    return filtered.map(ep => ({
+      ep,
+      hasCloud: !!ep.repositoryFileId,
+      override: compileOverrides[ep.dayOfWeek] || null,
+    }));
+  }, [weekEpisodes, compileOverrides]);
+
+  const compileReadyCount = compileDays.filter(d => d.hasCloud || d.override).length;
+  const canCompile = compileDays.length === 6 && compileReadyCount === 6 && !!compileFinalFilename.trim() && !isCompiling;
+
+  // Reset overrides + auto-suggest final filename when week changes (compile mode)
+  useEffect(() => {
+    setCompileOverrides({});
+    const sunday = allEpisodeTitles.find(ep => ep.weekId === selectedWeekId && ep.dayOfWeek === 0);
+    if (sunday) setCompileFinalFilename(sunday.title);
+  }, [selectedWeekId, allEpisodeTitles]);
 
   // Auto-load intro/outro presets on open
   useEffect(() => {
@@ -202,7 +236,7 @@ export function BulkModal({
     (async () => {
       const [weeksRes, matsRes] = await Promise.all([
         supabase.from('editorial_weeks').select('id, start_date').order('start_date', { ascending: false }),
-        supabase.from('episode_materials').select('id, title_options_json, selected_title_index, episode_date, week_id').order('episode_date', { ascending: true }),
+        supabase.from('episode_materials').select('id, title_options_json, selected_title_index, episode_date, week_id, repository_file_id').order('episode_date', { ascending: true }),
       ]);
 
       if (weeksRes.data) setWeeks(weeksRes.data);
@@ -217,7 +251,11 @@ export function BulkModal({
           if (title) {
             const d = new Date(`${row.episode_date}T12:00:00`);
             const dayName = DAY_NAMES[d.getDay()] || '';
-            titles.push({ id: row.id, title, label: `[${dayName}] - ${title}`, dayOfWeek: d.getDay(), weekId: row.week_id, episodeDate: row.episode_date });
+            titles.push({
+              id: row.id, title, label: `[${dayName}] - ${title}`,
+              dayOfWeek: d.getDay(), weekId: row.week_id, episodeDate: row.episode_date,
+              repositoryFileId: row.repository_file_id,
+            });
           }
         }
         setAllEpisodeTitles(titles);
@@ -372,6 +410,22 @@ export function BulkModal({
     });
   };
 
+  const handleCompile = async () => {
+    if (!canCompile || !selectedWeekId) return;
+    const days: CompileCloudDayInput[] = compileDays.map(d => ({
+      dayIndex: d.ep.dayOfWeek,
+      materialId: d.ep.id,
+      fileId: d.ep.repositoryFileId,
+      override: d.override,
+      label: `${DAY_NAMES[d.ep.dayOfWeek]} — ${d.ep.title}`,
+    }));
+    await compileFromCloud({
+      weekId: selectedWeekId,
+      finalFilename: compileFinalFilename.trim(),
+      days,
+    });
+  };
+
   const weekLabel = (w: { start_date: string }) => {
     const d = new Date(`${w.start_date}T12:00:00`);
     return `Semana de ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
@@ -410,7 +464,7 @@ export function BulkModal({
         {/* Week Selector */}
         <div className="space-y-1">
           <Label className="text-xs font-mono text-muted-foreground uppercase tracking-wider">Semana</Label>
-          <Select value={selectedWeekId} onValueChange={setSelectedWeekId} disabled={isProcessing}>
+          <Select value={selectedWeekId} onValueChange={setSelectedWeekId} disabled={isProcessing || isCompiling}>
             <SelectTrigger className="h-9 text-sm font-mono">
               <SelectValue placeholder="Selecione a semana..." />
             </SelectTrigger>
@@ -423,6 +477,18 @@ export function BulkModal({
             </SelectContent>
           </Select>
         </div>
+
+        <Tabs value={mode} onValueChange={(v) => setMode(v as 'process' | 'compile')} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="process" disabled={isCompiling}>
+              <Layers className="w-3.5 h-3.5 mr-1.5" /> Processar do zero
+            </TabsTrigger>
+            <TabsTrigger value="compile" disabled={isProcessing}>
+              <Download className="w-3.5 h-3.5 mr-1.5" /> Compilar da nuvem
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="process" className="space-y-3 mt-3">
 
         {/* Bulk File Drop Zone */}
         {selectedWeekId && rows.length > 0 && (
@@ -749,6 +815,130 @@ export function BulkModal({
           </div>
         )}
         {logs.length > 0 && <ProcessLog logs={logs} />}
+          </TabsContent>
+
+          <TabsContent value="compile" className="space-y-3 mt-3">
+            {!selectedWeekId ? (
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-center text-xs font-mono text-muted-foreground">
+                Selecione uma semana para listar os episódios disponíveis na nuvem.
+              </div>
+            ) : compileDays.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-center text-xs font-mono text-muted-foreground">
+                Nenhum episódio (Seg–Sáb) cadastrado nessa semana.
+              </div>
+            ) : (
+              <>
+                <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[11px] font-mono text-muted-foreground">
+                  Compila <strong>Intro + Seg + Ter + Qua + Qui + Sex + Sáb + Outro</strong> com os MP3s já no OneDrive e baixa local. <span className="text-foreground">Não sobe nada nem altera o banco.</span>
+                </div>
+
+                <div className="space-y-2">
+                  {compileDays.map(({ ep, hasCloud, override }) => {
+                    const ready = hasCloud || !!override;
+                    return (
+                      <div
+                        key={ep.id}
+                        className={`rounded-md border p-2.5 ${
+                          ready ? 'border-primary/30 bg-primary/5' : 'border-destructive/30 bg-destructive/5'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono">
+                              {DAY_NAMES[ep.dayOfWeek]}
+                            </span>
+                            <span className="text-xs font-mono truncate">{ep.title}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono shrink-0">
+                            {hasCloud && !override && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Cloud className="w-3 h-3" /> nuvem
+                              </span>
+                            )}
+                            {override && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <FileAudio className="w-3 h-3" /> local
+                              </span>
+                            )}
+                            {!hasCloud && !override && (
+                              <span className="flex items-center gap-1 text-destructive">
+                                <CloudOff className="w-3 h-3" /> faltando
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {!hasCloud && (
+                          <label className="block mt-2 cursor-pointer">
+                            <div className={`text-[10px] border border-dashed rounded px-2 py-1.5 truncate transition-colors ${
+                              override ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-muted-foreground/50'
+                            }`}>
+                              {override ? `📎 ${override.name}` : 'Arraste um MP3 ou clique para enviar'}
+                            </div>
+                            <input
+                              type="file"
+                              accept=".mp3,audio/mpeg"
+                              className="hidden"
+                              disabled={isCompiling}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                setCompileOverrides(prev => ({ ...prev, [ep.dayOfWeek]: f }));
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-mono text-muted-foreground">Nome do arquivo final</Label>
+                  <Input
+                    value={compileFinalFilename}
+                    onChange={(e) => setCompileFinalFilename(e.target.value)}
+                    placeholder="Heavynauta_S##.mp3"
+                    className="h-9 text-sm font-mono"
+                    disabled={isCompiling}
+                  />
+                </div>
+
+                <div className="text-[11px] font-mono text-muted-foreground">
+                  Pronto: <span className={compileReadyCount === 6 ? 'text-primary' : 'text-destructive'}>{compileReadyCount}/6</span> dias
+                </div>
+
+                <Button onClick={handleCompile} disabled={!canCompile} className="w-full h-10">
+                  {isCompiling ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Compilando...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Download className="w-4 h-4" /> Baixar consolidado
+                    </span>
+                  )}
+                </Button>
+
+                {(isCompiling || compileProgress > 0) && (
+                  <div className="space-y-2">
+                    <div className="h-1.5 w-full rounded bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${compileProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                      <span>{compileProgressLabel || '—'}</span>
+                      <span>{compileProgress}%</span>
+                    </div>
+                  </div>
+                )}
+
+                {compileLogs.length > 0 && <ProcessLog logs={compileLogs} />}
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
