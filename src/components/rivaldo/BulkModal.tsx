@@ -191,6 +191,28 @@ export function BulkModal({
 
   const sundayTitles = useMemo(() => weekEpisodes.filter(t => t.dayOfWeek === 0), [weekEpisodes]);
 
+  // Compile mode: weekday episodes (Mon=1..Sat=6), sorted, with cloud presence info
+  const compileDays = useMemo(() => {
+    const filtered = weekEpisodes
+      .filter(t => t.dayOfWeek >= 1 && t.dayOfWeek <= 6)
+      .sort((a, b) => a.dayOfWeek - b.dayOfWeek);
+    return filtered.map(ep => ({
+      ep,
+      hasCloud: !!ep.repositoryFileId,
+      override: compileOverrides[ep.dayOfWeek] || null,
+    }));
+  }, [weekEpisodes, compileOverrides]);
+
+  const compileReadyCount = compileDays.filter(d => d.hasCloud || d.override).length;
+  const canCompile = compileDays.length === 6 && compileReadyCount === 6 && !!compileFinalFilename.trim() && !isCompiling;
+
+  // Reset overrides + auto-suggest final filename when week changes (compile mode)
+  useEffect(() => {
+    setCompileOverrides({});
+    const sunday = allEpisodeTitles.find(ep => ep.weekId === selectedWeekId && ep.dayOfWeek === 0);
+    if (sunday) setCompileFinalFilename(sunday.title);
+  }, [selectedWeekId, allEpisodeTitles]);
+
   // Auto-load intro/outro presets on open
   useEffect(() => {
     if (!open) return;
