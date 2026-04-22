@@ -38,6 +38,15 @@ export type BulkUploadStatus = {
   uploadedFilename?: string;
 };
 
+export type FinalEpisodeUploadStatus = {
+  state: 'idle' | 'uploading' | 'done' | 'error';
+  webUrl?: string;
+  fileId?: string;
+  folderPath?: string;
+  uploadedFilename?: string;
+  error?: string;
+};
+
 export interface StartBulkInput {
   rows: BulkQueueRow[];
   intro: File;
