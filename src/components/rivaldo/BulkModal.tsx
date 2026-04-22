@@ -148,25 +148,23 @@ export function BulkModal({
   desktopQueueStatusMessage = null,
   onDesktopJobQueued,
 }: BulkModalProps) {
-  const [rows, setRows] = useState<QueueRow[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
+  const bulk = useRivaldoBulk();
+  const {
+    isProcessing, progress, progressLabel, logs,
+    rows, uploadStatuses,
+    selectedWeekId, finalEpisodeFilename, generateFinalEpisode, uploadToCloud,
+    setRows, updateRow: updateRowCtx, setSelectedWeekId, setFinalEpisodeFilename,
+    setGenerateFinalEpisode, setUploadToCloud,
+    startBulk, retryUpload: retryUploadCtx,
+  } = bulk;
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
   const [allEpisodeTitles, setAllEpisodeTitles] = useState<EpisodeTitle[]>([]);
-  const [finalEpisodeFilename, setFinalEpisodeFilename] = useState('');
-  const [selectedWeekId, setSelectedWeekId] = useState<string>('');
   const [weeks, setWeeks] = useState<{ id: string; start_date: string }[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
   const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
   const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
-  const [uploadToCloud, setUploadToCloud] = useState(true);
-  type UploadStatus = { state: 'idle' | 'uploading' | 'done' | 'error'; webUrl?: string; error?: string; fileId?: string; folderPath?: string; uploadedFilename?: string };
-  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadStatus>>({});
 
   // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
   const resolvedIntro = introFile || autoIntroFile;
