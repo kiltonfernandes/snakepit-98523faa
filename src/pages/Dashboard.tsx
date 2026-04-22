@@ -59,8 +59,8 @@ export default function Dashboard() {
         title: mat?.selected_title_index != null,
         description: !!mat?.description_html,
         cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
-        scheduling: !!mat?.spotify_link,
         saved: !!mat?.repository_url,
+        scheduling: !!mat?.spotify_link,
       };
       const count = Object.values(indicators).filter(Boolean).length;
       return { day, indicators, count, pauta };
