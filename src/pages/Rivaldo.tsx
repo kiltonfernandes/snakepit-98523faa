@@ -7,6 +7,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/contexts/AppContext';
 import { useRivaldo } from '@/contexts/RivaldoContext';
+import { useRivaldoBulk } from '@/contexts/RivaldoBulkContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
@@ -108,6 +109,7 @@ const Rivaldo = () => {
     return groups;
   }, [materials, pautas, weeks]);
   const rivaldo = useRivaldo();
+  const bulk = useRivaldoBulk();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [uploadToCloud, setUploadToCloud] = useState(true); // default ON per user preference
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
@@ -229,9 +231,27 @@ const Rivaldo = () => {
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="ml-auto flex items-center gap-1.5">
-          <Layers className="w-4 h-4" /> Bulk 3.2
-        </Button>
+        <div className="ml-auto flex items-center gap-2">
+          {bulk.isProcessing && (
+            <button
+              type="button"
+              onClick={() => setBulkOpen(true)}
+              className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-mono text-primary hover:bg-primary/20 transition-colors"
+              title="Reabrir modal do bulk em andamento"
+            >
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
+                className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full"
+              />
+              <span className="truncate max-w-[160px]">{bulk.currentBatchName ?? 'Bulk em andamento'}</span>
+              <span className="font-semibold">{Math.round(bulk.progress)}%</span>
+            </button>
+          )}
+          <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="flex items-center gap-1.5">
+            <Layers className="w-4 h-4" /> Bulk 3.2
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 px-6 pb-6 pt-4 flex gap-6 overflow-y-auto">

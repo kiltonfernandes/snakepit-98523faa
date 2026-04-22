@@ -16,14 +16,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile } from '@/lib/audio/types';
 import { ElapsedTimer } from '@/components/rivaldo/ElapsedTimer';
 import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
-import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive, OneDriveUploadResult } from '@/lib/storage/onedrive';
+import { useRivaldoBulk, BulkQueueRow } from '@/contexts/RivaldoBulkContext';
 
 const BGM_PRESETS = [
   { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
@@ -149,25 +148,23 @@ export function BulkModal({
   desktopQueueStatusMessage = null,
   onDesktopJobQueued,
 }: BulkModalProps) {
-  const [rows, setRows] = useState<QueueRow[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [progressLabel, setProgressLabel] = useState('');
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
+  const bulk = useRivaldoBulk();
+  const {
+    isProcessing, progress, progressLabel, logs,
+    rows, uploadStatuses,
+    selectedWeekId, finalEpisodeFilename, generateFinalEpisode, uploadToCloud,
+    setRows, updateRow: updateRowCtx, setSelectedWeekId, setFinalEpisodeFilename,
+    setGenerateFinalEpisode, setUploadToCloud,
+    startBulk, retryUpload: retryUploadCtx,
+  } = bulk;
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
   const [allEpisodeTitles, setAllEpisodeTitles] = useState<EpisodeTitle[]>([]);
-  const [finalEpisodeFilename, setFinalEpisodeFilename] = useState('');
-  const [selectedWeekId, setSelectedWeekId] = useState<string>('');
   const [weeks, setWeeks] = useState<{ id: string; start_date: string }[]>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
   const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
   const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
-  const [uploadToCloud, setUploadToCloud] = useState(true);
-  type UploadStatus = { state: 'idle' | 'uploading' | 'done' | 'error'; webUrl?: string; error?: string; fileId?: string; folderPath?: string; uploadedFilename?: string };
-  const [uploadStatuses, setUploadStatuses] = useState<Record<string, UploadStatus>>({});
 
   // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
   const resolvedIntro = introFile || autoIntroFile;
@@ -227,8 +224,10 @@ export function BulkModal({
     })();
   }, [open]);
 
-  // When week changes, auto-create rows with random non-repeating BGMs
+  // When week changes, auto-create rows with random non-repeating BGMs.
+  // Skipped while processing (preserves in-flight bulk state).
   useEffect(() => {
+    if (isProcessing) return;
     if (!selectedWeekId) { setRows([]); return; }
     const eps = allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId && ep.dayOfWeek !== 0);
     // Sort by day index (Mon=1 .. Sat=6)
@@ -251,70 +250,22 @@ export function BulkModal({
     // Auto-select sunday title for final episode
     const sunday = allEpisodeTitles.find(ep => ep.weekId === selectedWeekId && ep.dayOfWeek === 0);
     setFinalEpisodeFilename(sunday?.title || '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeekId, allEpisodeTitles]);
 
-  const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
-    setLogs((prev) => [...prev, { timestamp: Date.now(), message, type }]);
-  }, []);
+  const addLog = bulk.addLog;
+  const updateRow = updateRowCtx;
 
-  const updateRow = (id: string, updates: Partial<QueueRow>) => {
-    setRows((prev) => prev.map((row) => row.id === id ? { ...row, ...updates } : row));
-  };
-
-  /** Retry uploading a single row's blob — re-encodes via runPipeline of just that item. */
+  /** Retry uploading a single row — delegated to context. */
   const retryUpload = useCallback(async (row: QueueRow) => {
     if (!resolvedIntro || !resolvedOutro) return;
-    setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
-    try {
-      let bgm = row.bgmFile;
-      if (!bgm && row.bgmPreset) {
-        const preset = BGM_PRESETS.find((p) => p.url === row.bgmPreset);
-        bgm = await loadPresetAsFile(preset ?? { label: 'BGM', url: row.bgmPreset });
-      }
-      if (!bgm) throw new Error('BGM não disponível');
-      addLog(`Reprocessando ${row.filename} para reupload...`, 'step');
-      const { runPipeline } = await import('@/lib/audio/pipeline');
-      const result = await runPipeline(
-        {
-          masterMode: row.masterMode,
-          master: row.masterFile,
-          masterTracks: row.masterTracks,
-          processingProfile,
-          bgm,
-          intro: resolvedIntro,
-          outro: resolvedOutro,
-          filename: row.filename.trim(),
-        },
-        audioParams,
-        () => undefined,
-        addLog,
-        { exportMode: 'blob', returnFinalBuffer: false }
-      );
-      if (!result.outputBlob) throw new Error('Encode não retornou blob');
-      const folderPath = buildEpisodeFolderPath(row.episodeDate);
-      const filename = sanitizeFilename(row.filename.trim());
-      const uploaded = await uploadEpisodeToOneDrive({
-        folderPath,
-        filename,
-        blob: result.outputBlob,
-        onProgress: ({ fraction }) => setProgressLabel(`Reupload: ${Math.round(fraction * 100)}%`),
-      });
-      setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
-      if (row.materialId) {
-        await supabase.from('episode_materials').update({
-          repository_provider: 'onedrive',
-          repository_url: uploaded.webUrl,
-          repository_file_id: uploaded.fileId,
-          repository_uploaded_at: new Date().toISOString(),
-        }).eq('id', row.materialId);
-      }
-      addLog(`Reupload concluído: ${uploaded.filename}`, 'success');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Falha';
-      setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
-      addLog(`Falha no reupload de ${row.filename}: ${msg}`, 'error');
-    }
-  }, [addLog, audioParams, processingProfile, resolvedIntro, resolvedOutro]);
+    await retryUploadCtx(row.id, {
+      intro: resolvedIntro,
+      outro: resolvedOutro,
+      audioParams,
+      processingProfile,
+    });
+  }, [retryUploadCtx, resolvedIntro, resolvedOutro, audioParams, processingProfile]);
 
   // Auto-match uploaded files to rows by day name in filename
   const handleBulkFileDrop = useCallback((files: FileList | File[]) => {
@@ -404,91 +355,20 @@ export function BulkModal({
       return;
     }
 
-    setIsProcessing(true);
-    setProgress(0);
-    setLogs([]);
-
-    try {
-      const items: BulkItem[] = await Promise.all(
-        rows.map(async (row) => {
-          let bgm = row.bgmFile;
-          if (!bgm && row.bgmPreset) {
-            const preset = BGM_PRESETS.find((item) => item.url === row.bgmPreset);
-            bgm = await loadPresetAsFile(preset ?? { label: 'BGM', url: row.bgmPreset });
-          }
-          return {
-            masterMode: row.masterMode,
-            master: row.masterFile,
-            masterTracks: row.masterTracks,
-            processingProfile,
-            bgm: bgm!,
-            filename: row.filename.trim(),
-          };
-        })
-      );
-
-      // Reset upload statuses
-      const initial: Record<string, UploadStatus> = {};
-      rows.forEach(r => { initial[r.id] = { state: 'idle' }; });
-      setUploadStatuses(initial);
-
-      await runBulkPipeline(
-        { items, intro: resolvedIntro!, outro: resolvedOutro!, generateFinalEpisode, finalFilename: finalEpisodeFilename || undefined },
-        audioParams,
-        (value, label) => {
-          setProgress(value);
-          setProgressLabel(label);
-        },
-        addLog,
-        {
-          exportMode: 'blob',
-          downloadIndividualItems: !uploadToCloud,
-          onItemEncoded: async (_item, index, result) => {
-            const row = rows[index];
-            if (!row) return;
-            if (uploadToCloud && result.outputBlob) {
-              setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
-              try {
-                const folderPath = buildEpisodeFolderPath(row.episodeDate);
-                const filename = sanitizeFilename(row.filename.trim());
-                addLog(`Upload OneDrive: ${folderPath}/${filename}...`, 'step');
-                const uploaded = await uploadEpisodeToOneDrive({
-                  folderPath,
-                  filename,
-                  blob: result.outputBlob,
-                  onProgress: ({ fraction }) => {
-                    setProgressLabel(`Upload ${row.filename}: ${Math.round(fraction * 100)}%`);
-                  },
-                });
-                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'done', webUrl: uploaded.webUrl, fileId: uploaded.fileId, folderPath, uploadedFilename: uploaded.filename } }));
-                addLog(`OneDrive: ${uploaded.filename} → ${uploaded.webUrl}`, 'success');
-                if (row.materialId) {
-                  await supabase.from('episode_materials').update({
-                    repository_provider: 'onedrive',
-                    repository_url: uploaded.webUrl,
-                    repository_file_id: uploaded.fileId,
-                    repository_uploaded_at: new Date().toISOString(),
-                  }).eq('id', row.materialId);
-                }
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : 'Falha no upload';
-                setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'error', error: msg } }));
-                addLog(`OneDrive falhou (${row.filename}): ${msg}`, 'error');
-              }
-            } else {
-              addLog(`Download concluído: ${_item.filename}`, 'success');
-            }
-          },
-        }
-      );
-      addLog('Bulk finalizado com sucesso!', 'success');
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Erro desconhecido no bulk pipeline';
-      addLog(message, 'error');
-      console.error('[Bulk Pipeline Error]', error);
-    } finally {
-      setIsProcessing(false);
-    }
+    if (!resolvedIntro || !resolvedOutro) return;
+    const week = weeks.find(w => w.id === selectedWeekId);
+    const batchName = week ? `Semana de ${new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : undefined;
+    await startBulk({
+      rows: rows as BulkQueueRow[],
+      intro: resolvedIntro,
+      outro: resolvedOutro,
+      audioParams,
+      processingProfile,
+      generateFinalEpisode,
+      finalFilename: finalEpisodeFilename || undefined,
+      uploadToCloud,
+      batchName,
+    });
   };
 
   const weekLabel = (w: { start_date: string }) => {

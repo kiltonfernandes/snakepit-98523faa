@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/contexts/AppContext";
 import { RivaldoProvider } from "@/contexts/RivaldoContext";
+import { RivaldoBulkProvider } from "@/contexts/RivaldoBulkContext";
 import { AppLayout } from "@/layouts/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import Releases from "@/pages/Releases";
@@ -23,6 +24,7 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <AppProvider>
     <RivaldoProvider>
+    <RivaldoBulkProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -43,6 +45,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </RivaldoBulkProvider>
     </RivaldoProvider>
     </AppProvider>
   </QueryClientProvider>
