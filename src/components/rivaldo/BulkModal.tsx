@@ -160,6 +160,8 @@ export function BulkModal({
     setRows, updateRow: updateRowCtx, setSelectedWeekId, setFinalEpisodeFilename,
     setGenerateFinalEpisode, setUploadToCloud,
     startBulk, retryUpload: retryUploadCtx,
+    isCompiling, compileProgress, compileProgressLabel, compileLogs,
+    compileFromCloud,
   } = bulk;
   const [desktopFeedback, setDesktopFeedback] = useState<{ type: 'info' | 'success' | 'error'; message: string } | null>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
@@ -169,6 +171,13 @@ export function BulkModal({
   const dropRef = useRef<HTMLDivElement>(null);
   const [autoIntroFile, setAutoIntroFile] = useState<File | null>(null);
   const [autoOutroFile, setAutoOutroFile] = useState<File | null>(null);
+
+  // Modal-local mode toggle (not persisted between sessions)
+  const [mode, setMode] = useState<'process' | 'compile'>('process');
+
+  // Compile mode: per-day local file overrides (when cloud file missing or user prefers)
+  const [compileOverrides, setCompileOverrides] = useState<Record<number, File | null>>({});
+  const [compileFinalFilename, setCompileFinalFilename] = useState('');
 
   // Resolve intro/outro: use prop if provided, otherwise auto-loaded preset
   const resolvedIntro = introFile || autoIntroFile;
