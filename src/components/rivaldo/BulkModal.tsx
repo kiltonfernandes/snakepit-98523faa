@@ -815,6 +815,130 @@ export function BulkModal({
           </div>
         )}
         {logs.length > 0 && <ProcessLog logs={logs} />}
+          </TabsContent>
+
+          <TabsContent value="compile" className="space-y-3 mt-3">
+            {!selectedWeekId ? (
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-center text-xs font-mono text-muted-foreground">
+                Selecione uma semana para listar os episódios disponíveis na nuvem.
+              </div>
+            ) : compileDays.length === 0 ? (
+              <div className="rounded-md border border-dashed border-border bg-muted/20 p-4 text-center text-xs font-mono text-muted-foreground">
+                Nenhum episódio (Seg–Sáb) cadastrado nessa semana.
+              </div>
+            ) : (
+              <>
+                <div className="rounded-md border border-border/60 bg-muted/20 p-2 text-[11px] font-mono text-muted-foreground">
+                  Compila <strong>Intro + Seg + Ter + Qua + Qui + Sex + Sáb + Outro</strong> com os MP3s já no OneDrive e baixa local. <span className="text-foreground">Não sobe nada nem altera o banco.</span>
+                </div>
+
+                <div className="space-y-2">
+                  {compileDays.map(({ ep, hasCloud, override }) => {
+                    const ready = hasCloud || !!override;
+                    return (
+                      <div
+                        key={ep.id}
+                        className={`rounded-md border p-2.5 ${
+                          ready ? 'border-primary/30 bg-primary/5' : 'border-destructive/30 bg-destructive/5'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="bg-muted px-1.5 py-0.5 rounded text-[10px] uppercase tracking-wider font-mono">
+                              {DAY_NAMES[ep.dayOfWeek]}
+                            </span>
+                            <span className="text-xs font-mono truncate">{ep.title}</span>
+                          </div>
+                          <div className="flex items-center gap-1.5 text-[10px] font-mono shrink-0">
+                            {hasCloud && !override && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <Cloud className="w-3 h-3" /> nuvem
+                              </span>
+                            )}
+                            {override && (
+                              <span className="flex items-center gap-1 text-primary">
+                                <FileAudio className="w-3 h-3" /> local
+                              </span>
+                            )}
+                            {!hasCloud && !override && (
+                              <span className="flex items-center gap-1 text-destructive">
+                                <CloudOff className="w-3 h-3" /> faltando
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {!hasCloud && (
+                          <label className="block mt-2 cursor-pointer">
+                            <div className={`text-[10px] border border-dashed rounded px-2 py-1.5 truncate transition-colors ${
+                              override ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-muted-foreground/50'
+                            }`}>
+                              {override ? `📎 ${override.name}` : 'Arraste um MP3 ou clique para enviar'}
+                            </div>
+                            <input
+                              type="file"
+                              accept=".mp3,audio/mpeg"
+                              className="hidden"
+                              disabled={isCompiling}
+                              onChange={(e) => {
+                                const f = e.target.files?.[0] || null;
+                                setCompileOverrides(prev => ({ ...prev, [ep.dayOfWeek]: f }));
+                                e.target.value = '';
+                              }}
+                            />
+                          </label>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-1">
+                  <Label className="text-xs font-mono text-muted-foreground">Nome do arquivo final</Label>
+                  <Input
+                    value={compileFinalFilename}
+                    onChange={(e) => setCompileFinalFilename(e.target.value)}
+                    placeholder="Heavynauta_S##.mp3"
+                    className="h-9 text-sm font-mono"
+                    disabled={isCompiling}
+                  />
+                </div>
+
+                <div className="text-[11px] font-mono text-muted-foreground">
+                  Pronto: <span className={compileReadyCount === 6 ? 'text-primary' : 'text-destructive'}>{compileReadyCount}/6</span> dias
+                </div>
+
+                <Button onClick={handleCompile} disabled={!canCompile} className="w-full h-10">
+                  {isCompiling ? (
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" /> Compilando...
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-2">
+                      <Download className="w-4 h-4" /> Baixar consolidado
+                    </span>
+                  )}
+                </Button>
+
+                {(isCompiling || compileProgress > 0) && (
+                  <div className="space-y-2">
+                    <div className="h-1.5 w-full rounded bg-muted overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all"
+                        style={{ width: `${compileProgress}%` }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
+                      <span>{compileProgressLabel || '—'}</span>
+                      <span>{compileProgress}%</span>
+                    </div>
+                  </div>
+                )}
+
+                {compileLogs.length > 0 && <ProcessLog logs={compileLogs} />}
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
