@@ -353,6 +353,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     <RivaldoBulkContext.Provider value={{
       isProcessing, progress, progressLabel, logs, rows, uploadStatuses,
       selectedWeekId, finalEpisodeFilename, generateFinalEpisode, uploadToCloud, currentBatchName,
+      finalEpisodeStatus,
       setRows, updateRow, setSelectedWeekId, setFinalEpisodeFilename, setGenerateFinalEpisode, setUploadToCloud,
       startBulk, retryUpload, clearBulkState, addLog,
     }}>
