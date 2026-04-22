@@ -224,8 +224,10 @@ export function BulkModal({
     })();
   }, [open]);
 
-  // When week changes, auto-create rows with random non-repeating BGMs
+  // When week changes, auto-create rows with random non-repeating BGMs.
+  // Skipped while processing (preserves in-flight bulk state).
   useEffect(() => {
+    if (isProcessing) return;
     if (!selectedWeekId) { setRows([]); return; }
     const eps = allEpisodeTitles.filter(ep => ep.weekId === selectedWeekId && ep.dayOfWeek !== 0);
     // Sort by day index (Mon=1 .. Sat=6)
@@ -248,6 +250,7 @@ export function BulkModal({
     // Auto-select sunday title for final episode
     const sunday = allEpisodeTitles.find(ep => ep.weekId === selectedWeekId && ep.dayOfWeek === 0);
     setFinalEpisodeFilename(sunday?.title || '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedWeekId, allEpisodeTitles]);
 
   const addLog = bulk.addLog;
