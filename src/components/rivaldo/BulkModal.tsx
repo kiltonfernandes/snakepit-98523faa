@@ -725,6 +725,29 @@ export function BulkModal({
 
         <ElapsedTimer isRunning={isProcessing} />
         <GranularProgress progress={progress} label={progressLabel} isRunning={isProcessing} />
+        {generateFinalEpisode && uploadToCloud && finalEpisodeStatus.state !== 'idle' && (
+          <div className="rounded-md border border-border/60 bg-muted/30 p-2 text-xs font-mono flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Cloud className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">
+                Consolidado:{' '}
+                {finalEpisodeStatus.state === 'uploading' && 'enviando para OneDrive...'}
+                {finalEpisodeStatus.state === 'done' && (finalEpisodeStatus.uploadedFilename || 'enviado')}
+                {finalEpisodeStatus.state === 'error' && `erro — ${finalEpisodeStatus.error}`}
+              </span>
+            </div>
+            {finalEpisodeStatus.state === 'done' && finalEpisodeStatus.webUrl && (
+              <a
+                href={finalEpisodeStatus.webUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline shrink-0"
+              >
+                abrir
+              </a>
+            )}
+          </div>
+        )}
         {logs.length > 0 && <ProcessLog logs={logs} />}
       </DialogContent>
     </Dialog>
