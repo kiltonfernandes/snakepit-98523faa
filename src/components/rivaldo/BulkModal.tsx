@@ -153,6 +153,7 @@ export function BulkModal({
     isProcessing, progress, progressLabel, logs,
     rows, uploadStatuses,
     selectedWeekId, finalEpisodeFilename, generateFinalEpisode, uploadToCloud,
+    finalEpisodeStatus,
     setRows, updateRow: updateRowCtx, setSelectedWeekId, setFinalEpisodeFilename,
     setGenerateFinalEpisode, setUploadToCloud,
     startBulk, retryUpload: retryUploadCtx,
