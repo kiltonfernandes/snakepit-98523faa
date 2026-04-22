@@ -73,6 +73,7 @@ export interface BulkPipelineRunOptions extends PipelineRunOptions {
   onItemEncoded?: (item: BulkItem, index: number, result: PipelineResult) => Promise<void> | void;
   onFinalEpisodeEncoded?: (blob: Blob) => Promise<void> | void;
   downloadIndividualItems?: boolean;
+  downloadFinalEpisode?: boolean;
 }
 
 function stepProgress(base: number, span: number, fraction: number, onProgress: ProgressCallback, label: string) {
@@ -431,8 +432,11 @@ export async function runBulkPipeline(
         input.outro,
       ], { type: 'audio/mpeg' });
 
-      await downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
-      onLog('Episodio final consolidado exportado', 'success');
+      const shouldDownloadFinal = options.downloadFinalEpisode ?? true;
+      if (shouldDownloadFinal) {
+        await downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
+        onLog('Episodio final consolidado exportado', 'success');
+      }
       await options.onFinalEpisodeEncoded?.(finalBlob);
     }
 

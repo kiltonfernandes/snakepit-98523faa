@@ -38,6 +38,15 @@ export type BulkUploadStatus = {
   uploadedFilename?: string;
 };
 
+export type FinalEpisodeUploadStatus = {
+  state: 'idle' | 'uploading' | 'done' | 'error';
+  webUrl?: string;
+  fileId?: string;
+  folderPath?: string;
+  uploadedFilename?: string;
+  error?: string;
+};
+
 export interface StartBulkInput {
   rows: BulkQueueRow[];
   intro: File;
@@ -63,6 +72,7 @@ interface RivaldoBulkContextType {
   generateFinalEpisode: boolean;
   uploadToCloud: boolean;
   currentBatchName: string | null;
+  finalEpisodeStatus: FinalEpisodeUploadStatus;
 
   // setters (UI config persistence)
   setRows: React.Dispatch<React.SetStateAction<BulkQueueRow[]>>;
@@ -94,6 +104,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
   const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
   const [uploadToCloud, setUploadToCloud] = useState(true);
   const [currentBatchName, setCurrentBatchName] = useState<string | null>(null);
+  const [finalEpisodeStatus, setFinalEpisodeStatus] = useState<FinalEpisodeUploadStatus>({ state: 'idle' });
   const processingRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -111,6 +122,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     setProgressLabel('');
     setUploadStatuses({});
     setCurrentBatchName(null);
+    setFinalEpisodeStatus({ state: 'idle' });
   }, []);
 
   const startBulk = useCallback(async (input: StartBulkInput) => {
@@ -121,6 +133,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     setProgressLabel('');
     setLogs([]);
     setCurrentBatchName(input.batchName ?? null);
+    setFinalEpisodeStatus({ state: 'idle' });
 
     const params = input.audioParams ?? DEFAULT_PARAMS;
     const initial: Record<string, BulkUploadStatus> = {};
@@ -160,6 +173,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
         {
           exportMode: 'blob',
           downloadIndividualItems: !input.uploadToCloud,
+          downloadFinalEpisode: !input.uploadToCloud,
           onItemEncoded: async (_item, index, result) => {
             const row = input.rows[index];
             if (!row) return;
@@ -208,6 +222,55 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
               }
             } else {
               addLog(`Download concluído: ${_item.filename}`, 'success');
+            }
+          },
+          onFinalEpisodeEncoded: async (finalBlob) => {
+            if (!input.generateFinalEpisode) return;
+            if (!input.uploadToCloud) return;
+            // Pick the row with the latest episode_date as the consolidated episode anchor
+            const sortedRows = [...input.rows]
+              .filter(r => r.episodeDate)
+              .sort((a, b) => (a.episodeDate! < b.episodeDate! ? 1 : -1));
+            const anchorRow = sortedRows[0] ?? input.rows[input.rows.length - 1];
+            const baseName = (input.finalFilename || 'episodio_final').trim();
+            const filename = sanitizeFilename(baseName);
+            const folderPath = buildEpisodeFolderPath(anchorRow?.episodeDate);
+            setFinalEpisodeStatus({ state: 'uploading', folderPath });
+            addLog(`Upload OneDrive (consolidado): ${folderPath}/${filename}...`, 'step');
+            try {
+              const uploaded = await uploadEpisodeToOneDrive({
+                folderPath,
+                filename,
+                blob: finalBlob,
+                onProgress: ({ fraction }) => {
+                  setProgressLabel(`Upload consolidado: ${Math.round(fraction * 100)}%`);
+                },
+              });
+              setFinalEpisodeStatus({
+                state: 'done',
+                webUrl: uploaded.webUrl,
+                fileId: uploaded.fileId,
+                folderPath,
+                uploadedFilename: uploaded.filename,
+              });
+              addLog(`OneDrive (consolidado): ${uploaded.filename}`, 'success');
+              if (anchorRow?.materialId) {
+                try {
+                  updateMaterial(anchorRow.materialId, {
+                    repository_provider: 'onedrive',
+                    repository_url: uploaded.webUrl,
+                    repository_file_id: uploaded.fileId,
+                    repository_uploaded_at: new Date().toISOString(),
+                  });
+                } catch (e) {
+                  const m = e instanceof Error ? e.message : 'erro desconhecido';
+                  addLog(`Aviso: falha ao sincronizar material do consolidado (${m})`, 'error');
+                }
+              }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Falha no upload do consolidado';
+              setFinalEpisodeStatus({ state: 'error', error: msg, folderPath });
+              addLog(`OneDrive falhou (consolidado): ${msg}`, 'error');
             }
           },
         },
@@ -290,6 +353,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     <RivaldoBulkContext.Provider value={{
       isProcessing, progress, progressLabel, logs, rows, uploadStatuses,
       selectedWeekId, finalEpisodeFilename, generateFinalEpisode, uploadToCloud, currentBatchName,
+      finalEpisodeStatus,
       setRows, updateRow, setSelectedWeekId, setFinalEpisodeFilename, setGenerateFinalEpisode, setUploadToCloud,
       startBulk, retryUpload, clearBulkState, addLog,
     }}>
