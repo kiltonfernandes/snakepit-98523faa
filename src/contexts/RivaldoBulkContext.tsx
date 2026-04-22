@@ -386,13 +386,95 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     }
   }, [rows, addLog, updateMaterial]);
 
+  const compileFromCloud = useCallback(async (input: CompileFromCloudInput) => {
+    if (compilingRef.current) return;
+    compilingRef.current = true;
+    setIsCompiling(true);
+    setCompileLogs([]);
+    setCompileProgress(0);
+    setCompileProgressLabel('');
+
+    // Total steps: 1 intro load + N day fetches + 1 outro load + 1 concat/download
+    const dayCount = input.days.length;
+    const totalSteps = 1 + dayCount + 1 + 1;
+    let stepIdx = 0;
+    const tickProgress = (label: string) => {
+      stepIdx += 1;
+      setCompileProgress(Math.min(100, Math.round((stepIdx / totalSteps) * 100)));
+      setCompileProgressLabel(label);
+    };
+
+    try {
+      addCompileLog('Carregando intro/outro presets...', 'step');
+      const [introFile, outroFile] = await Promise.all([
+        loadPresetAsFile({ label: 'Heavynauta Intro', url: '/presets/Heavynauta_Intro.mp3' }),
+        loadPresetAsFile({ label: 'Heavynauta Outro', url: '/presets/heavynaura_outro.mp3' }),
+      ]);
+      tickProgress('Intro/Outro carregados');
+
+      const introBlob = new Blob([await introFile.arrayBuffer()], { type: 'audio/mpeg' });
+
+      // Fetch each day in order (Mon→Sat)
+      const sortedDays = [...input.days].sort((a, b) => a.dayIndex - b.dayIndex);
+      const dayBlobs: Blob[] = [];
+
+      for (const day of sortedDays) {
+        if (day.override) {
+          addCompileLog(`Usando upload local: ${day.label}`, 'info');
+          dayBlobs.push(new Blob([await day.override.arrayBuffer()], { type: 'audio/mpeg' }));
+          tickProgress(`Local OK: ${day.label}`);
+          continue;
+        }
+        if (!day.fileId) {
+          throw new Error(`Dia "${day.label}" não tem arquivo na nuvem nem upload local.`);
+        }
+        addCompileLog(`Resolvendo URL OneDrive: ${day.label}...`, 'step');
+        const { data, error } = await supabase.functions.invoke('upload-episode-to-onedrive', {
+          body: { action: 'download', fileId: day.fileId },
+        });
+        if (error) throw new Error(`Falha ao resolver download (${day.label}): ${error.message}`);
+        const downloadUrl = (data as { downloadUrl?: string | null })?.downloadUrl;
+        if (!downloadUrl) throw new Error(`OneDrive não retornou downloadUrl para ${day.label}.`);
+        addCompileLog(`Baixando ${day.label}...`, 'step');
+        const res = await fetch(downloadUrl);
+        if (!res.ok) throw new Error(`Falha no download de ${day.label}: HTTP ${res.status}`);
+        const blob = await res.blob();
+        dayBlobs.push(new Blob([blob], { type: 'audio/mpeg' }));
+        tickProgress(`${day.label}: ${(blob.size / (1024 * 1024)).toFixed(1)} MB`);
+      }
+
+      const outroBlob = new Blob([await outroFile.arrayBuffer()], { type: 'audio/mpeg' });
+      tickProgress('Outro pronto');
+
+      addCompileLog('Concatenando: Intro + dias + Outro...', 'step');
+      const finalBlob = new Blob([introBlob, ...dayBlobs, outroBlob], { type: 'audio/mpeg' });
+      const sizeMB = (finalBlob.size / (1024 * 1024)).toFixed(1);
+      addCompileLog(`Consolidado: ${sizeMB} MB`, 'success');
+
+      const finalName = sanitizeFilename(input.finalFilename || 'episodio_consolidado');
+      await downloadBlob(finalBlob, finalName);
+      tickProgress('Download iniciado');
+      setCompileProgress(100);
+      setCompileProgressLabel('Concluído');
+      addCompileLog(`Baixado: ${finalName}`, 'success');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido na compilação';
+      addCompileLog(msg, 'error');
+      console.error('[Compile From Cloud Error]', err);
+    } finally {
+      setIsCompiling(false);
+      compilingRef.current = false;
+    }
+  }, [addCompileLog]);
+
   return (
     <RivaldoBulkContext.Provider value={{
       isProcessing, progress, progressLabel, logs, rows, uploadStatuses,
       selectedWeekId, finalEpisodeFilename, generateFinalEpisode, uploadToCloud, currentBatchName,
       finalEpisodeStatus,
+      isCompiling, compileProgress, compileProgressLabel, compileLogs,
       setRows, updateRow, setSelectedWeekId, setFinalEpisodeFilename, setGenerateFinalEpisode, setUploadToCloud,
-      startBulk, retryUpload, clearBulkState, addLog,
+      startBulk, retryUpload, compileFromCloud, clearBulkState, addLog,
     }}>
       {children}
     </RivaldoBulkContext.Provider>
