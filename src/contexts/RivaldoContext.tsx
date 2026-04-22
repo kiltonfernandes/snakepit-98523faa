@@ -3,6 +3,7 @@ import { AudioParams, DEFAULT_PARAMS, DEFAULT_PROCESSING_PROFILE, LogEntry, Mast
 import { runPipeline, PipelineInput } from '@/lib/audio/pipeline';
 import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { supabase } from '@/integrations/supabase/client';
+import { useApp } from '@/contexts/AppContext';
 
 export interface PipelineUploadOptions {
   enabled: boolean;
@@ -31,6 +32,7 @@ interface RivaldoContextType extends RivaldoState {
 const RivaldoContext = createContext<RivaldoContextType | null>(null);
 
 export function RivaldoProvider({ children }: { children: React.ReactNode }) {
+  const { updateMaterial } = useApp();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
@@ -97,17 +99,18 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           addLog(`OneDrive: ${uploaded.filename} (${(uploaded.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
 
           if (upload?.episodeMaterialId) {
-            const { error: updErr } = await supabase
-              .from('episode_materials')
-              .update({
+            try {
+              updateMaterial(upload.episodeMaterialId, {
                 repository_provider: 'onedrive',
                 repository_url: uploaded.webUrl,
                 repository_file_id: uploaded.fileId,
                 repository_uploaded_at: new Date().toISOString(),
-              })
-              .eq('id', upload.episodeMaterialId);
-            if (updErr) addLog(`Aviso: link salvo localmente, falha em sincronizar materials (${updErr.message})`, 'error');
-            else addLog('Link salvo no episódio', 'success');
+              });
+              addLog('Link salvo no episódio', 'success');
+            } catch (e) {
+              const msg = e instanceof Error ? e.message : 'erro desconhecido';
+              addLog(`Aviso: falha em sincronizar materials (${msg})`, 'error');
+            }
           }
         } catch (uploadErr) {
           const msg = uploadErr instanceof Error ? uploadErr.message : 'Falha no upload OneDrive';
