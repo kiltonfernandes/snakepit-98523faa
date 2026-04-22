@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile, DEFAULT_PROCESSING_PROFILE } from '@/lib/audio/types';
-import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
+import { loadPresetAsFile } from '@/lib/assets/presets';
 import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { useApp } from '@/contexts/AppContext';
 
@@ -306,4 +306,3 @@ export function useRivaldoBulk() {
 
 // Avoid lint warning on unused import
 void DEFAULT_PROCESSING_PROFILE;
-void PresetDefinition;
