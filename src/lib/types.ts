@@ -134,6 +134,6 @@ export interface EpisodeCompletionIndicators {
   title: boolean;
   description: boolean;
   cover: boolean;
-  scheduling: boolean;
   saved: boolean;
+  scheduling: boolean;
 }
