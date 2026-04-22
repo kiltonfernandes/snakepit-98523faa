@@ -491,6 +491,39 @@ export type Database = {
         }
         Relationships: []
       }
+      rivaldo_presets: {
+        Row: {
+          audio_params_json: Json
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean
+          name: string
+          processing_profile_json: Json
+          updated_at: string
+        }
+        Insert: {
+          audio_params_json?: Json
+          created_at?: string
+          description?: string | null
+          id: string
+          is_default?: boolean
+          name: string
+          processing_profile_json?: Json
+          updated_at?: string
+        }
+        Update: {
+          audio_params_json?: Json
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean
+          name?: string
+          processing_profile_json?: Json
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
