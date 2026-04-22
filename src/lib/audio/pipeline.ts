@@ -73,6 +73,7 @@ export interface BulkPipelineRunOptions extends PipelineRunOptions {
   onItemEncoded?: (item: BulkItem, index: number, result: PipelineResult) => Promise<void> | void;
   onFinalEpisodeEncoded?: (blob: Blob) => Promise<void> | void;
   downloadIndividualItems?: boolean;
+  downloadFinalEpisode?: boolean;
 }
 
 function stepProgress(base: number, span: number, fraction: number, onProgress: ProgressCallback, label: string) {
