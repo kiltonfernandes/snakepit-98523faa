@@ -104,6 +104,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
   const [generateFinalEpisode, setGenerateFinalEpisode] = useState(true);
   const [uploadToCloud, setUploadToCloud] = useState(true);
   const [currentBatchName, setCurrentBatchName] = useState<string | null>(null);
+  const [finalEpisodeStatus, setFinalEpisodeStatus] = useState<FinalEpisodeUploadStatus>({ state: 'idle' });
   const processingRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -121,6 +122,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     setProgressLabel('');
     setUploadStatuses({});
     setCurrentBatchName(null);
+    setFinalEpisodeStatus({ state: 'idle' });
   }, []);
 
   const startBulk = useCallback(async (input: StartBulkInput) => {
@@ -131,6 +133,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     setProgressLabel('');
     setLogs([]);
     setCurrentBatchName(input.batchName ?? null);
+    setFinalEpisodeStatus({ state: 'idle' });
 
     const params = input.audioParams ?? DEFAULT_PARAMS;
     const initial: Record<string, BulkUploadStatus> = {};
