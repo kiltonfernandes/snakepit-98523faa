@@ -16,14 +16,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile } from '@/lib/audio/types';
 import { ElapsedTimer } from '@/components/rivaldo/ElapsedTimer';
 import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
-import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive, OneDriveUploadResult } from '@/lib/storage/onedrive';
+import { useRivaldoBulk, BulkQueueRow } from '@/contexts/RivaldoBulkContext';
 
 const BGM_PRESETS = [
   { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
