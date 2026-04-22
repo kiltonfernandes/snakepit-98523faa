@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
-import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2, Cloud, ExternalLink, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Layers, Play, FileAudio, X, Sparkles, Upload, CheckCircle2, Cloud, ExternalLink, RefreshCw, AlertCircle, Loader2, Download, CloudOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { motion } from 'framer-motion';
@@ -9,6 +9,8 @@ import { ProcessLog } from '@/components/rivaldo/ProcessLog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -22,7 +24,7 @@ import { loadPresetAsFile, PresetDefinition } from '@/lib/assets/presets';
 import { getDesktopApi } from '@/lib/desktop/runtime';
 import { DesktopJob, DesktopState } from '@/lib/desktop/types';
 import { prepareDesktopBulkPayload } from '@/lib/desktop/queue';
-import { useRivaldoBulk, BulkQueueRow } from '@/contexts/RivaldoBulkContext';
+import { useRivaldoBulk, BulkQueueRow, CompileCloudDayInput } from '@/contexts/RivaldoBulkContext';
 
 const BGM_PRESETS = [
   { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
