@@ -269,16 +269,20 @@ export default function CalendarView() {
     return data?.downloadUrl || null;
   };
 
+  const getDriveAccessUrl = async (material: EpisodeMaterial): Promise<string | null> => {
+    if (material.repository_file_id) {
+      const downloadUrl = await fetchDriveDownloadUrl(material.repository_file_id);
+      if (downloadUrl) return downloadUrl;
+    }
+    return material.repository_url || null;
+  };
+
   const handleDownloadFromDrive = async () => {
     if (!selectedMaterial?.repository_file_id && !selectedMaterial?.repository_url) return;
     if (downloadingFromDrive) return;
     setDownloadingFromDrive(true);
     try {
-      let url: string | null = null;
-      if (selectedMaterial.repository_file_id) {
-        url = await fetchDriveDownloadUrl(selectedMaterial.repository_file_id);
-      }
-      if (!url) url = selectedMaterial.repository_url || null;
+      const url = await getDriveAccessUrl(selectedMaterial);
       if (!url) throw new Error('Sem URL para download');
       const a = document.createElement('a');
       a.href = url;
@@ -292,6 +296,17 @@ export default function CalendarView() {
       toast.error(err instanceof Error ? err.message : 'Falha ao baixar do Drive');
     } finally {
       setDownloadingFromDrive(false);
+    }
+  };
+
+  const handleOpenFromDrive = async () => {
+    if (!selectedMaterial?.repository_file_id && !selectedMaterial?.repository_url) return;
+    try {
+      const url = await getDriveAccessUrl(selectedMaterial);
+      if (!url) throw new Error('Sem URL para abrir');
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Falha ao abrir arquivo');
     }
   };
 
@@ -732,14 +747,14 @@ export default function CalendarView() {
 
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <Label className="flex items-center gap-2 text-sm font-medium">
-                    {selectedMaterial.repository_url ? (
+                    {(selectedMaterial.repository_url || selectedMaterial.repository_file_id) ? (
                       <Cloud className="h-4 w-4 text-primary" />
                     ) : (
                       <CloudOff className="h-4 w-4 text-muted-foreground" />
                     )}
                     Arquivo no OneDrive
                   </Label>
-                  {selectedMaterial.repository_url ? (
+                  {(selectedMaterial.repository_url || selectedMaterial.repository_file_id) ? (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="secondary" className="text-xs">
@@ -771,11 +786,11 @@ export default function CalendarView() {
                           variant="outline"
                           size="sm"
                           className="gap-2"
-                          asChild
+                          onClick={handleOpenFromDrive}
                         >
-                          <a href={selectedMaterial.repository_url} target="_blank" rel="noopener noreferrer">
+                          <>
                             <ExternalLink className="h-3.5 w-3.5" /> Abrir
-                          </a>
+                          </>
                         </Button>
                         <Button
                           variant="destructive"

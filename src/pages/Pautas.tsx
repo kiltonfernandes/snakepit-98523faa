@@ -165,6 +165,16 @@ function computePautaStatus(pauta: Pauta, material: EpisodeMaterial | undefined)
   return 'pesquisa';
 }
 
+function isMaterialSaved(material?: Pick<EpisodeMaterial, 'repository_url' | 'repository_file_id' | 'repository_uploaded_at' | 'repository_provider'> | null) {
+  if (!material) return false;
+  return !!(
+    material.repository_file_id ||
+    material.repository_url ||
+    material.repository_uploaded_at ||
+    material.repository_provider === 'onedrive'
+  );
+}
+
 export default function Pautas() {
   const { weeks, addWeek, deleteWeek, pautas, addPauta, updatePauta, getPautasForWeek, settings, releases, recalcWeekStatus, savePromptSession, logActivity, materials, getMaterialsForWeek, updateMaterial } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
@@ -1727,7 +1737,7 @@ export default function Pautas() {
                       title: mat?.selected_title_index != null,
                       description: !!mat?.description_html,
                       cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
-                      saved: !!mat?.repository_url,
+                      saved: isMaterialSaved(mat),
                       scheduling: !!mat?.spotify_link,
                     };
                     const doneCount = Object.values(indicators).filter(Boolean).length;

@@ -43,6 +43,16 @@ export default function Dashboard() {
 
   const DASHBOARD_SLOTS = DAY_SLOTS.filter(d => d.key !== 'sunday');
 
+  const isMaterialSaved = (material?: { repository_url?: string | null; repository_file_id?: string | null; repository_uploaded_at?: string | null; repository_provider?: string | null } | null) => {
+    if (!material) return false;
+    return !!(
+      material.repository_file_id ||
+      material.repository_url ||
+      material.repository_uploaded_at ||
+      material.repository_provider === 'onedrive'
+    );
+  };
+
   function getWeekIndicators(week: EditorialWeek) {
     const weekPautas = pautas.filter(p => p.week_id === week.id);
     const weekMaterials = materials.filter(m => m.week_id === week.id);
@@ -59,7 +69,7 @@ export default function Dashboard() {
         title: mat?.selected_title_index != null,
         description: !!mat?.description_html,
         cover: !!(mat?.cover_url || mat?.cover_source_url || mat?.cover_saved_at),
-        saved: !!mat?.repository_url,
+        saved: isMaterialSaved(mat),
         scheduling: !!mat?.spotify_link,
       };
       const count = Object.values(indicators).filter(Boolean).length;
@@ -455,12 +465,12 @@ export default function Dashboard() {
                                                     <span className="flex justify-center"><Dot active={indicators.title} /></span>
                                                     <span className="flex justify-center"><Dot active={indicators.description} /></span>
                                                     <span className="flex justify-center"><Dot active={indicators.cover} /></span>
-                                                    <span className="flex justify-center"><Dot active={indicators.scheduling} /></span>
                                                     <span className="flex justify-center">
                                                       {indicators.saved
                                                         ? <Cloud className="h-3 w-3 text-emerald-400" />
                                                         : <Cloud className="h-3 w-3 text-muted-foreground/30" />}
                                                     </span>
+                                                    <span className="flex justify-center"><Dot active={indicators.scheduling} /></span>
                                                     <span className="text-right text-[10px] font-mono text-muted-foreground">{count}/6</span>
                                                   </div>
                                                 ))}
