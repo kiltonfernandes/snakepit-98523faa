@@ -1,86 +1,143 @@
+# Plano: Alinhar Rivaldo às suas instruções de edição
+
+Comparei suas instruções com o pipeline atual (`src/lib/audio/pipeline.ts`, `auto-duck.ts`, `assembler.ts`, `voice-processor.ts`, `types.ts`). A montagem geral (master + duck + intro/outro + export MP3) já segue o seu modelo, mas há **3 diferenças críticas** e **2 ajustes finos** a fazer.
+
+---
+
+## Diferenças encontradas
+
+### 1. CRÍTICO — Corte de silêncio na master NÃO está implementado
+
+**Você pediu:**
+
+- Threshold: −20 dB
+- Detectar silêncio só se durar ≥ **0,9 s contínuos**
+- Recortar o miolo para deixar **0,6 s** finais
+- Exemplo: 3 s de silêncio → vira 0,6 s
+
+**Hoje:**
+
+- Os parâmetros `silenceCutTarget` (0.4 s) e `silenceCutBufferMs` (418 ms) **existem na UI e nos defaults**, mas nenhum código os usa. Não há recorte temporal de silêncios na master em lugar nenhum.
+- O que existe é o "Smart Mute" do voice-processor, que apenas **atenua** os trechos não-falados (mantém a duração). Não é corte.
+
+**Resultado:** suas pausas de respiração permanecem do tamanho original.
+
+---
+
+### 2. CRÍTICO — Threshold de silêncio incorreto
+
+**Você pediu:** −20 dB para definir silêncio.
+
+**Hoje:** `silenceThresholdDb = −26 dB` (em `DEFAULT_PARAMS`). Esse valor é usado pelo auto-duck para detectar onde está a voz, mas estaria reaproveitado para o silence-cut. Precisa ir para −20 dB.
+
+---
+
+### 3. Pré-silêncio dos 7 s — OK, mas com ressalva
+
+**Você pediu:** 7 s de silêncio no começo da master (BGM toca sozinho antes da voz).
+
+**Hoje:** `bgmPreMasterSilence = 7` ✅ — já está certo. Apenas confirmar que continua 7 s após a mudança. >>>> confirmado 
+
+---
+
+### 4. Auto-Duck — parâmetros conferem, com 1 desvio
 
 
-# Plano: Modo "Compilar da Nuvem" no Bulk Rivaldo
+| Parâmetro           | Você pediu                     | Hoje                     | Status    |
+| ------------------- | ------------------------------ | ------------------------ | --------- |
+| Redução do BGM      | −24 dB                         | `duckReductionDb: -24`   | ✅         |
+| Fade down (descida) | 1,23 s                         | `fadeDownDuration: 1.23` | ✅         |
+| Fade up (subida)    | 0,3 s                          | `fadeUpDuration: 0.3`    | ✅         |
+| Pausa máxima        | 4 s                            | `maxPause: 4.0`          | ✅         |
+| Hold após voz       | (você não citou — implícito 0) | `duckHoldDuration: 0.5`  | ⚠️ desvio |
 
-## O que muda
 
-Adicionar um **segundo modo de operação** no `BulkModal`, escolhível via toggle no topo:
+**Desvio:** existe um `duckHoldDuration` de 0,5 s que segura o duck por meio segundo extra após a voz parar, antes do fade-up de 0,3 s começar. Suas instruções não mencionam esse hold. **Sugiro zerar para 0 s** para bater 100% com o spec.
 
-1. **Processar do zero** (atual) — gera + sobe + opcional consolidar.
-2. **Compilar da nuvem** (NOVO) — pega os MP3s já prontos no OneDrive da semana selecionada, monta o consolidado **Intro + Seg + Ter + Qua + Qui + Sex + Sáb + Outro**, baixa local. **Não sobe nada.**
+---
 
-## Recomendação de abordagem
+### 5. Corte do BGM 12 s após o fim da master — OK
 
-**Usar os arquivos da nuvem automaticamente** (sem upload manual). Razão:
-- Os episódios da semana já estão em `episode_materials` com `repository_file_id` preenchidos pelo bulk anterior.
-- Zero fricção: usuário escolhe a semana → sistema lista os 6 dias → 1 clique → consolidado pronto.
-- Reutiliza a edge function `upload-episode-to-onedrive` no modo `action: 'download'` (que já existe).
+**Você pediu:** localizar fim da master, marcar [corte] em +12 s no BGM, deletar tudo depois.
+**Hoje:** `bgmTailAfterMaster: 12` em `assembler.ts → mixAndTrim`. ✅
 
-Fallback elegante: se algum dia não estiver na nuvem, mostra a lista do que falta e oferece **upload manual avulso** só dos faltantes (drag-drop por dia).
+---
 
-## Fluxo de UX
+### 6. Intro antes / Outro depois → V2 → MP3 — OK
 
-```text
-┌──── BulkModal ────────────────────────────────┐
-│ [● Processar do zero]  [○ Compilar da nuvem]  │  ← Toggle no topo
-├───────────────────────────────────────────────┤
-│ Semana: [Selecione ▾]                         │
-│                                               │
-│ ✓ Segunda  — "Título…"      ☁ pronto          │
-│ ✓ Terça    — "Título…"      ☁ pronto          │
-│ ⚠ Quarta   — "Título…"      sem upload        │
-│              [arraste o mp3 aqui]             │
-│ ✓ Quinta…                                     │
-│ …                                             │
-│                                               │
-│ Nome do arquivo final: [Heavynauta_S##.mp3]   │
-│                                               │
-│ [⬇ Baixar consolidado]                        │
-└───────────────────────────────────────────────┘
+`assembler.ts → concatenate` faz exatamente Intro + V1 + Outro. ✅
+Existe um crossfade de 40 ms (`crossfadeDuration: 0.04`) entre as junções — você não pediu isso, mas é uma transição suave que evita "pop". **Sugiro manter**, mas se preferir corte seco posso zerar.
+
+---
+
+## Plano de implementação
+
+### Arquivo novo: `src/lib/audio/silence-cut.ts`
+
+Função `cutSilencesInMaster(buffer, params, log)`:
+
+1. Varrer a master em janelas de ~10 ms calculando RMS.
+2. Marcar como "silêncio" janelas com nível < −20 dB.
+3. Agrupar janelas contíguas em **blocos de silêncio**.
+4. Para cada bloco com **duração ≥ 0,9 s**: cortar o miolo deixando apenas **0,6 s** centrados (preserva 0,3 s de cada lado, do início e fim do bloco — mantém naturalidade nas bordas das frases).
+5. Retornar novo `AudioBuffer` mais curto + log de quantos cortes foram feitos e quanto tempo foi removido.
+
+### `src/lib/audio/types.ts`
+
+- `silenceThresholdDb: -26` → **−20**
+- `silenceCutTarget: 0.4` → **0.6**
+- `silenceCutBufferMs: 418` → **300** (significa o "buffer" preservado nas bordas; 300 ms × 2 lados = 600 ms = alvo)
+- `duckHoldDuration: 0.5` → **0** (para bater com sua spec)
+- Adicionar `silenceMinDuration: 0.9` (novo campo — duração mínima para considerar bloco recortável)
+
+### `src/lib/audio/pipeline.ts`
+
+Inserir o passo de corte **logo após `mixVoiceTracks` e ANTES de adicionar o pré-silêncio de 7 s**:
+
+```ts
+const processedMaster = mixVoiceTracks(voiceBuffers, onLog);
+applyGainToBuffer(processedMaster, params.masterGainDb);
+// NOVO:
+const trimmedMaster = cutSilencesInMaster(processedMaster, params, onLog);
+// depois segue: pré-silêncio de 7s, decode bgm/intro/outro, duck, mix, concat...
 ```
 
-## Arquivos
+Importante: o corte **acontece antes** do pré-silêncio de 7 s, então os 7 s de abertura ficam intactos.
 
-### 1. `src/components/rivaldo/BulkModal.tsx`
-- Novo `useState<'process' | 'compile'>('process')` para o modo (local ao modal — não persiste).
-- Toggle `Tabs` no topo dentro do `DialogContent`.
-- Quando modo = `'compile'`:
-  - Esconde drop-zone bulk, slots de master/BGM, e seções de processamento.
-  - Renderiza lista vertical dos 6 dias (Seg–Sáb) da semana selecionada com status:
-    - `repository_file_id` presente → ✓ pronto, mostra título.
-    - Faltando → ⚠ + dropzone individual aceitando 1 MP3 (vira override em memória `Map<dayIndex, File>`).
-  - Botão único: `Baixar consolidado` (desabilitado se `prontos + overrides < 6`).
-  - Mostra `GranularProgress` durante download/montagem.
+### `src/components/rivaldo/ParametersSidebar.tsx`
 
-### 2. `src/contexts/RivaldoBulkContext.tsx`
-- Adicionar action `compileFromCloud(input: { weekId, finalFilename, materialsByDay, fileOverrides })`:
-  1. Resolve URL de download para cada `repository_file_id` via `supabase.functions.invoke('upload-episode-to-onedrive', { body: { action: 'download', fileId } })`.
-  2. `fetch` cada URL → `Blob` (com progresso por dia: 1/8, 2/8…).
-  3. Para dias com override de arquivo local, usa o `File` direto.
-  4. Decide o intro/outro: usa `INTRO_PRESET`/`OUTRO_PRESET` (já carregados via `loadPresetAsFile`).
-  5. Concat: `new Blob([intro, ...dias, outro], { type: 'audio/mpeg' })` — mesma técnica já usada em `pipeline.ts` linha 429-433.
-  6. `downloadBlob(finalBlob, finalFilename)` (de `@/lib/audio/encoder`).
-  7. `uploadStatuses` não é tocado; **nenhuma chamada a `updateMaterial`** (não muda nada no banco).
-- Estado novo no contexto: `compileProgress: number`, `compileLogs: LogEntry[]`, `isCompiling: boolean`.
-- `clearBulkState` limpa também esses campos.
+- Atualizar labels/ranges dos sliders para refletir os novos defaults.
+- Adicionar slider para `silenceMinDuration` (faixa 0.5–3 s).
+- Slider de `duckHoldDuration` mantido (caso queira voltar a usar manualmente), mas default 0.
 
-### 3. (sem mudança) `supabase/functions/upload-episode-to-onedrive/index.ts`
-A action `download` já existe e retorna `downloadUrl` público — só consumir.
+### Compatibilidade com o Bulk
 
-## Comportamento garantido
+A pipeline é a mesma para single e bulk (`runBulkPipeline` chama `runPipeline`), então o corte de silêncio será aplicado automaticamente em ambos os modos. Modo "Compilar da nuvem" não toca em master, então não é afetado.
 
-| Item | Modo Processar | Modo Compilar |
-|---|---|---|
-| Sobe na nuvem | sim (opcional) | **não** |
-| Baixa local | opcional | **sempre** (é o objetivo) |
-| Atualiza `episode_materials` | sim | **não** |
-| Persiste entre rotas | sim (já implementado) | sim (mesmo contexto) |
-| Aceita upload manual | obrigatório | só fallback p/ dia faltante |
+---
 
-## Edge cases tratados
+## Tabela final de parâmetros (pós-mudança)
 
-- Semana sem nenhum episódio na nuvem → mostra mensagem "Nenhum episódio salvo nesta semana. Use o modo Processar ou faça upload manual abaixo."
-- Domingo nunca entra no consolidado (não é um dia de pauta editorial — é justamente o consolidado).
-- `repository_file_id` presente mas link expirado → tenta `download` action; se falhar, marca dia como `⚠` e pede override manual.
-- Limpeza de `Blob` URLs após download (já feito em `encoder.ts`).
 
+| Parâmetro                   | Valor                                            |
+| --------------------------- | ------------------------------------------------ |
+| `silenceThresholdDb`        | **−20 dB**                                       |
+| `silenceMinDuration` (novo) | **0,9 s**                                        |
+| `silenceCutTarget`          | **0,6 s**                                        |
+| `bgmPreMasterSilence`       | 7 s                                              |
+| `duckReductionDb`           | −24 dB                                           |
+| `fadeDownDuration`          | 1,23 s                                           |
+| `fadeUpDuration`            | 0,3 s                                            |
+| `maxPause`                  | 4 s                                              |
+| `duckHoldDuration`          | **0 s**                                          |
+| `bgmTailAfterMaster`        | 12 s                                             |
+| `crossfadeDuration`         | 0,04 s (manter, ou zerar se preferir corte seco) |
+
+
+---
+
+## Perguntas antes de implementar
+
+1. **duckHoldDuration**: zero (como sua spec sugere) ou mantém os 0,5 s atuais que ajudam a evitar o BGM "pulando" entre frases curtas?
+2. **crossfade intro/outro**: mantém os 40 ms atuais ou prefere corte seco (0 ms)?
+3. **smartMute** (que apenas atenua, não corta tempo): mantém ligado em paralelo ao novo corte real, ou desligo por padrão? Sua spec só fala em recorte temporal.
