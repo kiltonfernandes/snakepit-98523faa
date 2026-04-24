@@ -23,6 +23,8 @@ export interface AudioParams {
   duckHoldDuration: number;
   silenceCutTarget: number;
   silenceCutBufferMs: number;
+  silenceCutThresholdDb: number;
+  silenceMinDuration: number;
   bgmTailAfterMaster: number;
   bgmPreMasterSilence: number;
   bgmPostMasterSilence: number;
@@ -41,9 +43,11 @@ export const DEFAULT_PARAMS: AudioParams = {
   fadeDownDuration: 1.23,
   fadeUpDuration: 0.3,
   maxPause: 4.0,
-  duckHoldDuration: 0.5,
-  silenceCutTarget: 0.4,
-  silenceCutBufferMs: 418,
+  duckHoldDuration: 0,
+  silenceCutTarget: 0.6,
+  silenceCutBufferMs: 300,
+  silenceCutThresholdDb: -20,
+  silenceMinDuration: 0.9,
   bgmTailAfterMaster: 12,
   bgmPreMasterSilence: 7,
   bgmPostMasterSilence: 12,

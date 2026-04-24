@@ -167,14 +167,16 @@ export function ParametersSidebar({ params, onParamsChange, profile, onProfileCh
       <div className="px-4 pb-4 space-y-1 max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-thin">
 
         <Section title="Corte de Silêncio" icon={Scissors}>
-          <SliderField label="Threshold" value={params.silenceThresholdDb} min={-40} max={-10} step={1}
-            onChange={(v) => onParamsChange({ ...params, silenceThresholdDb: v })} unit="dB" />
-          <SliderField label="Pausa máxima" value={params.maxPause} min={0.5} max={6} step={0.1}
-            onChange={(v) => onParamsChange({ ...params, maxPause: v })} unit="s" />
+          <SliderField label="Threshold corte" value={params.silenceCutThresholdDb} min={-40} max={-10} step={1}
+            onChange={(v) => onParamsChange({ ...params, silenceCutThresholdDb: v })} unit="dB" />
+          <SliderField label="Duração mínima" value={params.silenceMinDuration} min={0.3} max={3} step={0.1}
+            onChange={(v) => onParamsChange({ ...params, silenceMinDuration: v })} unit="s" />
           <SliderField label="Alvo após corte" value={params.silenceCutTarget} min={0.2} max={2} step={0.1}
             onChange={(v) => onParamsChange({ ...params, silenceCutTarget: v })} unit="s" />
-          <SliderField label="Buffer" value={params.silenceCutBufferMs} min={0} max={500} step={10}
-            onChange={(v) => onParamsChange({ ...params, silenceCutBufferMs: v })} unit="ms" />
+          <SliderField label="Threshold duck (voz)" value={params.silenceThresholdDb} min={-40} max={-10} step={1}
+            onChange={(v) => onParamsChange({ ...params, silenceThresholdDb: v })} unit="dB" />
+          <SliderField label="Pausa máxima duck" value={params.maxPause} min={0.5} max={6} step={0.1}
+            onChange={(v) => onParamsChange({ ...params, maxPause: v })} unit="s" />
         </Section>
 
         <Section title="Auto-Duck & BGM" icon={Volume2}>
