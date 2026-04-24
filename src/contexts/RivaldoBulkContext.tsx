@@ -1,3 +1,4 @@
+// HMR refresh marker
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile, DEFAULT_PROCESSING_PROFILE } from '@/lib/audio/types';
