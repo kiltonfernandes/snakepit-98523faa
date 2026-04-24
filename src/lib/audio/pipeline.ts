@@ -2,6 +2,7 @@ import { mixAndTrim, concatenate } from './assembler';
 import { applyAutoDuck } from './auto-duck';
 import { decodeFile, audioBufferToMonoData, monoDataToAudioBuffer, ensureSampleRate } from './decoder';
 import { downloadBlob, encodeBufferToMp3Blob, encodeToMp3 } from './encoder';
+import { cutSilencesInMaster } from './silence-cut';
 import { VoiceWorkerClient } from './voice-worker-client';
 import {
   AudioParams,
@@ -272,22 +273,26 @@ export async function runPipeline(
     const processedMaster = mixVoiceTracks(voiceBuffers, onLog);
     applyGainToBuffer(processedMaster, params.masterGainDb);
 
+    // Cut long silences (>= silenceMinDuration) down to silenceCutTarget seconds.
+    onLog('Cortando silêncios longos da master...', 'step');
+    const trimmedMaster = cutSilencesInMaster(processedMaster, params, onLog);
+
     // Add pre-master silence (BGM plays alone before voice starts)
-    const preSilenceSamples = Math.round(processedMaster.sampleRate * (params.bgmPreMasterSilence || 0));
+    const preSilenceSamples = Math.round(trimmedMaster.sampleRate * (params.bgmPreMasterSilence || 0));
     // Add post-master silence (BGM plays alone after voice ends)
-    const postSilenceSamples = Math.round(processedMaster.sampleRate * (params.bgmPostMasterSilence || 0));
+    const postSilenceSamples = Math.round(trimmedMaster.sampleRate * (params.bgmPostMasterSilence || 0));
 
     let masterForDuck: AudioBuffer;
     if (preSilenceSamples > 0 || postSilenceSamples > 0) {
-      const extendedLength = preSilenceSamples + processedMaster.length + postSilenceSamples;
-      masterForDuck = monoDataToAudioBuffer(new Float32Array(extendedLength), processedMaster.sampleRate);
+      const extendedLength = preSilenceSamples + trimmedMaster.length + postSilenceSamples;
+      masterForDuck = monoDataToAudioBuffer(new Float32Array(extendedLength), trimmedMaster.sampleRate);
       const dst = masterForDuck.getChannelData(0);
-      const src = processedMaster.getChannelData(0);
+      const src = trimmedMaster.getChannelData(0);
       // Pre-silence is zeros (already zeroed), then master, then post-silence (zeros)
       dst.set(src, preSilenceSamples);
       onLog(`Silêncio pré-master: ${params.bgmPreMasterSilence}s | pós-master: ${params.bgmPostMasterSilence}s`, 'info');
     } else {
-      masterForDuck = processedMaster;
+      masterForDuck = trimmedMaster;
     }
 
     onLog('Decodificando trilha, intro e outro...', 'step');
