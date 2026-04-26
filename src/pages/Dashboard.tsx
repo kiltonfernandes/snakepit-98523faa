@@ -306,6 +306,18 @@ export default function Dashboard() {
                       <span className="h-2 w-2 rounded-full bg-emerald-500" />
                       <span>{statusCounts.finalized} finalizada</span>
                     </div>
+                    {statusCounts.scheduled > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/10 text-xs text-cyan-400">
+                        <span className="h-2 w-2 rounded-full bg-cyan-500" />
+                        <span>{statusCounts.scheduled} agendado</span>
+                      </div>
+                    )}
+                    {statusCounts.published > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/10 text-xs text-violet-400">
+                        <span className="h-2 w-2 rounded-full bg-violet-500" />
+                        <span>{statusCounts.published} publicado</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
