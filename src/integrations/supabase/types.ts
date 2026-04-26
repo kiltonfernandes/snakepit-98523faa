@@ -82,6 +82,7 @@ export type Database = {
       }
       app_settings: {
         Row: {
+          ai_model: string
           banned_terms_text: string
           brand_tone_temperature: number
           default_export_container: string
@@ -92,6 +93,7 @@ export type Database = {
           theme_name: string
         }
         Insert: {
+          ai_model?: string
           banned_terms_text?: string
           brand_tone_temperature?: number
           default_export_container?: string
@@ -102,6 +104,7 @@ export type Database = {
           theme_name?: string
         }
         Update: {
+          ai_model?: string
           banned_terms_text?: string
           brand_tone_temperature?: number
           default_export_container?: string
