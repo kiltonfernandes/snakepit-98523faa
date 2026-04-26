@@ -92,6 +92,7 @@ export interface AppSettings {
   theme_name: string;
   prompt_overrides_json: Record<string, string>;
   description_template_html: string;
+  ai_model: string;
 }
 
 export interface ActivityLog {
