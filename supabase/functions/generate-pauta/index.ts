@@ -1,10 +1,26 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+const DEFAULT_MODEL = "google/gemini-2.5-flash-lite";
+
+async function getActiveModel(): Promise<string> {
+  try {
+    const url = Deno.env.get("SUPABASE_URL");
+    const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY");
+    if (!url || !key) return DEFAULT_MODEL;
+    const sb = createClient(url, key);
+    const { data } = await sb.from("app_settings").select("ai_model").eq("singleton_id", 1).single();
+    return (data as any)?.ai_model || DEFAULT_MODEL;
+  } catch {
+    return DEFAULT_MODEL;
+  }
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -31,6 +47,8 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
+    const model = await getActiveModel();
+
     const response = await fetch(
       "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
@@ -40,7 +58,7 @@ serve(async (req) => {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model,
           messages: [
             {
               role: "system",
