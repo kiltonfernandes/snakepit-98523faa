@@ -22,6 +22,7 @@ import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getEffectivePautaStatus } from '@/lib/episode-status';
 
 const MONTHS_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -73,7 +74,8 @@ export default function Dashboard() {
         scheduling: !!mat?.spotify_link,
       };
       const count = Object.values(indicators).filter(Boolean).length;
-      return { day, indicators, count, pauta };
+      const effectiveStatus = getEffectivePautaStatus(pauta, mat);
+      return { day, indicators, count, pauta, effectiveStatus, material: mat };
     });
   }
 
@@ -101,14 +103,18 @@ export default function Dashboard() {
 
   // Status counts for current week
   const statusCounts = useMemo(() => {
-    const c = { draft: 0, generating: 0, finalized: 0, total: currentWeekPautas.length };
+    const c = { draft: 0, generating: 0, finalized: 0, scheduled: 0, published: 0, total: currentWeekPautas.length };
     currentWeekPautas.forEach(p => {
-      if (p.status === 'finalized') c.finalized++;
+      const mat = materials.find(m => m.episode_date === p.publication_date);
+      const eff = getEffectivePautaStatus(p, mat);
+      if (eff === 'publicado') c.published++;
+      else if (eff === 'agendado') c.scheduled++;
+      else if (p.status === 'finalized') c.finalized++;
       else if (p.status === 'generated') c.generating++;
       else c.draft++;
     });
     return c;
-  }, [currentWeekPautas]);
+  }, [currentWeekPautas, materials]);
 
   // Bottleneck detection
   const bottlenecks = useMemo(() => {
@@ -300,13 +306,25 @@ export default function Dashboard() {
                       <span className="h-2 w-2 rounded-full bg-emerald-500" />
                       <span>{statusCounts.finalized} finalizada</span>
                     </div>
+                    {statusCounts.scheduled > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-cyan-500/10 text-xs text-cyan-400">
+                        <span className="h-2 w-2 rounded-full bg-cyan-500" />
+                        <span>{statusCounts.scheduled} agendado</span>
+                      </div>
+                    )}
+                    {statusCounts.published > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-violet-500/10 text-xs text-violet-400">
+                        <span className="h-2 w-2 rounded-full bg-violet-500" />
+                        <span>{statusCounts.published} publicado</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </Card>
 
               {/* Day-by-day grid */}
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {currentIndicators.map(({ day, indicators, count, pauta }) => {
+                {currentIndicators.map(({ day, indicators, count, pauta, effectiveStatus }) => {
                   const pct = Math.round((count / 6) * 100);
                   return (
                     <motion.div key={day.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -314,7 +332,15 @@ export default function Dashboard() {
                         onClick={() => navigate('/pautas')}>
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold">{day.label}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-semibold">{day.label}</span>
+                              {effectiveStatus === 'publicado' && (
+                                <Badge className="h-4 px-1.5 text-[9px] bg-violet-500/20 text-violet-400 border-0">Publicado</Badge>
+                              )}
+                              {effectiveStatus === 'agendado' && (
+                                <Badge className="h-4 px-1.5 text-[9px] bg-cyan-500/20 text-cyan-400 border-0">Agendado</Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5">
                               <span className={cn("text-xs font-mono font-bold", trafficColor(pct))}>{count}/6</span>
                               <span className={cn("h-2 w-2 rounded-full", trafficLight(pct))} />

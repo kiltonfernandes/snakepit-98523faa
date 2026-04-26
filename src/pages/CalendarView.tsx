@@ -49,6 +49,7 @@ import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
+import { getEffectivePautaStatus } from '@/lib/episode-status';
 import JSZip from 'jszip';
 
 // Week starts on Monday
@@ -442,6 +443,8 @@ export default function CalendarView() {
   };
 
   const pautaStatusColor = (status: string) => {
+    if (status === 'publicado') return 'bg-violet-500';
+    if (status === 'agendado') return 'bg-cyan-500';
     if (status === 'finalized') return 'bg-primary';
     if (status === 'generated' || status === 'needs_review') return 'bg-accent';
     if (status === 'in_progress') return 'bg-secondary';
@@ -449,6 +452,13 @@ export default function CalendarView() {
   };
 
   const pautaStatusLabel = (status: string) => {
+    if (status === 'publicado') return 'Publicado';
+    if (status === 'agendado') return 'Agendado';
+    if (status === 'pronto_agendar') return 'Pronto p/ agendar';
+    if (status === 'pronto_gravar') return 'Pronto p/ gravar';
+    if (status === 'criando_materiais') return 'Criando materiais';
+    if (status === 'revisao') return 'Revisão';
+    if (status === 'pesquisa') return 'Pesquisa';
     if (status === 'finalized') return 'Finalizada';
     if (status === 'generated') return 'Gerada';
     if (status === 'needs_review') return 'Revisão';
@@ -509,6 +519,7 @@ export default function CalendarView() {
                     const mat = materials.find(m => m.episode_date === item.data.publication_date);
                     const title = mat ? getSelectedTitle(mat) : '';
                     const thumbUrl = mat ? coverThumbnails[mat.id] : undefined;
+                    const effStatus = getEffectivePautaStatus(item.data, mat);
                     return (
                       <div className="flex items-start gap-1.5">
                         {thumbUrl && (
@@ -517,8 +528,8 @@ export default function CalendarView() {
                         <div className="min-w-0 flex-1">
                           {title && <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>}
                           <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(item.data.status)}`} />
-                            <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(item.data.status)}</span>
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(effStatus)}`} />
+                            <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(effStatus)}</span>
                             <FileText className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
                           </div>
                         </div>

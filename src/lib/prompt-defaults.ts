@@ -187,8 +187,9 @@ const MATERIAL_DESCRIPTIONS_INSTRUCTIONS = `Regras de descrição:
 - Use o título selecionado como âncora
 - Priorize "Notícias" como base factual
 - Não invente seções ausentes
-- Inclua bloco institucional antes dos CTAs
-- CTAs obrigatórios: "Ouça onde quiser" + links (YouTube, Spotify, Apple Podcasts, Deezer, Pod.link, Discord, WhatsApp)`;
+- NÃO inclua bloco institucional "Heavynauta — Papo Sério Sobre Música Pesada"
+- NÃO inclua CTAs nem links de plataformas (YouTube, Spotify, Apple Podcasts, Deezer, Pod.link, Discord, WhatsApp)
+- O bloco institucional e os CTAs são adicionados automaticamente pelo template; a IA deve gerar APENAS o conteúdo editorial do episódio (introdução, destaques, lista de tópicos)`;
 
 const MATERIAL_BRAND_BLOCK = `<p><b>Heavynauta — Papo Sério Sobre Música Pesada</b></p>
 <p>Diariamente, o Heavynauta traz notícias, reviews e análises do universo do heavy metal. De clássicos atemporais a lançamentos frescos, nosso compromisso é com informação de qualidade e paixão pela música pesada.</p>`;
