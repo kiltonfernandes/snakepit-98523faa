@@ -21,6 +21,7 @@ import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
+import { AI_MODELS, DEFAULT_AI_MODEL } from '@/lib/ai-models';
 
 const TONE_PRESETS = [
   { label: 'Cirúrgico', value: 30, desc: 'Extremamente preciso e direto. Mínimo de adjetivos, foco em dados.' },
@@ -544,7 +545,53 @@ export default function Settings() {
 
         {/* TAB: IA & Tokens */}
         <TabsContent value="tokens">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }}>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.1 }} className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Cpu className="h-4 w-4" /> Modelo de IA
+                </CardTitle>
+                <CardDescription>
+                  Escolha qual modelo será usado nas gerações de texto (pautas, descrições, enriquecimento). Aplica-se a todas as edge functions de IA.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Label className="text-xs">Modelo ativo</Label>
+                <Select
+                  value={settings.ai_model || DEFAULT_AI_MODEL}
+                  onValueChange={(v) => {
+                    updateSettings({ ai_model: v });
+                    const m = AI_MODELS.find(x => x.id === v);
+                    toast.success(`Modelo alterado para ${m?.label || v}`);
+                  }}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(['Google Gemini', 'OpenAI GPT'] as const).map(provider => (
+                      <div key={provider}>
+                        <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                          {provider}
+                        </div>
+                        {AI_MODELS.filter(m => m.provider === provider).map(m => (
+                          <SelectItem key={m.id} value={m.id}>
+                            <div className="flex flex-col">
+                              <span className="text-sm">{m.label}</span>
+                              <span className="text-[10px] text-muted-foreground">{m.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </div>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <div className="text-[11px] text-muted-foreground bg-muted/30 rounded p-2">
+                  <strong>Modelo atual:</strong> <code className="font-mono">{settings.ai_model || DEFAULT_AI_MODEL}</code>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-sm flex items-center gap-2">

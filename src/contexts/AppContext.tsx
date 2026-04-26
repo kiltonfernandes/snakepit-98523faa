@@ -50,6 +50,7 @@ const defaultSettings: AppSettings = {
   theme_name: 'heavynauta',
   prompt_overrides_json: {},
   description_template_html: '',
+  ai_model: 'google/gemini-2.5-flash',
 };
 
 const emptySections: PautaSections = {
