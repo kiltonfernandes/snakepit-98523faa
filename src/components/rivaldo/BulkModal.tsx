@@ -746,7 +746,7 @@ export function BulkModal({
           />
           <Label htmlFor="bulk-upload-cloud" className="text-xs font-mono text-muted-foreground cursor-pointer flex items-center gap-1.5">
             <Cloud className="w-3.5 h-3.5" />
-            Enviar todos para OneDrive (Snakepit/{new Date().getFullYear()}-W##/)
+            Enviar diários para OneDrive (consolidado de domingo sempre baixa local)
           </Label>
         </div>
 
