@@ -324,7 +324,7 @@ export default function Dashboard() {
 
               {/* Day-by-day grid */}
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {currentIndicators.map(({ day, indicators, count, pauta }) => {
+                {currentIndicators.map(({ day, indicators, count, pauta, effectiveStatus }) => {
                   const pct = Math.round((count / 6) * 100);
                   return (
                     <motion.div key={day.key} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -332,7 +332,15 @@ export default function Dashboard() {
                         onClick={() => navigate('/pautas')}>
                         <CardContent className="p-3">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-sm font-semibold">{day.label}</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-semibold">{day.label}</span>
+                              {effectiveStatus === 'publicado' && (
+                                <Badge className="h-4 px-1.5 text-[9px] bg-violet-500/20 text-violet-400 border-0">Publicado</Badge>
+                              )}
+                              {effectiveStatus === 'agendado' && (
+                                <Badge className="h-4 px-1.5 text-[9px] bg-cyan-500/20 text-cyan-400 border-0">Agendado</Badge>
+                              )}
+                            </div>
                             <div className="flex items-center gap-1.5">
                               <span className={cn("text-xs font-mono font-bold", trafficColor(pct))}>{count}/6</span>
                               <span className={cn("h-2 w-2 rounded-full", trafficLight(pct))} />
