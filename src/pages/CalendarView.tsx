@@ -519,6 +519,7 @@ export default function CalendarView() {
                     const mat = materials.find(m => m.episode_date === item.data.publication_date);
                     const title = mat ? getSelectedTitle(mat) : '';
                     const thumbUrl = mat ? coverThumbnails[mat.id] : undefined;
+                    const effStatus = getEffectivePautaStatus(item.data, mat);
                     return (
                       <div className="flex items-start gap-1.5">
                         {thumbUrl && (
@@ -527,8 +528,8 @@ export default function CalendarView() {
                         <div className="min-w-0 flex-1">
                           {title && <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>}
                           <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(item.data.status)}`} />
-                            <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(item.data.status)}</span>
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(effStatus)}`} />
+                            <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(effStatus)}</span>
                             <FileText className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
                           </div>
                         </div>
