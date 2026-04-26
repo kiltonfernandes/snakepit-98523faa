@@ -103,14 +103,18 @@ export default function Dashboard() {
 
   // Status counts for current week
   const statusCounts = useMemo(() => {
-    const c = { draft: 0, generating: 0, finalized: 0, total: currentWeekPautas.length };
+    const c = { draft: 0, generating: 0, finalized: 0, scheduled: 0, published: 0, total: currentWeekPautas.length };
     currentWeekPautas.forEach(p => {
-      if (p.status === 'finalized') c.finalized++;
+      const mat = materials.find(m => m.episode_date === p.publication_date);
+      const eff = getEffectivePautaStatus(p, mat);
+      if (eff === 'publicado') c.published++;
+      else if (eff === 'agendado') c.scheduled++;
+      else if (p.status === 'finalized') c.finalized++;
       else if (p.status === 'generated') c.generating++;
       else c.draft++;
     });
     return c;
-  }, [currentWeekPautas]);
+  }, [currentWeekPautas, materials]);
 
   // Bottleneck detection
   const bottlenecks = useMemo(() => {
