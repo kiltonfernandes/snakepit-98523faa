@@ -22,6 +22,7 @@ import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { getEffectivePautaStatus } from '@/lib/episode-status';
 
 const MONTHS_PT = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
@@ -73,7 +74,8 @@ export default function Dashboard() {
         scheduling: !!mat?.spotify_link,
       };
       const count = Object.values(indicators).filter(Boolean).length;
-      return { day, indicators, count, pauta };
+      const effectiveStatus = getEffectivePautaStatus(pauta, mat);
+      return { day, indicators, count, pauta, effectiveStatus, material: mat };
     });
   }
 
