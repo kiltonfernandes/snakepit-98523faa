@@ -746,7 +746,7 @@ export function BulkModal({
           />
           <Label htmlFor="bulk-upload-cloud" className="text-xs font-mono text-muted-foreground cursor-pointer flex items-center gap-1.5">
             <Cloud className="w-3.5 h-3.5" />
-            Enviar todos para OneDrive (Snakepit/{new Date().getFullYear()}-W##/)
+            Enviar diários para OneDrive (consolidado de domingo sempre baixa local)
           </Label>
         </div>
 
@@ -791,14 +791,14 @@ export function BulkModal({
 
         <ElapsedTimer isRunning={isProcessing} />
         <GranularProgress progress={progress} label={progressLabel} isRunning={isProcessing} />
-        {generateFinalEpisode && uploadToCloud && finalEpisodeStatus.state !== 'idle' && (
+        {generateFinalEpisode && finalEpisodeStatus.state !== 'idle' && (
           <div className="rounded-md border border-border/60 bg-muted/30 p-2 text-xs font-mono flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Cloud className="w-3.5 h-3.5 shrink-0" />
               <span className="truncate">
                 Consolidado:{' '}
-                {finalEpisodeStatus.state === 'uploading' && 'enviando para OneDrive...'}
-                {finalEpisodeStatus.state === 'done' && (finalEpisodeStatus.uploadedFilename || 'enviado')}
+                {finalEpisodeStatus.state === 'uploading' && 'processando...'}
+                {finalEpisodeStatus.state === 'done' && `baixado local — ${finalEpisodeStatus.uploadedFilename || 'episodio_final'}.mp3`}
                 {finalEpisodeStatus.state === 'error' && `erro — ${finalEpisodeStatus.error}`}
               </span>
             </div>
