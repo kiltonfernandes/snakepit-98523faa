@@ -211,7 +211,9 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
         {
           exportMode: 'blob',
           downloadIndividualItems: !input.uploadToCloud,
-          downloadFinalEpisode: !input.uploadToCloud,
+          // Consolidado (episódio de domingo) SEMPRE baixa local — nunca vai para o OneDrive,
+          // independentemente do toggle "Enviar todos para OneDrive".
+          downloadFinalEpisode: true,
           onItemEncoded: async (_item, index, result) => {
             const row = input.rows[index];
             if (!row) return;
@@ -264,52 +266,11 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
           },
           onFinalEpisodeEncoded: async (finalBlob) => {
             if (!input.generateFinalEpisode) return;
-            if (!input.uploadToCloud) return;
-            // Pick the row with the latest episode_date as the consolidated episode anchor
-            const sortedRows = [...input.rows]
-              .filter(r => r.episodeDate)
-              .sort((a, b) => (a.episodeDate! < b.episodeDate! ? 1 : -1));
-            const anchorRow = sortedRows[0] ?? input.rows[input.rows.length - 1];
+            // Consolidado de domingo é apenas baixado local (já feito no pipeline).
+            // Nunca sobe para OneDrive, conforme requisito do usuário.
             const baseName = (input.finalFilename || 'episodio_final').trim();
-            const filename = sanitizeFilename(baseName);
-            const folderPath = buildEpisodeFolderPath(anchorRow?.episodeDate);
-            setFinalEpisodeStatus({ state: 'uploading', folderPath });
-            addLog(`Upload OneDrive (consolidado): ${folderPath}/${filename}...`, 'step');
-            try {
-              const uploaded = await uploadEpisodeToOneDrive({
-                folderPath,
-                filename,
-                blob: finalBlob,
-                onProgress: ({ fraction }) => {
-                  setProgressLabel(`Upload consolidado: ${Math.round(fraction * 100)}%`);
-                },
-              });
-              setFinalEpisodeStatus({
-                state: 'done',
-                webUrl: uploaded.webUrl,
-                fileId: uploaded.fileId,
-                folderPath,
-                uploadedFilename: uploaded.filename,
-              });
-              addLog(`OneDrive (consolidado): ${uploaded.filename}`, 'success');
-              if (anchorRow?.materialId) {
-                try {
-                  updateMaterial(anchorRow.materialId, {
-                    repository_provider: 'onedrive',
-                    repository_url: uploaded.webUrl,
-                    repository_file_id: uploaded.fileId,
-                    repository_uploaded_at: new Date().toISOString(),
-                  });
-                } catch (e) {
-                  const m = e instanceof Error ? e.message : 'erro desconhecido';
-                  addLog(`Aviso: falha ao sincronizar material do consolidado (${m})`, 'error');
-                }
-              }
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : 'Falha no upload do consolidado';
-              setFinalEpisodeStatus({ state: 'error', error: msg, folderPath });
-              addLog(`OneDrive falhou (consolidado): ${msg}`, 'error');
-            }
+            setFinalEpisodeStatus({ state: 'done', uploadedFilename: baseName });
+            addLog(`Episódio consolidado baixado local: ${baseName}.mp3`, 'success');
           },
         },
       );
