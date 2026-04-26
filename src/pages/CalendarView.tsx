@@ -443,6 +443,8 @@ export default function CalendarView() {
   };
 
   const pautaStatusColor = (status: string) => {
+    if (status === 'publicado') return 'bg-violet-500';
+    if (status === 'agendado') return 'bg-cyan-500';
     if (status === 'finalized') return 'bg-primary';
     if (status === 'generated' || status === 'needs_review') return 'bg-accent';
     if (status === 'in_progress') return 'bg-secondary';
@@ -450,6 +452,13 @@ export default function CalendarView() {
   };
 
   const pautaStatusLabel = (status: string) => {
+    if (status === 'publicado') return 'Publicado';
+    if (status === 'agendado') return 'Agendado';
+    if (status === 'pronto_agendar') return 'Pronto p/ agendar';
+    if (status === 'pronto_gravar') return 'Pronto p/ gravar';
+    if (status === 'criando_materiais') return 'Criando materiais';
+    if (status === 'revisao') return 'Revisão';
+    if (status === 'pesquisa') return 'Pesquisa';
     if (status === 'finalized') return 'Finalizada';
     if (status === 'generated') return 'Gerada';
     if (status === 'needs_review') return 'Revisão';
