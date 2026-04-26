@@ -49,6 +49,7 @@ import { generateCoverImage, buildCoverSearchQuery } from '@/lib/cover-generator
 import { GenerationProgressModal, GenerationItem } from '@/components/GenerationProgressModal';
 import { supabase } from '@/integrations/supabase/client';
 import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
+import { getEffectivePautaStatus } from '@/lib/episode-status';
 import JSZip from 'jszip';
 
 // Week starts on Monday
