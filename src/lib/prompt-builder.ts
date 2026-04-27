@@ -239,7 +239,7 @@ function renderSectionPlaybooks(sections: { key: string; label: string }[], over
   }).filter(Boolean).join('\n\n');
 }
 
-function renderContextXml(payload: DayPayload): string {
+function renderContextXml(payload: DayPayload, focusSectionKey?: string): string {
   const lines: string[] = [`<ctx date="${payload.publication_date}" label="${payload.pauta_label}">`];
 
   // Only non-empty raw inputs (compact)
@@ -264,7 +264,21 @@ function renderContextXml(payload: DayPayload): string {
   if (farolStr) lines.push(`  <farois>${farolStr}</farois>`);
 
   lines.push('</ctx>');
-  return lines.join('\n');
+  let out = lines.join('\n');
+
+  // Highlight the "direção" (editorial guidance) for the focused section.
+  // This makes the human direction prominent and scoped to a specific section,
+  // so the AI prioritizes it when generating that section's content.
+  if (focusSectionKey) {
+    const dirKey = SECTION_DIRECTION_KEYS[focusSectionKey];
+    if (dirKey) {
+      const dirVal = (ri[dirKey] || '').toString().trim();
+      if (dirVal) {
+        out += `\n\nDIREÇÃO EDITORIAL (seção "${focusSectionKey}") — siga estas instruções como prioridade máxima:\n${dirVal}`;
+      }
+    }
+  }
+  return out;
 }
 
 // ─── Contracts (token-optimized) ────────────────────────────────────────────
