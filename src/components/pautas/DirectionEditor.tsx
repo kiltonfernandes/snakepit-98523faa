@@ -9,8 +9,58 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Compass, Check, Trash2 } from "lucide-react";
+import { Compass, Check, Trash2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Build a contextual Google search query for a given section, based on the
+ * raw inputs already filled by the editor. Returns an empty string when
+ * there is not enough context to suggest a meaningful search.
+ *
+ * Intent per section:
+ * - anniversary       → "história curiosidades recepção entrevistas <texto do aniversário>"
+ * - news              → "o que aconteceu <link da notícia>"
+ * - review_rafa       → "review do disco e entrevistas <Album> <Artista>"
+ * - review_kilton     → "review do disco e entrevistas <Album> <Artista>"
+ * - next_week_releases → "lançamentos heavy metal <semana> review"
+ */
+export function buildSectionSearchQuery(
+  sectionKey: string,
+  ctx: {
+    anniversary?: string;
+    newsLink?: string;
+    releaseArtist?: string;
+    releaseAlbum?: string;
+    publicationDate?: string;
+  },
+): string {
+  const clean = (s?: string) => (s || "").trim();
+  switch (sectionKey) {
+    case "anniversary": {
+      const txt = clean(ctx.anniversary);
+      if (!txt) return "";
+      return `história detalhes curiosidades recepção entrevistas ${txt}`;
+    }
+    case "news": {
+      const link = clean(ctx.newsLink);
+      if (!link) return "";
+      return `o que aconteceu ${link}`;
+    }
+    case "review_rafa":
+    case "review_kilton": {
+      const artist = clean(ctx.releaseArtist);
+      const album = clean(ctx.releaseAlbum);
+      if (!artist && !album) return "";
+      return `review do disco e entrevistas ${album} ${artist}`.trim();
+    }
+    case "next_week_releases": {
+      const date = clean(ctx.publicationDate);
+      return `lançamentos heavy metal ${date ? `semana de ${date}` : "novos álbuns"} review`;
+    }
+    default:
+      return "";
+  }
+}
 
 interface DirectionEditorProps {
   /** Current direction text (raw input value). */
@@ -23,6 +73,15 @@ interface DirectionEditorProps {
   buttonLabel?: string;
   /** Optional className for the button. */
   className?: string;
+  /**
+   * Optional Google search query to expose as a quick-research button inside
+   * the modal. When omitted (or empty), the search button is hidden.
+   * Caller assembles a query that is contextually relevant to the section
+   * (e.g. "review do disco e entrevistas Powerslave Iron Maiden").
+   */
+  searchQuery?: string;
+  /** Optional label for the search button (defaults to "Pesquisar no Google"). */
+  searchLabel?: string;
 }
 
 /**
@@ -39,6 +98,8 @@ export function DirectionEditor({
   sectionLabel,
   buttonLabel = "Direção",
   className,
+  searchQuery,
+  searchLabel = "Pesquisar no Google",
 }: DirectionEditorProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value || "");
@@ -60,6 +121,11 @@ export function DirectionEditor({
     onChange("");
     setOpen(false);
   };
+
+  const trimmedQuery = (searchQuery || "").trim();
+  const googleHref = trimmedQuery
+    ? `https://www.google.com/search?q=${encodeURIComponent(trimmedQuery)}`
+    : null;
 
   return (
     <>
@@ -103,6 +169,30 @@ export function DirectionEditor({
             className="min-h-[220px] text-sm leading-relaxed"
             autoFocus
           />
+
+          {googleHref && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Pesquisa sugerida
+                </p>
+                <p className="truncate text-xs text-foreground/80" title={trimmedQuery}>
+                  {trimmedQuery}
+                </p>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                asChild
+                className="gap-1.5 shrink-0"
+              >
+                <a href={googleHref} target="_blank" rel="noopener noreferrer">
+                  <Search className="h-3.5 w-3.5" /> {searchLabel}
+                </a>
+              </Button>
+            </div>
+          )}
 
           <DialogFooter className="gap-2 sm:justify-between">
             <Button
