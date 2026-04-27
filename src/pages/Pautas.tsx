@@ -1497,8 +1497,7 @@ export default function Pautas() {
                       </div>
                       <DirectionEditor
                         sectionLabel="Aniversário"
-                        value={inputs.comment_anniversary || ''}
-                        onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
+                        {...directionBinding(pauta, 'comment_anniversary', 'mandatory_anniversary')}
                         searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })}
                       />
 
@@ -1530,8 +1529,7 @@ export default function Pautas() {
                           <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
                           <DirectionEditor
                             sectionLabel="Review Rafa"
-                            value={inputs.comment_review_rafa || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
+                            {...directionBinding(pauta, 'comment_review_rafa', 'mandatory_review_rafa')}
                             searchQuery={(() => {
                               const r = releases.find(x => x.id === inputs.review_rafa_id);
                               return buildSectionSearchQuery('review_rafa', { releaseArtist: r?.artist, releaseAlbum: r?.album });
@@ -1559,16 +1557,14 @@ export default function Pautas() {
                           </div>
                           <DirectionEditor
                             sectionLabel="Notícias"
-                            value={inputs.comment_news || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
+                            {...directionBinding(pauta, 'comment_news', 'mandatory_news')}
                             searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })}
                           />
 
                           <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
                           <DirectionEditor
                             sectionLabel="Review Kilton"
-                            value={inputs.comment_review_kilton || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
+                            {...directionBinding(pauta, 'comment_review_kilton', 'mandatory_review_kilton')}
                             searchQuery={(() => {
                               const r = releases.find(x => x.id === inputs.review_kilton_id);
                               return buildSectionSearchQuery('review_kilton', { releaseArtist: r?.artist, releaseAlbum: r?.album });
@@ -1582,8 +1578,7 @@ export default function Pautas() {
                           <SaturdayReleasePicker pauta={pauta} />
                           <DirectionEditor
                             sectionLabel="Lançamentos da Semana"
-                            value={inputs.comment_next_week_releases || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_next_week_releases', v)}
+                            {...directionBinding(pauta, 'comment_next_week_releases', 'mandatory_next_week_releases')}
                             searchQuery={buildSectionSearchQuery('next_week_releases', { publicationDate: pauta.publication_date })}
                           />
                         </>
