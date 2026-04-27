@@ -26,7 +26,7 @@ import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
 import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, type PromptBuildContext } from '@/lib/prompt-builder';
-import { DirectionEditor } from '@/components/pautas/DirectionEditor';
+import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/DirectionEditor';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
 
@@ -1283,6 +1283,7 @@ export default function Pautas() {
                         sectionLabel="Aniversário"
                         value={inputs.comment_anniversary || ''}
                         onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
+                        searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })}
                       />
                     </>
                   )}
@@ -1294,6 +1295,10 @@ export default function Pautas() {
                         sectionLabel="Review Rafa"
                         value={inputs.comment_review_rafa || ''}
                         onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
+                        searchQuery={(() => {
+                          const r = releases.find(x => x.id === inputs.review_rafa_id);
+                          return buildSectionSearchQuery('review_rafa', { releaseArtist: r?.artist, releaseAlbum: r?.album });
+                        })()}
                       />
                     </>
                   )}
@@ -1323,6 +1328,7 @@ export default function Pautas() {
                         sectionLabel="Notícias"
                         value={inputs.comment_news || ''}
                         onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
+                        searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })}
                       />
                     </>
                   )}
@@ -1334,6 +1340,10 @@ export default function Pautas() {
                         sectionLabel="Review Kilton"
                         value={inputs.comment_review_kilton || ''}
                         onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
+                        searchQuery={(() => {
+                          const r = releases.find(x => x.id === inputs.review_kilton_id);
+                          return buildSectionSearchQuery('review_kilton', { releaseArtist: r?.artist, releaseAlbum: r?.album });
+                        })()}
                       />
                     </>
                   )}
