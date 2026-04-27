@@ -11,10 +11,14 @@ export const PROMPT_SCHEMA_VERSION = 'snakepit.manual.v1';
 export const MIN_LONGFORM_SECTION_WORDS = 500; // legacy default
 export const SECTION_WORD_TARGETS: Record<string, number> = {
   anniversary: 200,
-  review_rafa: 300,
-  review_kilton: 300,
   news: 500,
   next_week_releases: 500,
+};
+// Sections that have a MINIMUM word count and NO upper bound.
+// Takes precedence over SECTION_WORD_TARGETS in contracts.
+export const SECTION_WORD_MIN: Record<string, number> = {
+  review_rafa: 400,
+  review_kilton: 400,
 };
 export const DEFAULT_BRAND_TONE_TEMPERATURE = 55;
 
@@ -39,6 +43,25 @@ export const SECTION_DIRECTION_KEYS: Record<string, string> = {
   review_kilton: 'comment_review_kilton',
   next_week_releases: 'comment_next_week_releases',
 };
+
+// Maps each section key to the raw_inputs_json key that holds its
+// "Informação Mandatória" — content the response MUST incorporate verbatim
+// in meaning (paraphrased), and which does NOT count toward the word target.
+export const SECTION_MANDATORY_KEYS: Record<string, string> = {
+  anniversary: 'mandatory_anniversary',
+  review_rafa: 'mandatory_review_rafa',
+  news: 'mandatory_news',
+  review_kilton: 'mandatory_review_kilton',
+  next_week_releases: 'mandatory_next_week_releases',
+};
+
+function sectionWordSpec(sectionKey: string): string {
+  if (SECTION_WORD_MIN[sectionKey]) {
+    return `mínimo ${SECTION_WORD_MIN[sectionKey]} palavras, sem limite máximo`;
+  }
+  const t = SECTION_WORD_TARGETS[sectionKey] || MIN_LONGFORM_SECTION_WORDS;
+  return `~${t} palavras`;
+}
 
 function isInputFilled(value: unknown): boolean {
   if (value === undefined || value === null) return false;
