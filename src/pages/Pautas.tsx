@@ -351,6 +351,25 @@ export default function Pautas() {
 
   const getRawInputs = (pauta: Pauta) => (pauta.raw_inputs_json || {}) as Record<string, any>;
 
+  /**
+   * Build the {value, onChange} pair for a DirectionEditor bound to a section.
+   * Reads/writes both `comment_<commentKey>` (direction) and
+   * `mandatory_<mandatoryKey>` (mandatory info) on raw_inputs_json.
+   */
+  const directionBinding = (pauta: Pauta, commentKey: string, mandatoryKey: string) => {
+    const inputs = getRawInputs(pauta);
+    return {
+      value: {
+        direction: (inputs[commentKey] || '') as string,
+        mandatory: (inputs[mandatoryKey] || '') as string,
+      },
+      onChange: (v: { direction: string; mandatory: string }) => {
+        updateRawInput(pauta.id, commentKey, v.direction);
+        updateRawInput(pauta.id, mandatoryKey, v.mandatory);
+      },
+    };
+  };
+
   const updateRawInput = (pautaId: string, key: string, value: any) => {
     const pauta = pautas.find(p => p.id === pautaId);
     if (!pauta) return;
