@@ -530,6 +530,55 @@ export default function Releases() {
     toast.success(`${selectedIds.size} lançamentos removidos`);
   };
 
+  /**
+   * Delete every release belonging to a given artist (case-insensitive match
+   * on the exact artist name). Used by the "Excluir banda" UI.
+   */
+  const handleDeleteBand = useCallback((artist: string) => {
+    const target = artist.trim().toLowerCase();
+    const ids = releases.filter(r => (r.artist || '').trim().toLowerCase() === target).map(r => r.id);
+    if (ids.length === 0) {
+      toast.error('Nenhum lançamento encontrado para essa banda');
+      return;
+    }
+    ids.forEach(id => deleteRelease(id));
+    // Clear any selection that might reference removed rows
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.delete(id));
+      return next;
+    });
+    toast.success(`Banda "${artist}" removida (${ids.length} álbum${ids.length > 1 ? 'ns' : ''})`);
+  }, [releases, deleteRelease]);
+
+  /**
+   * Distinct list of artists currently in the catalog, with how many albums
+   * each one has. Sorted alphabetically. Used by the "Gerenciar bandas" modal.
+   */
+  const bandsList = useMemo(() => {
+    const map = new Map<string, { artist: string; count: number; country: string | null }>();
+    releases.forEach(r => {
+      const key = (r.artist || '').trim().toLowerCase();
+      if (!key) return;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { artist: r.artist, count: 1, country: r.country || null });
+      }
+    });
+    const q = bandsSearch.trim().toLowerCase();
+    return Array.from(map.values())
+      .filter(b => !q || b.artist.toLowerCase().includes(q))
+      .sort((a, b) => a.artist.localeCompare(b.artist));
+  }, [releases, bandsSearch]);
+
+  const bandToConfirmCount = useMemo(() => {
+    if (!deleteBandConfirm) return 0;
+    const target = deleteBandConfirm.trim().toLowerCase();
+    return releases.filter(r => (r.artist || '').trim().toLowerCase() === target).length;
+  }, [deleteBandConfirm, releases]);
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
