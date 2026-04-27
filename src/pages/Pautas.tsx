@@ -1279,11 +1279,10 @@ export default function Pautas() {
                           onChange={e => updateRawInput(pauta.id, 'anniversary', e.target.value)}
                         />
                       </div>
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Aniversário"
+                      <DirectionEditor
+                        sectionLabel="Aniversário"
                         value={inputs.comment_anniversary || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
                       />
                     </>
                   )}
@@ -1291,11 +1290,10 @@ export default function Pautas() {
                   {step.key === 'review_rafa' && (
                     <>
                       <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Review Rafa"
+                      <DirectionEditor
+                        sectionLabel="Review Rafa"
                         value={inputs.comment_review_rafa || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_review_rafa', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
                       />
                     </>
                   )}
@@ -1321,11 +1319,10 @@ export default function Pautas() {
                           onChange={e => updateRawInput(pauta.id, 'news_link', e.target.value)}
                         />
                       </div>
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Notícias"
+                      <DirectionEditor
+                        sectionLabel="Notícias"
                         value={inputs.comment_news || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_news', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
                       />
                     </>
                   )}
@@ -1333,11 +1330,10 @@ export default function Pautas() {
                   {step.key === 'review_kilton' && (
                     <>
                       <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Review Kilton"
+                      <DirectionEditor
+                        sectionLabel="Review Kilton"
                         value={inputs.comment_review_kilton || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_review_kilton', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
                       />
                     </>
                   )}
