@@ -1484,6 +1484,7 @@ export default function Pautas() {
                         sectionLabel="Aniversário"
                         value={inputs.comment_anniversary || ''}
                         onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
+                        searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })}
                       />
 
                       <div className="space-y-1">
@@ -1516,6 +1517,10 @@ export default function Pautas() {
                             sectionLabel="Review Rafa"
                             value={inputs.comment_review_rafa || ''}
                             onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
+                            searchQuery={(() => {
+                              const r = releases.find(x => x.id === inputs.review_rafa_id);
+                              return buildSectionSearchQuery('review_rafa', { releaseArtist: r?.artist, releaseAlbum: r?.album });
+                            })()}
                           />
 
                           <div className="space-y-1">
@@ -1541,6 +1546,7 @@ export default function Pautas() {
                             sectionLabel="Notícias"
                             value={inputs.comment_news || ''}
                             onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
+                            searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })}
                           />
 
                           <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
@@ -1548,6 +1554,10 @@ export default function Pautas() {
                             sectionLabel="Review Kilton"
                             value={inputs.comment_review_kilton || ''}
                             onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
+                            searchQuery={(() => {
+                              const r = releases.find(x => x.id === inputs.review_kilton_id);
+                              return buildSectionSearchQuery('review_kilton', { releaseArtist: r?.artist, releaseAlbum: r?.album });
+                            })()}
                           />
                         </>
                       )}
@@ -1559,6 +1569,7 @@ export default function Pautas() {
                             sectionLabel="Lançamentos da Semana"
                             value={inputs.comment_next_week_releases || ''}
                             onChange={v => updateRawInput(pauta.id, 'comment_next_week_releases', v)}
+                            searchQuery={buildSectionSearchQuery('next_week_releases', { publicationDate: pauta.publication_date })}
                           />
                         </>
                       )}
