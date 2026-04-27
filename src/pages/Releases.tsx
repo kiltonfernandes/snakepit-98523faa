@@ -789,9 +789,26 @@ export default function Releases() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Excluir este álbum"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title={`Excluir TODA a banda "${r.artist}" (todos os álbuns)`}
+                          onClick={(e) => { e.stopPropagation(); setDeleteBandConfirm(r.artist); }}
+                        >
+                          <Users className="h-3.5 w-3.5 text-destructive/80" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
