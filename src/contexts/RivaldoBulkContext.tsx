@@ -179,13 +179,14 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     input.rows.forEach(r => { initial[r.id] = { state: 'idle' }; });
     setUploadStatuses(initial);
 
+    const dlog = new DetailedLogger();
+    dlog.resetClock();
+    const startedIso = new Date().toISOString();
+    let finalStatus: 'SUCCESS' | 'ERROR' = 'SUCCESS';
+    let errorMessage: string | undefined;
+    const bulkFilename = (input.finalFilename || `bulk_${input.rows.length}_itens`).trim();
+
     try {
-      const dlog = new DetailedLogger();
-      dlog.resetClock();
-      const startedIso = new Date().toISOString();
-      let finalStatus: 'SUCCESS' | 'ERROR' = 'SUCCESS';
-      let errorMessage: string | undefined;
-      const bulkFilename = (input.finalFilename || `bulk_${input.rows.length}_itens`).trim();
       const items: BulkItem[] = await Promise.all(
         input.rows.map(async (row) => {
           let bgm = row.bgmFile;
