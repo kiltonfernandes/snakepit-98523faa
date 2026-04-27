@@ -287,9 +287,22 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
       const message = error instanceof Error ? error.message : 'Erro desconhecido no bulk pipeline';
       addLog(message, 'error');
       console.error('[Bulk Pipeline Error]', error);
+      finalStatus = 'ERROR';
+      errorMessage = message;
+      dlog.log('bulk', 'error', `Bulk abortado: ${message}`);
     } finally {
       setIsProcessing(false);
       processingRef.current = false;
+      try {
+        const finishedIso = new Date().toISOString();
+        const ts = startedIso.replace(/[:.]/g, '-');
+        const safe = bulkFilename.replace(/[^A-Za-z0-9._-]+/g, '_');
+        dlog.download(`rivaldo_bulk__${safe}__${ts}__${finalStatus}`, {
+          filename: bulkFilename, mode: 'bulk', startedIso, finishedIso, status: finalStatus,
+          pipelineVersion: '3.2', errorMessage,
+          extra: { itemCount: input.rows.length, generateFinalEpisode: input.generateFinalEpisode, uploadToCloud: input.uploadToCloud },
+        });
+      } catch { /* never throw from logger */ }
     }
   }, [addLog, updateMaterial]);
 
