@@ -384,16 +384,28 @@ export function buildWeekPrompt(weekStart: string, pautas: Pauta[], ctx: PromptB
   ].join('\n\n');
 }
 
-export function buildDayPrompt(pauta: Pauta, ctx: PromptBuildContext): string {
+export function buildDayPrompt(
+  pauta: Pauta,
+  ctx: PromptBuildContext,
+  options?: { sectionKeys?: string[] },
+): string {
   const overrides = getOverrides(ctx);
   const tone = toneProfileForTemperature(ctx.settings.brand_tone_temperature);
   const payload = buildDayPayload(pauta, ctx.releases);
+
+  // Optional bypass: restrict generation to a subset of section keys
+  // (e.g. when the editor left some inputs empty and we want to skip them).
+  if (options?.sectionKeys && options.sectionKeys.length > 0) {
+    const allow = new Set(options.sectionKeys);
+    payload.required_sections = payload.required_sections.filter(s => allow.has(s.key));
+  }
+  if (payload.required_sections.length === 0) return '';
 
   return [
     renderInstructions(ctx.bannedTerms, overrides),
     renderBrandVoice(tone, ctx.settings.brand_tone_temperature, overrides),
     renderPlaybook(overrides),
-    `ESCOPO: DIA ${pauta.publication_date}`,
+    `ESCOPO: DIA ${pauta.publication_date}${options?.sectionKeys ? ` (seções: ${options.sectionKeys.join(', ')})` : ''}`,
     renderSectionPlaybooks(payload.required_sections, overrides),
     dayContractHtml(payload),
     renderContextXml(payload),
@@ -413,7 +425,7 @@ export function buildSectionPrompt(pauta: Pauta, sectionKey: string, ctx: Prompt
     `ESCOPO: SEÇÃO "${sectionLabel}" de ${pauta.publication_date}`,
     renderSectionPlaybooks([{ key: sectionKey, label: sectionLabel }], overrides),
     sectionContractHtml(payload, sectionKey, sectionLabel),
-    renderContextXml(payload),
+    renderContextXml(payload, sectionKey),
   ].join('\n\n');
 }
 
