@@ -221,6 +221,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
           // Consolidado (episódio de domingo) SEMPRE baixa local — nunca vai para o OneDrive,
           // independentemente do toggle "Enviar todos para OneDrive".
           downloadFinalEpisode: true,
+          logger: dlog,
           onItemEncoded: async (_item, index, result) => {
             const row = input.rows[index];
             if (!row) return;
