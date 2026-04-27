@@ -413,7 +413,10 @@ export async function runBulkPipeline(
 ): Promise<void> {
   const exportMode = options.exportMode ?? 'download';
   const downloadIndividualItems = options.downloadIndividualItems ?? true;
+  const dlog = options.logger;
   onLog(`Iniciando fila bulk com ${input.items.length} itens`, 'step');
+  dlog?.log('bulk', 'step', `Iniciando bulk com ${input.items.length} itens`);
+  dlog?.log('bulk', 'info', `generateFinalEpisode=${input.generateFinalEpisode} downloadIndividualItems=${downloadIndividualItems}`);
   const v1Blobs: Blob[] = [];
   const sharedWorker = new VoiceWorkerClient();
 
@@ -427,12 +430,14 @@ export async function runBulkPipeline(
       const progressSpan = progressEnvelope / input.items.length;
       onProgress(progressBase * 100, `Processando ${item.filename}...`);
       onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
+      dlog?.log('bulk', 'step', `===== Episódio ${index + 1}/${input.items.length}: ${item.filename} =====`);
 
       const itemOptions: PipelineRunOptions = {
         exportMode: input.generateFinalEpisode ? 'blob' : exportMode,
         maxVoiceConcurrency: options.maxVoiceConcurrency,
         processVoiceBuffer,
         returnFinalBuffer: false,
+        logger: dlog,
       };
 
       const result = await runPipeline(
@@ -462,6 +467,7 @@ export async function runBulkPipeline(
         if (downloadIndividualItems) {
           await downloadBlob(itemBlob, item.filename);
           onLog(`MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(1)} MB)`, 'success');
+          dlog?.log('bulk', 'success', `MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(2)} MB)`);
           // Small delay between downloads to prevent browser throttling
           if (index < input.items.length - 1) {
             await new Promise(r => setTimeout(r, 2500));
@@ -471,12 +477,14 @@ export async function runBulkPipeline(
       }
 
       onLog(`Relatorio final: ${result.masterReport.loudness.lufs.toFixed(1)} LUFS`, 'info');
+      dlog?.log('bulk', 'info', `Relatório do episódio ${index + 1}: ${result.masterReport.loudness.lufs.toFixed(2)} LUFS`);
       await options.onItemEncoded?.(item, index, result);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     if (input.generateFinalEpisode && v1Blobs.length > 0) {
       onLog('Gerando episodio final consolidado...', 'step');
+      dlog?.log('bulk', 'step', 'Montando MP3 consolidado de todos os episódios');
       onProgress(78, 'Montando MP3 consolidado...');
 
       const finalBlob = new Blob([
@@ -489,11 +497,13 @@ export async function runBulkPipeline(
       if (shouldDownloadFinal) {
         await downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
         onLog('Episodio final consolidado exportado', 'success');
+        dlog?.log('bulk', 'success', `Episódio consolidado exportado (${(finalBlob.size / (1024 * 1024)).toFixed(2)} MB)`);
       }
       await options.onFinalEpisodeEncoded?.(finalBlob);
     }
 
     onProgress(100, 'Bulk finalizado');
+    dlog?.log('bulk', 'success', 'Bulk finalizado');
   } finally {
     sharedWorker.terminate();
   }
