@@ -831,12 +831,43 @@ export default function Pautas() {
       const sections = getSectionsForDay(slot);
       const existingSections = (pauta.sections_json || {}) as Record<string, string>;
 
-      const allFilled = sections.every(s => existingSections[s.key]?.trim());
-      if (!regenerateAll && allFilled) {
+      // BYPASS: only generate sections whose raw input is filled.
+      // Sections without any insumo are skipped entirely (never sent to the AI).
+      const filledSectionKeys = sections
+        .filter(s => sectionHasInput(pauta, s.key))
+        .map(s => s.key);
+      const skippedSectionKeys = sections
+        .filter(s => !sectionHasInput(pauta, s.key))
+        .map(s => s.key);
+
+      // Mark skipped sections as "done" in the progress UI so the user sees
+      // they were intentionally bypassed (not pending).
+      if (skippedSectionKeys.length > 0) {
         setFlowProgress(prev => {
           const next = { ...prev };
           next[slot] = { ...next[slot] };
-          for (const sec of sections) next[slot][sec.key] = 'done';
+          for (const k of skippedSectionKeys) next[slot][k] = 'done';
+          return next;
+        });
+        setProgressLogs(prev => [
+          ...prev,
+          `⊘ ${DAY_SLOTS.find(d => d.key === slot)?.label}: pulando seções sem insumo (${skippedSectionKeys.join(', ')})`,
+        ]);
+      }
+
+      // Nothing to generate for this day
+      if (filledSectionKeys.length === 0) {
+        setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `⊘ ${DAY_SLOTS.find(d => d.key === slot)?.label}: sem insumos preenchidos`]);
+        continue;
+      }
+
+      const allFilledTargets = filledSectionKeys.every(k => existingSections[k]?.trim());
+      if (!regenerateAll && allFilledTargets) {
+        setFlowProgress(prev => {
+          const next = { ...prev };
+          next[slot] = { ...next[slot] };
+          for (const k of filledSectionKeys) next[slot][k] = 'done';
           return next;
         });
         setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
@@ -851,11 +882,12 @@ export default function Pautas() {
       setFlowProgress(prev => {
         const next = { ...prev };
         next[slot] = { ...next[slot] };
-        for (const sec of sections) next[slot][sec.key] = 'generating';
+        for (const k of filledSectionKeys) next[slot][k] = 'generating';
         return next;
       });
 
-      const prompt = buildDayPrompt(pauta, promptCtx);
+      // Build prompt restricted to filled sections only
+      const prompt = buildDayPrompt(pauta, promptCtx, { sectionKeys: filledSectionKeys });
       if (!prompt) continue;
 
       try {
@@ -864,7 +896,12 @@ export default function Pautas() {
 
         if (result.success && result.sections) {
           const current = (pauta.sections_json || {}) as Record<string, string>;
-          const updated = { ...current, ...result.sections };
+          // Only persist sections we asked for — defensively drop anything else
+          const onlyRequested: Record<string, string> = {};
+          for (const k of filledSectionKeys) {
+            if (result.sections[k]) onlyRequested[k] = result.sections[k];
+          }
+          const updated = { ...current, ...onlyRequested };
           const allContent = Object.values(updated).join('\n');
           const linkMatches = allContent.match(/https?:\/\/[^\s<>"]+/g) || [];
           updatePauta(pauta.id, {
@@ -877,7 +914,7 @@ export default function Pautas() {
           setFlowProgress(prev => {
             const next = { ...prev };
             next[slot] = { ...next[slot] };
-            for (const sec of sections) next[slot][sec.key] = 'done';
+            for (const k of filledSectionKeys) next[slot][k] = 'done';
             return next;
           });
           setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
@@ -886,7 +923,7 @@ export default function Pautas() {
           setFlowProgress(prev => {
             const next = { ...prev };
             next[slot] = { ...next[slot] };
-            for (const sec of sections) next[slot][sec.key] = 'error';
+            for (const k of filledSectionKeys) next[slot][k] = 'error';
             return next;
           });
           setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'error', error: result.error } : i));
@@ -897,7 +934,7 @@ export default function Pautas() {
         setFlowProgress(prev => {
           const next = { ...prev };
           next[slot] = { ...next[slot] };
-          for (const sec of sections) next[slot][sec.key] = 'error';
+          for (const k of filledSectionKeys) next[slot][k] = 'error';
           return next;
         });
         setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'error', error: e.message } : i));
