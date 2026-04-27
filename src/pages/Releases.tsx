@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2, RefreshCw } from 'lucide-react';
+import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2, RefreshCw, Users } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -178,6 +178,10 @@ export default function Releases() {
   // Delete confirmation state
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [bulkDeleteConfirmOpen, setBulkDeleteConfirmOpen] = useState(false);
+  // Band-level delete state
+  const [bandsModalOpen, setBandsModalOpen] = useState(false);
+  const [bandsSearch, setBandsSearch] = useState('');
+  const [deleteBandConfirm, setDeleteBandConfirm] = useState<string | null>(null);
 
   const renderFlag = useCallback((country: string | null | undefined, className = 'h-4 w-5 rounded-[2px] overflow-hidden') => {
     const code = normalizeCountryCode(country);
@@ -526,6 +530,55 @@ export default function Releases() {
     toast.success(`${selectedIds.size} lançamentos removidos`);
   };
 
+  /**
+   * Delete every release belonging to a given artist (case-insensitive match
+   * on the exact artist name). Used by the "Excluir banda" UI.
+   */
+  const handleDeleteBand = useCallback((artist: string) => {
+    const target = artist.trim().toLowerCase();
+    const ids = releases.filter(r => (r.artist || '').trim().toLowerCase() === target).map(r => r.id);
+    if (ids.length === 0) {
+      toast.error('Nenhum lançamento encontrado para essa banda');
+      return;
+    }
+    ids.forEach(id => deleteRelease(id));
+    // Clear any selection that might reference removed rows
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      ids.forEach(id => next.delete(id));
+      return next;
+    });
+    toast.success(`Banda "${artist}" removida (${ids.length} álbum${ids.length > 1 ? 'ns' : ''})`);
+  }, [releases, deleteRelease]);
+
+  /**
+   * Distinct list of artists currently in the catalog, with how many albums
+   * each one has. Sorted alphabetically. Used by the "Gerenciar bandas" modal.
+   */
+  const bandsList = useMemo(() => {
+    const map = new Map<string, { artist: string; count: number; country: string | null }>();
+    releases.forEach(r => {
+      const key = (r.artist || '').trim().toLowerCase();
+      if (!key) return;
+      const existing = map.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        map.set(key, { artist: r.artist, count: 1, country: r.country || null });
+      }
+    });
+    const q = bandsSearch.trim().toLowerCase();
+    return Array.from(map.values())
+      .filter(b => !q || b.artist.toLowerCase().includes(q))
+      .sort((a, b) => a.artist.localeCompare(b.artist));
+  }, [releases, bandsSearch]);
+
+  const bandToConfirmCount = useMemo(() => {
+    if (!deleteBandConfirm) return 0;
+    const target = deleteBandConfirm.trim().toLowerCase();
+    return releases.filter(r => (r.artist || '').trim().toLowerCase() === target).length;
+  }, [deleteBandConfirm, releases]);
+
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -662,6 +715,9 @@ export default function Releases() {
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
           <Upload className="h-4 w-4" /> Import
         </Button>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => setBandsModalOpen(true)} title="Gerenciar e excluir bandas inteiras">
+          <Users className="h-4 w-4" /> Bandas
+        </Button>
         <Select defaultValue="json" onValueChange={(v) => handleExport(v as any)}>
           <SelectTrigger className="w-[100px] h-8">
             <Download className="h-4 w-4 mr-1" /><SelectValue placeholder="Export" />
@@ -703,7 +759,7 @@ export default function Releases() {
                   <TableHead>País</TableHead>
                   <TableHead>Gêneros</TableHead>
                   <SortHeader field="rating">Rating</SortHeader>
-                  <TableHead className="w-[60px]"></TableHead>
+                  <TableHead className="w-[90px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -733,9 +789,26 @@ export default function Releases() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}>
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
+                      <div className="flex items-center gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title="Excluir este álbum"
+                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          title={`Excluir TODA a banda "${r.artist}" (todos os álbuns)`}
+                          onClick={(e) => { e.stopPropagation(); setDeleteBandConfirm(r.artist); }}
+                        >
+                          <Users className="h-3.5 w-3.5 text-destructive/80" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -1063,6 +1136,91 @@ export default function Releases() {
               setBulkDeleteConfirmOpen(false);
               toast.success(`${selectedIds.size} lançamentos removidos`);
             }}>Excluir Todos</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Manage Bands modal — search, count, and delete entire bands */}
+      <Dialog open={bandsModalOpen} onOpenChange={setBandsModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Users className="h-4 w-4 text-primary" /> Gerenciar Bandas
+            </DialogTitle>
+            <DialogDescription>
+              Excluir uma banda remove <strong>todos os álbuns</strong> dela do catálogo. Ação irreversível.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar banda..."
+              value={bandsSearch}
+              onChange={(e) => setBandsSearch(e.target.value)}
+              className="pl-9 h-9"
+              autoFocus
+            />
+          </div>
+
+          <div className="max-h-[420px] overflow-y-auto rounded-md border border-border/60">
+            {bandsList.length === 0 ? (
+              <div className="py-12 text-center text-sm text-muted-foreground">
+                {releases.length === 0 ? 'Nenhuma banda no catálogo.' : 'Nenhuma banda encontrada para esta busca.'}
+              </div>
+            ) : (
+              <ul className="divide-y divide-border/40">
+                {bandsList.map((b) => (
+                  <li key={b.artist} className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-muted/30">
+                    <div className="min-w-0 flex items-center gap-2">
+                      {renderFlag(b.country)}
+                      <span className="truncate font-medium text-sm">{b.artist}</span>
+                      <Badge variant="secondary" className="text-[10px] shrink-0">
+                        {b.count} álbum{b.count > 1 ? 'ns' : ''}
+                      </Badge>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-1.5 text-destructive hover:text-destructive hover:bg-destructive/10 shrink-0"
+                      onClick={() => setDeleteBandConfirm(b.artist)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Excluir banda
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            {bandsList.length} banda{bandsList.length !== 1 ? 's' : ''} encontrada{bandsList.length !== 1 ? 's' : ''}.
+          </p>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete entire band confirmation */}
+      <AlertDialog open={!!deleteBandConfirm} onOpenChange={(open) => !open && setDeleteBandConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir banda "{deleteBandConfirm}"?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação é irreversível. Todos os <strong>{bandToConfirmCount} álbum{bandToConfirmCount > 1 ? 'ns' : ''}</strong> dessa banda serão removidos permanentemente do catálogo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deleteBandConfirm) {
+                  handleDeleteBand(deleteBandConfirm);
+                  setDeleteBandConfirm(null);
+                }
+              }}
+            >
+              Excluir banda inteira
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
