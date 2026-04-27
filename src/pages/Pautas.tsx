@@ -26,6 +26,7 @@ import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
 import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, SECTION_DIRECTION_KEYS, type PromptBuildContext } from '@/lib/prompt-builder';
+import { DirectionEditor } from '@/components/pautas/DirectionEditor';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
 
