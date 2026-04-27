@@ -25,7 +25,8 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { useApp } from '@/contexts/AppContext';
 import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants';
 import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
-import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, type PromptBuildContext } from '@/lib/prompt-builder';
+import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, type PromptBuildContext } from '@/lib/prompt-builder';
+import { DirectionEditor } from '@/components/pautas/DirectionEditor';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
 
@@ -831,12 +832,43 @@ export default function Pautas() {
       const sections = getSectionsForDay(slot);
       const existingSections = (pauta.sections_json || {}) as Record<string, string>;
 
-      const allFilled = sections.every(s => existingSections[s.key]?.trim());
-      if (!regenerateAll && allFilled) {
+      // BYPASS: only generate sections whose raw input is filled.
+      // Sections without any insumo are skipped entirely (never sent to the AI).
+      const filledSectionKeys = sections
+        .filter(s => sectionHasInput(pauta, s.key))
+        .map(s => s.key);
+      const skippedSectionKeys = sections
+        .filter(s => !sectionHasInput(pauta, s.key))
+        .map(s => s.key);
+
+      // Mark skipped sections as "done" in the progress UI so the user sees
+      // they were intentionally bypassed (not pending).
+      if (skippedSectionKeys.length > 0) {
         setFlowProgress(prev => {
           const next = { ...prev };
           next[slot] = { ...next[slot] };
-          for (const sec of sections) next[slot][sec.key] = 'done';
+          for (const k of skippedSectionKeys) next[slot][k] = 'done';
+          return next;
+        });
+        setProgressLogs(prev => [
+          ...prev,
+          `⊘ ${DAY_SLOTS.find(d => d.key === slot)?.label}: pulando seções sem insumo (${skippedSectionKeys.join(', ')})`,
+        ]);
+      }
+
+      // Nothing to generate for this day
+      if (filledSectionKeys.length === 0) {
+        setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
+        setProgressLogs(prev => [...prev, `⊘ ${DAY_SLOTS.find(d => d.key === slot)?.label}: sem insumos preenchidos`]);
+        continue;
+      }
+
+      const allFilledTargets = filledSectionKeys.every(k => existingSections[k]?.trim());
+      if (!regenerateAll && allFilledTargets) {
+        setFlowProgress(prev => {
+          const next = { ...prev };
+          next[slot] = { ...next[slot] };
+          for (const k of filledSectionKeys) next[slot][k] = 'done';
           return next;
         });
         setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
@@ -851,11 +883,12 @@ export default function Pautas() {
       setFlowProgress(prev => {
         const next = { ...prev };
         next[slot] = { ...next[slot] };
-        for (const sec of sections) next[slot][sec.key] = 'generating';
+        for (const k of filledSectionKeys) next[slot][k] = 'generating';
         return next;
       });
 
-      const prompt = buildDayPrompt(pauta, promptCtx);
+      // Build prompt restricted to filled sections only
+      const prompt = buildDayPrompt(pauta, promptCtx, { sectionKeys: filledSectionKeys });
       if (!prompt) continue;
 
       try {
@@ -864,7 +897,12 @@ export default function Pautas() {
 
         if (result.success && result.sections) {
           const current = (pauta.sections_json || {}) as Record<string, string>;
-          const updated = { ...current, ...result.sections };
+          // Only persist sections we asked for — defensively drop anything else
+          const onlyRequested: Record<string, string> = {};
+          for (const k of filledSectionKeys) {
+            if (result.sections[k]) onlyRequested[k] = result.sections[k];
+          }
+          const updated = { ...current, ...onlyRequested };
           const allContent = Object.values(updated).join('\n');
           const linkMatches = allContent.match(/https?:\/\/[^\s<>"]+/g) || [];
           updatePauta(pauta.id, {
@@ -877,7 +915,7 @@ export default function Pautas() {
           setFlowProgress(prev => {
             const next = { ...prev };
             next[slot] = { ...next[slot] };
-            for (const sec of sections) next[slot][sec.key] = 'done';
+            for (const k of filledSectionKeys) next[slot][k] = 'done';
             return next;
           });
           setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'done' } : i));
@@ -886,7 +924,7 @@ export default function Pautas() {
           setFlowProgress(prev => {
             const next = { ...prev };
             next[slot] = { ...next[slot] };
-            for (const sec of sections) next[slot][sec.key] = 'error';
+            for (const k of filledSectionKeys) next[slot][k] = 'error';
             return next;
           });
           setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'error', error: result.error } : i));
@@ -897,7 +935,7 @@ export default function Pautas() {
         setFlowProgress(prev => {
           const next = { ...prev };
           next[slot] = { ...next[slot] };
-          for (const sec of sections) next[slot][sec.key] = 'error';
+          for (const k of filledSectionKeys) next[slot][k] = 'error';
           return next;
         });
         setProgressItems(prev => prev.map(i => i.id === slot ? { ...i, status: 'error', error: e.message } : i));
@@ -1241,11 +1279,10 @@ export default function Pautas() {
                           onChange={e => updateRawInput(pauta.id, 'anniversary', e.target.value)}
                         />
                       </div>
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Aniversário"
+                      <DirectionEditor
+                        sectionLabel="Aniversário"
                         value={inputs.comment_anniversary || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
                       />
                     </>
                   )}
@@ -1253,11 +1290,10 @@ export default function Pautas() {
                   {step.key === 'review_rafa' && (
                     <>
                       <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Review Rafa"
+                      <DirectionEditor
+                        sectionLabel="Review Rafa"
                         value={inputs.comment_review_rafa || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_review_rafa', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
                       />
                     </>
                   )}
@@ -1283,11 +1319,10 @@ export default function Pautas() {
                           onChange={e => updateRawInput(pauta.id, 'news_link', e.target.value)}
                         />
                       </div>
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Notícias"
+                      <DirectionEditor
+                        sectionLabel="Notícias"
                         value={inputs.comment_news || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_news', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
                       />
                     </>
                   )}
@@ -1295,11 +1330,10 @@ export default function Pautas() {
                   {step.key === 'review_kilton' && (
                     <>
                       <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Review Kilton"
+                      <DirectionEditor
+                        sectionLabel="Review Kilton"
                         value={inputs.comment_review_kilton || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_review_kilton', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
                       />
                     </>
                   )}
@@ -1436,11 +1470,10 @@ export default function Pautas() {
                           onChange={e => updateRawInput(pauta.id, 'anniversary', e.target.value)}
                         />
                       </div>
-                      <Input
-                        className="h-7 text-[10px]"
-                        placeholder="Direção: Aniversário"
+                      <DirectionEditor
+                        sectionLabel="Aniversário"
                         value={inputs.comment_anniversary || ''}
-                        onChange={e => updateRawInput(pauta.id, 'comment_anniversary', e.target.value)}
+                        onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
                       />
 
                       <div className="space-y-1">
@@ -1469,11 +1502,10 @@ export default function Pautas() {
                       {slot !== 'saturday' && slot !== 'sunday' && (
                         <>
                           <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
-                          <Input
-                            className="h-7 text-[10px]"
-                            placeholder="Direção: Review Rafa"
+                          <DirectionEditor
+                            sectionLabel="Review Rafa"
                             value={inputs.comment_review_rafa || ''}
-                            onChange={e => updateRawInput(pauta.id, 'comment_review_rafa', e.target.value)}
+                            onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
                           />
 
                           <div className="space-y-1">
@@ -1495,19 +1527,17 @@ export default function Pautas() {
                               onChange={e => updateRawInput(pauta.id, 'news_link', e.target.value)}
                             />
                           </div>
-                          <Input
-                            className="h-7 text-[10px]"
-                            placeholder="Direção: Notícias"
+                          <DirectionEditor
+                            sectionLabel="Notícias"
                             value={inputs.comment_news || ''}
-                            onChange={e => updateRawInput(pauta.id, 'comment_news', e.target.value)}
+                            onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
                           />
 
                           <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
-                          <Input
-                            className="h-7 text-[10px]"
-                            placeholder="Direção: Review Kilton"
+                          <DirectionEditor
+                            sectionLabel="Review Kilton"
                             value={inputs.comment_review_kilton || ''}
-                            onChange={e => updateRawInput(pauta.id, 'comment_review_kilton', e.target.value)}
+                            onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
                           />
                         </>
                       )}
@@ -1515,11 +1545,10 @@ export default function Pautas() {
                       {slot === 'saturday' && (
                         <>
                           <SaturdayReleasePicker pauta={pauta} />
-                          <Input
-                            className="h-7 text-[10px]"
-                            placeholder="Direção: Lançamentos da Semana"
+                          <DirectionEditor
+                            sectionLabel="Lançamentos da Semana"
                             value={inputs.comment_next_week_releases || ''}
-                            onChange={e => updateRawInput(pauta.id, 'comment_next_week_releases', e.target.value)}
+                            onChange={v => updateRawInput(pauta.id, 'comment_next_week_releases', v)}
                           />
                         </>
                       )}

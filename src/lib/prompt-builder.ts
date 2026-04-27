@@ -18,6 +18,48 @@ export const SECTION_WORD_TARGETS: Record<string, number> = {
 };
 export const DEFAULT_BRAND_TONE_TEMPERATURE = 55;
 
+// ─── Section ↔ Input mapping ────────────────────────────────────────────────
+// Maps each section key to the raw_inputs_json keys that constitute its
+// "insumo" (raw material). A section is considered "filled" when AT LEAST
+// ONE of its input keys has a non-empty value.
+export const SECTION_INPUT_KEYS: Record<string, string[]> = {
+  anniversary: ['anniversary'],
+  review_rafa: ['review_rafa_id'],
+  news: ['news_link'],
+  review_kilton: ['review_kilton_id'],
+  next_week_releases: ['selected_release_ids'],
+};
+
+// Maps each section key to the raw_inputs_json key that holds its
+// "Direção" (editorial guidance written by the human editor).
+export const SECTION_DIRECTION_KEYS: Record<string, string> = {
+  anniversary: 'comment_anniversary',
+  review_rafa: 'comment_review_rafa',
+  news: 'comment_news',
+  review_kilton: 'comment_review_kilton',
+  next_week_releases: 'comment_next_week_releases',
+};
+
+function isInputFilled(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+export function sectionHasInput(pauta: Pauta, sectionKey: string): boolean {
+  const keys = SECTION_INPUT_KEYS[sectionKey];
+  if (!keys || keys.length === 0) return true; // unknown sections: don't bypass
+  const inputs = (pauta.raw_inputs_json || {}) as Record<string, unknown>;
+  return keys.some(k => isInputFilled(inputs[k]));
+}
+
+export function getFilledSectionKeys(pauta: Pauta): string[] {
+  const slot = getPautaSlot(pauta);
+  const sections = getSectionsForDay(slot);
+  return sections.filter(s => sectionHasInput(pauta, s.key)).map(s => s.key);
+}
+
 // ─── Tone profiles ──────────────────────────────────────────────────────────
 
 export interface ToneProfile {
@@ -197,7 +239,7 @@ function renderSectionPlaybooks(sections: { key: string; label: string }[], over
   }).filter(Boolean).join('\n\n');
 }
 
-function renderContextXml(payload: DayPayload): string {
+function renderContextXml(payload: DayPayload, focusSectionKey?: string): string {
   const lines: string[] = [`<ctx date="${payload.publication_date}" label="${payload.pauta_label}">`];
 
   // Only non-empty raw inputs (compact)
@@ -222,7 +264,21 @@ function renderContextXml(payload: DayPayload): string {
   if (farolStr) lines.push(`  <farois>${farolStr}</farois>`);
 
   lines.push('</ctx>');
-  return lines.join('\n');
+  let out = lines.join('\n');
+
+  // Highlight the "direção" (editorial guidance) for the focused section.
+  // This makes the human direction prominent and scoped to a specific section,
+  // so the AI prioritizes it when generating that section's content.
+  if (focusSectionKey) {
+    const dirKey = SECTION_DIRECTION_KEYS[focusSectionKey];
+    if (dirKey) {
+      const dirVal = (ri[dirKey] || '').toString().trim();
+      if (dirVal) {
+        out += `\n\nDIREÇÃO EDITORIAL (seção "${focusSectionKey}") — siga estas instruções como prioridade máxima:\n${dirVal}`;
+      }
+    }
+  }
+  return out;
 }
 
 // ─── Contracts (token-optimized) ────────────────────────────────────────────
@@ -328,16 +384,28 @@ export function buildWeekPrompt(weekStart: string, pautas: Pauta[], ctx: PromptB
   ].join('\n\n');
 }
 
-export function buildDayPrompt(pauta: Pauta, ctx: PromptBuildContext): string {
+export function buildDayPrompt(
+  pauta: Pauta,
+  ctx: PromptBuildContext,
+  options?: { sectionKeys?: string[] },
+): string {
   const overrides = getOverrides(ctx);
   const tone = toneProfileForTemperature(ctx.settings.brand_tone_temperature);
   const payload = buildDayPayload(pauta, ctx.releases);
+
+  // Optional bypass: restrict generation to a subset of section keys
+  // (e.g. when the editor left some inputs empty and we want to skip them).
+  if (options?.sectionKeys && options.sectionKeys.length > 0) {
+    const allow = new Set(options.sectionKeys);
+    payload.required_sections = payload.required_sections.filter(s => allow.has(s.key));
+  }
+  if (payload.required_sections.length === 0) return '';
 
   return [
     renderInstructions(ctx.bannedTerms, overrides),
     renderBrandVoice(tone, ctx.settings.brand_tone_temperature, overrides),
     renderPlaybook(overrides),
-    `ESCOPO: DIA ${pauta.publication_date}`,
+    `ESCOPO: DIA ${pauta.publication_date}${options?.sectionKeys ? ` (seções: ${options.sectionKeys.join(', ')})` : ''}`,
     renderSectionPlaybooks(payload.required_sections, overrides),
     dayContractHtml(payload),
     renderContextXml(payload),
@@ -357,7 +425,7 @@ export function buildSectionPrompt(pauta: Pauta, sectionKey: string, ctx: Prompt
     `ESCOPO: SEÇÃO "${sectionLabel}" de ${pauta.publication_date}`,
     renderSectionPlaybooks([{ key: sectionKey, label: sectionLabel }], overrides),
     sectionContractHtml(payload, sectionKey, sectionLabel),
-    renderContextXml(payload),
+    renderContextXml(payload, sectionKey),
   ].join('\n\n');
 }
 
