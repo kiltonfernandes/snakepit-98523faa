@@ -12,6 +12,56 @@ import {
 import { Compass, Check, Trash2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Build a contextual Google search query for a given section, based on the
+ * raw inputs already filled by the editor. Returns an empty string when
+ * there is not enough context to suggest a meaningful search.
+ *
+ * Intent per section:
+ * - anniversary       → "história curiosidades recepção entrevistas <texto do aniversário>"
+ * - news              → "o que aconteceu <link da notícia>"
+ * - review_rafa       → "review do disco e entrevistas <Album> <Artista>"
+ * - review_kilton     → "review do disco e entrevistas <Album> <Artista>"
+ * - next_week_releases → "lançamentos heavy metal <semana> review"
+ */
+export function buildSectionSearchQuery(
+  sectionKey: string,
+  ctx: {
+    anniversary?: string;
+    newsLink?: string;
+    releaseArtist?: string;
+    releaseAlbum?: string;
+    publicationDate?: string;
+  },
+): string {
+  const clean = (s?: string) => (s || "").trim();
+  switch (sectionKey) {
+    case "anniversary": {
+      const txt = clean(ctx.anniversary);
+      if (!txt) return "";
+      return `história detalhes curiosidades recepção entrevistas ${txt}`;
+    }
+    case "news": {
+      const link = clean(ctx.newsLink);
+      if (!link) return "";
+      return `o que aconteceu ${link}`;
+    }
+    case "review_rafa":
+    case "review_kilton": {
+      const artist = clean(ctx.releaseArtist);
+      const album = clean(ctx.releaseAlbum);
+      if (!artist && !album) return "";
+      return `review do disco e entrevistas ${album} ${artist}`.trim();
+    }
+    case "next_week_releases": {
+      const date = clean(ctx.publicationDate);
+      return `lançamentos heavy metal ${date ? `semana de ${date}` : "novos álbuns"} review`;
+    }
+    default:
+      return "";
+  }
+}
+
 interface DirectionEditorProps {
   /** Current direction text (raw input value). */
   value: string;
