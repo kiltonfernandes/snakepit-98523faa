@@ -24,6 +24,11 @@ import { cn } from "@/lib/utils";
  * - review_kilton     → "review do disco e entrevistas <Album> <Artista>"
  * - next_week_releases → "lançamentos heavy metal <semana> review"
  */
+export interface DirectionValue {
+  direction: string;
+  mandatory: string;
+}
+
 export function buildSectionSearchQuery(
   sectionKey: string,
   ctx: {
@@ -63,10 +68,13 @@ export function buildSectionSearchQuery(
 }
 
 interface DirectionEditorProps {
-  /** Current direction text (raw input value). */
-  value: string;
-  /** Persist a new value (debounced/immediate is up to caller). */
-  onChange: (value: string) => void;
+  /**
+   * Current value. Accepts either a legacy string (treated as `direction`,
+   * `mandatory` empty) or the full {direction, mandatory} object.
+   */
+  value: string | DirectionValue;
+  /** Persist the new value. Always called with the full object. */
+  onChange: (value: DirectionValue) => void;
   /** Section label shown in the modal header (e.g. "Aniversário", "Notícias"). */
   sectionLabel: string;
   /** Compact label for the button text (defaults to "Direção"). */
@@ -84,13 +92,19 @@ interface DirectionEditorProps {
   searchLabel?: string;
 }
 
+function normalizeValue(v: string | DirectionValue | undefined | null): DirectionValue {
+  if (!v) return { direction: "", mandatory: "" };
+  if (typeof v === "string") return { direction: v, mandatory: "" };
+  return { direction: v.direction || "", mandatory: v.mandatory || "" };
+}
+
 /**
- * DirectionEditor — replaces the inline "Direção: ..." text inputs.
+ * DirectionEditor — Direção editorial + Informação Mandatória.
  *
- * Renders as a small button. Clicking opens a modal where the editor can
- * write rich (multi-line) editorial guidance for a specific section. The
- * direction is saved on "Salvar" and is then injected into the prompt for
- * that section (see SECTION_DIRECTION_KEYS in src/lib/prompt-builder.ts).
+ * Two long-form fields:
+ *  - Direção: free editorial guidance (priority for the prompt).
+ *  - Informação mandatória: text that MUST appear in the response and does
+ *    NOT count toward the section's word target.
  */
 export function DirectionEditor({
   value,
@@ -101,24 +115,36 @@ export function DirectionEditor({
   searchQuery,
   searchLabel = "Pesquisar no Google",
 }: DirectionEditorProps) {
+  const current = normalizeValue(value);
   const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState(value || "");
+  const [draftDirection, setDraftDirection] = useState(current.direction);
+  const [draftMandatory, setDraftMandatory] = useState(current.mandatory);
 
-  // Sync draft when modal opens (or external value changes while closed)
   useEffect(() => {
-    if (open) setDraft(value || "");
-  }, [open, value]);
+    if (open) {
+      const v = normalizeValue(value);
+      setDraftDirection(v.direction);
+      setDraftMandatory(v.mandatory);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
-  const hasContent = !!(value && value.trim());
+  const hasDirection = !!current.direction.trim();
+  const hasMandatory = !!current.mandatory.trim();
+  const hasContent = hasDirection || hasMandatory;
 
   const handleSave = () => {
-    onChange(draft.trim());
+    onChange({
+      direction: draftDirection.trim(),
+      mandatory: draftMandatory.trim(),
+    });
     setOpen(false);
   };
 
   const handleClear = () => {
-    setDraft("");
-    onChange("");
+    setDraftDirection("");
+    setDraftMandatory("");
+    onChange({ direction: "", mandatory: "" });
     setOpen(false);
   };
 
@@ -126,6 +152,11 @@ export function DirectionEditor({
   const googleHref = trimmedQuery
     ? `https://www.google.com/search?q=${encodeURIComponent(trimmedQuery)}`
     : null;
+
+  const tooltip = [
+    hasDirection ? `Direção: ${current.direction}` : "",
+    hasMandatory ? `Mandatório: ${current.mandatory}` : "",
+  ].filter(Boolean).join("\n\n") || `Adicionar direção editorial para ${sectionLabel}`;
 
   return (
     <>
@@ -139,36 +170,58 @@ export function DirectionEditor({
           hasContent && "border-primary/40",
           className,
         )}
-        title={hasContent ? value : `Adicionar direção editorial para ${sectionLabel}`}
+        title={tooltip}
       >
         <Compass className="h-3 w-3" />
         <span className="truncate">
           {buttonLabel}
-          {hasContent ? " ✓" : ""}
+          {hasContent ? ` ✓${hasMandatory ? "!" : ""}` : ""}
         </span>
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Compass className="h-4 w-4 text-primary" />
               Direção editorial — {sectionLabel}
             </DialogTitle>
             <DialogDescription>
-              Escreva instruções livres para guiar a geração desta seção
-              (ângulo, tom, fatos a destacar, o que evitar, etc.). Esse texto
-              é injetado no prompt da seção como prioridade máxima.
+              Use os dois campos abaixo. A "Direção" guia o ângulo da geração.
+              A "Informação mandatória" precisa aparecer na response, parafraseada
+              de forma coerente — e NÃO conta no limite de palavras da seção.
             </DialogDescription>
           </DialogHeader>
 
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={`Ex: Foque na recepção crítica do álbum, mencione a turnê de 2024, evite comparar com o Master of Puppets...`}
-            className="min-h-[220px] text-sm leading-relaxed"
-            autoFocus
-          />
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Direção editorial
+              </label>
+              <Textarea
+                value={draftDirection}
+                onChange={(e) => setDraftDirection(e.target.value)}
+                placeholder={`Ex: Foque na recepção crítica do álbum, mencione a turnê de 2024, evite comparar com o Master of Puppets...`}
+                className="min-h-[140px] text-sm leading-relaxed"
+                autoFocus
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-amber-400/80">
+                Informação mandatória
+                <span className="ml-2 font-normal normal-case tracking-normal text-[10px] text-muted-foreground">
+                  (precisa aparecer na response · NÃO conta no limite de palavras)
+                </span>
+              </label>
+              <Textarea
+                value={draftMandatory}
+                onChange={(e) => setDraftMandatory(e.target.value)}
+                placeholder={`Ex: Citar que a banda toca no Bangers Open Air em abril de 2027; mencionar que o vocalista deixou o grupo em 2024...`}
+                className="min-h-[140px] text-sm leading-relaxed border-amber-500/20 focus-visible:ring-amber-500/40"
+              />
+            </div>
+          </div>
 
           {googleHref && (
             <div className="flex items-center justify-between gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
@@ -200,7 +253,7 @@ export function DirectionEditor({
               variant="ghost"
               size="sm"
               onClick={handleClear}
-              disabled={!hasContent && !draft}
+              disabled={!hasContent && !draftDirection && !draftMandatory}
               className="gap-1.5 text-destructive hover:text-destructive"
             >
               <Trash2 className="h-3.5 w-3.5" /> Limpar
