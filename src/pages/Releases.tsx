@@ -759,7 +759,7 @@ export default function Releases() {
                   <TableHead>País</TableHead>
                   <TableHead>Gêneros</TableHead>
                   <SortHeader field="rating">Rating</SortHeader>
-                  <TableHead className="w-[60px]"></TableHead>
+                  <TableHead className="w-[90px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
