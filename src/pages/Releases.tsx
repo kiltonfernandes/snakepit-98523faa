@@ -715,6 +715,9 @@ export default function Releases() {
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
           <Upload className="h-4 w-4" /> Import
         </Button>
+        <Button variant="outline" size="sm" className="gap-2" onClick={() => setBandsModalOpen(true)} title="Gerenciar e excluir bandas inteiras">
+          <Users className="h-4 w-4" /> Bandas
+        </Button>
         <Select defaultValue="json" onValueChange={(v) => handleExport(v as any)}>
           <SelectTrigger className="w-[100px] h-8">
             <Download className="h-4 w-4 mr-1" /><SelectValue placeholder="Export" />
