@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useRef } from 'react';
 import { AudioParams, DEFAULT_PARAMS, DEFAULT_PROCESSING_PROFILE, LogEntry, MasterReport, ProcessingProfile, TrackReport } from '@/lib/audio/types';
 import { runPipeline, PipelineInput } from '@/lib/audio/pipeline';
+import { DetailedLogger } from '@/lib/audio/detailed-logger';
 import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
@@ -68,6 +69,12 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
     setLastUpload(null);
     setCurrentFilename(input.filename);
 
+    const dlog = new DetailedLogger();
+    dlog.resetClock();
+    const startedIso = new Date().toISOString();
+    let finalStatus: 'SUCCESS' | 'ERROR' = 'SUCCESS';
+    let errorMessage: string | undefined;
+
     try {
       const uploadEnabled = upload?.enabled ?? false;
       const result = await runPipeline(
@@ -75,7 +82,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
         params,
         (value, label) => { setProgress(value); setProgressLabel(label); },
         (message, type) => { setLogs(prev => [...prev, { timestamp: Date.now(), message, type: type || 'info' }]); },
-        { exportMode: uploadEnabled ? 'blob' : 'download', returnFinalBuffer: false }
+        { exportMode: uploadEnabled ? 'blob' : 'download', returnFinalBuffer: false, logger: dlog }
       );
       setTrackReports(result.trackReports);
       setMasterReport(result.masterReport);
@@ -83,6 +90,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
       if (uploadEnabled && result.outputBlob) {
         try {
           addLog('Enviando para OneDrive...', 'step');
+          dlog.log('upload', 'step', 'Iniciando upload para OneDrive');
           setProgressLabel('Enviando para OneDrive...');
           const folderPath = buildEpisodeFolderPath(upload?.episodeDate);
           const filename = sanitizeFilename(input.filename);
@@ -97,6 +105,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           });
           setLastUpload(uploaded);
           addLog(`OneDrive: ${uploaded.filename} (${(uploaded.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
+          dlog.log('upload', 'success', `OneDrive: ${uploaded.filename} (${(uploaded.size / 1024 / 1024).toFixed(2)} MB)`, { data: { folderPath, webUrl: uploaded.webUrl, fileId: uploaded.fileId } });
 
           if (upload?.episodeMaterialId) {
             try {
@@ -107,23 +116,42 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
                 repository_uploaded_at: new Date().toISOString(),
               });
               addLog('Link salvo no episódio', 'success');
+              dlog.log('materials', 'success', `Link salvo no episode_material ${upload.episodeMaterialId}`);
             } catch (e) {
               const msg = e instanceof Error ? e.message : 'erro desconhecido';
               addLog(`Aviso: falha em sincronizar materials (${msg})`, 'error');
+              dlog.log('materials', 'error', `Aviso: falha em sincronizar materials (${msg})`);
             }
           }
         } catch (uploadErr) {
           const msg = uploadErr instanceof Error ? uploadErr.message : 'Falha no upload OneDrive';
           addLog(`OneDrive: ${msg}`, 'error');
+          dlog.log('upload', 'error', `OneDrive falhou: ${msg}`);
         }
       }
 
       addLog('Memória liberada após export', 'info');
     } catch (error) {
-      addLog(error instanceof Error ? error.message : 'Erro no pipeline 3.2', 'error');
+      const msg = error instanceof Error ? error.message : 'Erro no pipeline 3.2';
+      addLog(msg, 'error');
+      finalStatus = 'ERROR';
+      errorMessage = msg;
+      dlog.log('pipeline', 'error', `Pipeline abortado: ${msg}`, { data: { stack: error instanceof Error ? error.stack : undefined } });
     } finally {
       setIsProcessing(false);
       processingRef.current = false;
+      const finishedIso = new Date().toISOString();
+      const ts = startedIso.replace(/[:.]/g, '-');
+      const safeName = (input.filename || 'rivaldo').replace(/[^A-Za-z0-9._-]+/g, '_');
+      dlog.download(`rivaldo_single__${safeName}__${ts}__${finalStatus}`, {
+        filename: input.filename,
+        mode: 'single',
+        startedIso,
+        finishedIso,
+        status: finalStatus,
+        pipelineVersion: '3.2',
+        errorMessage,
+      });
     }
   }, [addLog, updateMaterial]);
 

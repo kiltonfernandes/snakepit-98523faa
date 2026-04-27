@@ -274,3 +274,19 @@ export const PIPELINE_STEPS: PipelineStep[] = [
   { id: 'mix', label: 'Mixando', startPct: 80, endPct: 90 },
   { id: 'encode', label: 'Codificando MP3', startPct: 90, endPct: 100 },
 ];
+
+/**
+ * Detailed log entry produced by Rivaldo for the auto-downloaded .txt
+ * processing log. `audioTsSec`, when present, is the position inside the
+ * source/master audio that the event refers to (used to sort the log
+ * granularly when multiple events happen at different audio offsets).
+ */
+export interface DetailedLogEntry {
+  isoTime: string;
+  elapsedMs: number;
+  audioTsSec?: number;
+  stage: string;
+  severity: 'info' | 'step' | 'success' | 'warn' | 'error';
+  message: string;
+  data?: Record<string, unknown>;
+}

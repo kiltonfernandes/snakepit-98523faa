@@ -351,6 +351,25 @@ export default function Pautas() {
 
   const getRawInputs = (pauta: Pauta) => (pauta.raw_inputs_json || {}) as Record<string, any>;
 
+  /**
+   * Build the {value, onChange} pair for a DirectionEditor bound to a section.
+   * Reads/writes both `comment_<commentKey>` (direction) and
+   * `mandatory_<mandatoryKey>` (mandatory info) on raw_inputs_json.
+   */
+  const directionBinding = (pauta: Pauta, commentKey: string, mandatoryKey: string) => {
+    const inputs = getRawInputs(pauta);
+    return {
+      value: {
+        direction: (inputs[commentKey] || '') as string,
+        mandatory: (inputs[mandatoryKey] || '') as string,
+      },
+      onChange: (v: { direction: string; mandatory: string }) => {
+        updateRawInput(pauta.id, commentKey, v.direction);
+        updateRawInput(pauta.id, mandatoryKey, v.mandatory);
+      },
+    };
+  };
+
   const updateRawInput = (pautaId: string, key: string, value: any) => {
     const pauta = pautas.find(p => p.id === pautaId);
     if (!pauta) return;
@@ -1281,8 +1300,7 @@ export default function Pautas() {
                       </div>
                       <DirectionEditor
                         sectionLabel="Aniversário"
-                        value={inputs.comment_anniversary || ''}
-                        onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
+                        {...directionBinding(pauta, 'comment_anniversary', 'mandatory_anniversary')}
                         searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })}
                       />
                     </>
@@ -1293,8 +1311,7 @@ export default function Pautas() {
                       <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
                       <DirectionEditor
                         sectionLabel="Review Rafa"
-                        value={inputs.comment_review_rafa || ''}
-                        onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
+                        {...directionBinding(pauta, 'comment_review_rafa', 'mandatory_review_rafa')}
                         searchQuery={(() => {
                           const r = releases.find(x => x.id === inputs.review_rafa_id);
                           return buildSectionSearchQuery('review_rafa', { releaseArtist: r?.artist, releaseAlbum: r?.album });
@@ -1326,8 +1343,7 @@ export default function Pautas() {
                       </div>
                       <DirectionEditor
                         sectionLabel="Notícias"
-                        value={inputs.comment_news || ''}
-                        onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
+                        {...directionBinding(pauta, 'comment_news', 'mandatory_news')}
                         searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })}
                       />
                     </>
@@ -1338,8 +1354,7 @@ export default function Pautas() {
                       <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
                       <DirectionEditor
                         sectionLabel="Review Kilton"
-                        value={inputs.comment_review_kilton || ''}
-                        onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
+                        {...directionBinding(pauta, 'comment_review_kilton', 'mandatory_review_kilton')}
                         searchQuery={(() => {
                           const r = releases.find(x => x.id === inputs.review_kilton_id);
                           return buildSectionSearchQuery('review_kilton', { releaseArtist: r?.artist, releaseAlbum: r?.album });
@@ -1482,8 +1497,7 @@ export default function Pautas() {
                       </div>
                       <DirectionEditor
                         sectionLabel="Aniversário"
-                        value={inputs.comment_anniversary || ''}
-                        onChange={v => updateRawInput(pauta.id, 'comment_anniversary', v)}
+                        {...directionBinding(pauta, 'comment_anniversary', 'mandatory_anniversary')}
                         searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })}
                       />
 
@@ -1515,8 +1529,7 @@ export default function Pautas() {
                           <ReleasePicker pauta={pauta} inputKey="review_rafa_id" label="Review Rafa" />
                           <DirectionEditor
                             sectionLabel="Review Rafa"
-                            value={inputs.comment_review_rafa || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_review_rafa', v)}
+                            {...directionBinding(pauta, 'comment_review_rafa', 'mandatory_review_rafa')}
                             searchQuery={(() => {
                               const r = releases.find(x => x.id === inputs.review_rafa_id);
                               return buildSectionSearchQuery('review_rafa', { releaseArtist: r?.artist, releaseAlbum: r?.album });
@@ -1544,16 +1557,14 @@ export default function Pautas() {
                           </div>
                           <DirectionEditor
                             sectionLabel="Notícias"
-                            value={inputs.comment_news || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_news', v)}
+                            {...directionBinding(pauta, 'comment_news', 'mandatory_news')}
                             searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })}
                           />
 
                           <ReleasePicker pauta={pauta} inputKey="review_kilton_id" label="Review Kilton" />
                           <DirectionEditor
                             sectionLabel="Review Kilton"
-                            value={inputs.comment_review_kilton || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_review_kilton', v)}
+                            {...directionBinding(pauta, 'comment_review_kilton', 'mandatory_review_kilton')}
                             searchQuery={(() => {
                               const r = releases.find(x => x.id === inputs.review_kilton_id);
                               return buildSectionSearchQuery('review_kilton', { releaseArtist: r?.artist, releaseAlbum: r?.album });
@@ -1567,8 +1578,7 @@ export default function Pautas() {
                           <SaturdayReleasePicker pauta={pauta} />
                           <DirectionEditor
                             sectionLabel="Lançamentos da Semana"
-                            value={inputs.comment_next_week_releases || ''}
-                            onChange={v => updateRawInput(pauta.id, 'comment_next_week_releases', v)}
+                            {...directionBinding(pauta, 'comment_next_week_releases', 'mandatory_next_week_releases')}
                             searchQuery={buildSectionSearchQuery('next_week_releases', { publicationDate: pauta.publication_date })}
                           />
                         </>
@@ -2002,7 +2012,7 @@ export default function Pautas() {
       </Dialog>
 
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>
               Protocolo de Prompt — {PROMPT_SCHEMA_VERSION} {activeSection ? `(${activeSection})` : `(${promptScope})`}
@@ -2012,17 +2022,17 @@ export default function Pautas() {
             </DialogDescription>
           </DialogHeader>
           {activePauta && (
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
               <div className="flex items-center gap-2 text-xs flex-wrap">
                 <Badge variant="secondary">Tom: {tone.label}</Badge>
                 <Badge variant="secondary">Scope: {promptScope}</Badge>
                 {bannedTerms.length > 0 && <Badge variant="outline">{bannedTerms.length} termos banidos</Badge>}
                 <Badge variant="outline">{activeSection ? `Seção: ${activeSection}` : promptScope === 'week' ? 'Semana completa' : 'Pauta completa'}</Badge>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <label className="text-sm font-medium">1. Prompt gerado ({promptScope})</label>
-                <div className="relative">
-                  <pre className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                <div className="relative min-w-0">
+                  <pre className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap break-words max-h-[260px] overflow-y-auto overflow-x-hidden w-full">
                     {promptScope === 'week' ? generateWeekPrompt() : generatePrompt(activePauta, activeSection || undefined)}
                   </pre>
                   <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"
@@ -2031,14 +2041,14 @@ export default function Pautas() {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">2. Resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
                   <Button size="sm" variant="secondary" onClick={handleGenerateAI} disabled={generating}>
                     {generating ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Gerando...</> : <><Zap className="h-3.5 w-3.5 mr-1.5" /> Gerar com IA</>}
                   </Button>
                 </div>
-                <Textarea rows={8} placeholder={`Cole aqui a resposta ou clique "Gerar com IA"...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
+                <Textarea className="w-full" rows={8} placeholder={`Cole aqui a resposta ou clique "Gerar com IA"...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
               </div>
               {parseError && (
                 <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-xs text-destructive">

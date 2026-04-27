@@ -68,12 +68,41 @@ const SLOT_ORDER = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'sat
 const INTRO_SEGWAY = `Saudações, heavynautas!\n\nNossa nave está aterrissando em mais um episódio do nosso podcast diário com os melhores lançamentos do heavy metal. O meu nome é Kilton Fernandes e hoje eu estou com meu copiloto Rafa Ferreira. Seja muito bem-vindo!`;
 const OUTRO_SEGWAY = `Kilton: Nossa nave espacial está se preparando para levantar voo e partir por hoje. Muito obrigado por nos acompanhar nessa jornada pelo universo do heavy metal.\n\nRafa: E não se esqueçam, heavynautas! Estamos de volta amanhã com mais novidades do mundo do metal. O Snakepit vai ao ar todos os dias, de segunda a sexta as 6 da manhã. Desejo a todos uma ótima noite e até a nossa próxima viagem!`;
 
+/**
+ * Strip Markdown emphasis/headings/lists from LLM output so the public
+ * recording script reads as clean prose, regardless of whether the model
+ * obeyed the "no markdown" rule. Catalogue links [text](url) are preserved
+ * because they are intentional and parsed elsewhere.
+ */
+function stripMarkdown(text: string): string {
+  let out = text;
+  // Bold/italic markers — keep inner content
+  out = out.replace(/\*\*\*(.+?)\*\*\*/g, '$1');
+  out = out.replace(/\*\*(.+?)\*\*/g, '$1');
+  out = out.replace(/(^|[^*])\*([^\s*][^*]*?)\*(?!\*)/g, '$1$2');
+  out = out.replace(/___(.+?)___/g, '$1');
+  out = out.replace(/__(.+?)__/g, '$1');
+  out = out.replace(/(^|[^_])_([^\s_][^_]*?)_(?!_)/g, '$1$2');
+  // Inline code / blockquotes
+  out = out.replace(/`([^`]+)`/g, '$1');
+  out = out.replace(/^\s{0,3}>\s?/gm, '');
+  // Heading prefixes (#, ##, ### ...)
+  out = out.replace(/^\s{0,3}#{1,6}\s+/gm, '');
+  // List markers at line start (-, *, +, 1.)
+  out = out.replace(/^\s{0,3}[-*+]\s+/gm, '');
+  out = out.replace(/^\s{0,3}\d+\.\s+/gm, '');
+  // Collapse 3+ blank lines into 2
+  out = out.replace(/\n{3,}/g, '\n\n');
+  return out;
+}
+
 function cleanContent(raw: string): string {
-  return raw
+  const stripped = raw
     .replace(/<title>[\s\S]*?<\/title>\s*/gi, '')
     .replace(/<\/?content>\s*/gi, '')
     .replace(/<\/?section[^>]*>\s*/gi, '')
     .trim();
+  return stripMarkdown(stripped);
 }
 
 function daySlotFromDate(dateStr: string): DaySlot {

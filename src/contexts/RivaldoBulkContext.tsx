@@ -2,6 +2,7 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile, DEFAULT_PROCESSING_PROFILE } from '@/lib/audio/types';
+import { DetailedLogger } from '@/lib/audio/detailed-logger';
 import { loadPresetAsFile } from '@/lib/assets/presets';
 import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { useApp } from '@/contexts/AppContext';
@@ -178,6 +179,13 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
     input.rows.forEach(r => { initial[r.id] = { state: 'idle' }; });
     setUploadStatuses(initial);
 
+    const dlog = new DetailedLogger();
+    dlog.resetClock();
+    const startedIso = new Date().toISOString();
+    let finalStatus: 'SUCCESS' | 'ERROR' = 'SUCCESS';
+    let errorMessage: string | undefined;
+    const bulkFilename = (input.finalFilename || `bulk_${input.rows.length}_itens`).trim();
+
     try {
       const items: BulkItem[] = await Promise.all(
         input.rows.map(async (row) => {
@@ -214,6 +222,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
           // Consolidado (episódio de domingo) SEMPRE baixa local — nunca vai para o OneDrive,
           // independentemente do toggle "Enviar todos para OneDrive".
           downloadFinalEpisode: true,
+          logger: dlog,
           onItemEncoded: async (_item, index, result) => {
             const row = input.rows[index];
             if (!row) return;
@@ -279,9 +288,22 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
       const message = error instanceof Error ? error.message : 'Erro desconhecido no bulk pipeline';
       addLog(message, 'error');
       console.error('[Bulk Pipeline Error]', error);
+      finalStatus = 'ERROR';
+      errorMessage = message;
+      dlog.log('bulk', 'error', `Bulk abortado: ${message}`);
     } finally {
       setIsProcessing(false);
       processingRef.current = false;
+      try {
+        const finishedIso = new Date().toISOString();
+        const ts = startedIso.replace(/[:.]/g, '-');
+        const safe = bulkFilename.replace(/[^A-Za-z0-9._-]+/g, '_');
+        dlog.download(`rivaldo_bulk__${safe}__${ts}__${finalStatus}`, {
+          filename: bulkFilename, mode: 'bulk', startedIso, finishedIso, status: finalStatus,
+          pipelineVersion: '3.2', errorMessage,
+          extra: { itemCount: input.rows.length, generateFinalEpisode: input.generateFinalEpisode, uploadToCloud: input.uploadToCloud },
+        });
+      } catch { /* never throw from logger */ }
     }
   }, [addLog, updateMaterial]);
 

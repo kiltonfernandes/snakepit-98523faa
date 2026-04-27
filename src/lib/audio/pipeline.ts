@@ -13,6 +13,7 @@ import {
   TrackReport,
 } from './types';
 import { clamp, dbToGain, gainToDb, peak, rms } from './dsp';
+import { DetailedLogger } from './detailed-logger';
 
 export interface PipelineInput {
   masterMode: 'single' | 'multi';
@@ -68,6 +69,12 @@ export interface PipelineRunOptions {
   maxVoiceConcurrency?: number;
   processVoiceBuffer?: VoiceBufferProcessor;
   returnFinalBuffer?: boolean;
+  /**
+   * Optional detailed logger. The pipeline will append granular events
+   * (decode metadata, silence cuts, mix offsets, encode summary, etc.).
+   * Caller is responsible for triggering the .txt download.
+   */
+  logger?: DetailedLogger;
 }
 
 export interface BulkPipelineRunOptions extends PipelineRunOptions {
@@ -218,20 +225,33 @@ export async function runPipeline(
     const exportMode = options.exportMode ?? 'download';
     const maxVoiceConcurrency = Math.max(1, options.maxVoiceConcurrency ?? 1);
     const returnFinalBuffer = options.returnFinalBuffer ?? true;
+    const dlog = options.logger;
+    // Wrap onLog so every UI log line is also persisted in the detailed log
+    const wrappedLog: LogCallback = (message, type = 'info') => {
+      onLog(message, type);
+      const sev = (type as 'info' | 'success' | 'error' | 'step') || 'info';
+      dlog?.log('pipeline', sev, message);
+    };
     const processVoice = options.processVoiceBuffer ?? ((context: VoiceProcessContext) => {
       worker ??= new VoiceWorkerClient();
       return processVoiceBufferWithWorker(worker, context);
     });
 
-    onLog('Decodificando arquivos base...', 'step');
+    wrappedLog('Decodificando arquivos base...', 'step');
     stepProgress(0, 0.1, 0.2, onProgress, 'Decodificando arquivos base...');
+    dlog?.log('pipeline', 'step', `Início do pipeline para "${input.filename}" (mode=${input.masterMode})`);
+    dlog?.log('pipeline', 'info', `Output bitrate=${params.outputBitrate}kbps, masterTargetLufs=${params.masterTargetLufs}, truePeakCeilingDbtp=${params.truePeakCeilingDbtp}`);
 
     const voiceBuffers: AudioBuffer[] = [];
     const trackReports: TrackReport[] = [];
 
     if (input.masterMode === 'multi' && input.masterTracks && input.masterTracks.length > 0) {
+      dlog?.log('decode', 'info', `Decodificando ${input.masterTracks.length} trilhas multi-master`);
       const processedTracks = await mapWithConcurrency(input.masterTracks, maxVoiceConcurrency, async (file, index) => {
         const decoded = await decodeFile(file);
+        dlog?.log('decode', 'success', `Trilha ${index + 1}/${input.masterTracks!.length}: ${file.name}`, {
+          data: { sampleRate: decoded.sampleRate, durationSec: decoded.length / decoded.sampleRate, channels: decoded.numberOfChannels, fileBytes: file.size },
+        });
         const processed = await processVoice({
           id: `${index}-${file.name}`,
           name: file.name,
@@ -243,7 +263,8 @@ export async function runPipeline(
           progressSpan: 0.55 / input.masterTracks!.length,
           onProgress,
         });
-        onLog(`Trilha tratada: ${file.name}`, 'info');
+        wrappedLog(`Trilha tratada: ${file.name}`, 'info');
+        dlog?.attachData(`voice-track[${index}]:${file.name}`, processed.report);
         return processed;
       });
 
@@ -253,6 +274,9 @@ export async function runPipeline(
       }
     } else {
       const decoded = await decodeFile(input.master!);
+      dlog?.log('decode', 'success', `Master single: ${input.master!.name}`, {
+        data: { sampleRate: decoded.sampleRate, durationSec: decoded.length / decoded.sampleRate, channels: decoded.numberOfChannels, fileBytes: input.master!.size },
+      });
       const processed = await processVoice({
         id: 'single-master',
         name: input.master!.name,
@@ -266,16 +290,23 @@ export async function runPipeline(
       });
       voiceBuffers.push(processed.buffer);
       trackReports.push(processed.report);
-      onLog(`Locucao tratada: ${input.master!.name}`, 'info');
+      wrappedLog(`Locucao tratada: ${input.master!.name}`, 'info');
+      dlog?.attachData(`voice-track[0]:${input.master!.name}`, processed.report);
     }
 
     stepProgress(0.66, 0.04, 1, onProgress, 'Montando master de voz...');
-    const processedMaster = mixVoiceTracks(voiceBuffers, onLog);
+    const processedMaster = mixVoiceTracks(voiceBuffers, wrappedLog);
     applyGainToBuffer(processedMaster, params.masterGainDb);
+    dlog?.log('mix', 'info', `Master de voz montado (${processedMaster.length / processedMaster.sampleRate} s) com ganho ${params.masterGainDb} dB`);
 
     // Cut long silences (>= silenceMinDuration) down to silenceCutTarget seconds.
-    onLog('Cortando silêncios longos da master...', 'step');
-    const trimmedMaster = cutSilencesInMaster(processedMaster, params, onLog);
+    wrappedLog('Cortando silêncios longos da master...', 'step');
+    const masterDurBefore = processedMaster.length / processedMaster.sampleRate;
+    const trimmedMaster = cutSilencesInMaster(processedMaster, params, wrappedLog);
+    const masterDurAfter = trimmedMaster.length / trimmedMaster.sampleRate;
+    dlog?.log('silence-cut', 'success', `Master ${masterDurBefore.toFixed(2)}s → ${masterDurAfter.toFixed(2)}s (corte total ${(masterDurBefore - masterDurAfter).toFixed(2)}s)`, {
+      data: { thresholdDb: params.silenceCutThresholdDb, minDurationSec: params.silenceMinDuration, targetSec: params.silenceCutTarget, bufferMs: params.silenceCutBufferMs },
+    });
 
     // Add pre-master silence (BGM plays alone before voice starts)
     const preSilenceSamples = Math.round(trimmedMaster.sampleRate * (params.bgmPreMasterSilence || 0));
@@ -290,17 +321,25 @@ export async function runPipeline(
       const src = trimmedMaster.getChannelData(0);
       // Pre-silence is zeros (already zeroed), then master, then post-silence (zeros)
       dst.set(src, preSilenceSamples);
-      onLog(`Silêncio pré-master: ${params.bgmPreMasterSilence}s | pós-master: ${params.bgmPostMasterSilence}s`, 'info');
+      wrappedLog(`Silêncio pré-master: ${params.bgmPreMasterSilence}s | pós-master: ${params.bgmPostMasterSilence}s`, 'info');
+      dlog?.log('mix', 'info', `Padding aplicado pré=${params.bgmPreMasterSilence}s pós=${params.bgmPostMasterSilence}s`, { audioTs: 0 });
     } else {
       masterForDuck = trimmedMaster;
     }
 
-    onLog('Decodificando trilha, intro e outro...', 'step');
+    wrappedLog('Decodificando trilha, intro e outro...', 'step');
     const [bgmRaw, introRaw, outroRaw] = await Promise.all([
       decodeFile(input.bgm),
       decodeFile(input.intro),
       decodeFile(input.outro),
     ]);
+    dlog?.log('decode', 'success', `BGM/intro/outro decodificados`, {
+      data: {
+        bgm:   { name: input.bgm.name,   durationSec: bgmRaw.length / bgmRaw.sampleRate,     sampleRate: bgmRaw.sampleRate },
+        intro: { name: input.intro.name, durationSec: introRaw.length / introRaw.sampleRate, sampleRate: introRaw.sampleRate },
+        outro: { name: input.outro.name, durationSec: outroRaw.length / outroRaw.sampleRate, sampleRate: outroRaw.sampleRate },
+      },
+    });
 
     const bgm = ensureSampleRate(bgmRaw, masterForDuck.sampleRate);
     const intro = ensureSampleRate(introRaw, masterForDuck.sampleRate);
@@ -308,23 +347,32 @@ export async function runPipeline(
 
     applyGainToBuffer(bgm, params.bgmGainDb);
     const bgmReady = extendBgmToMatch(bgm, masterForDuck.length + Math.round(masterForDuck.sampleRate * 180));
-    const duckedBgm = applyAutoDuck(masterForDuck, bgmReady, onLog, params);
+    const duckedBgm = applyAutoDuck(masterForDuck, bgmReady, wrappedLog, params);
+    dlog?.log('duck', 'success', `Auto-duck aplicado (reduction=${params.duckReductionDb}dB, hold=${params.duckHoldDuration}s, fadeDown=${params.fadeDownDuration}s, fadeUp=${params.fadeUpDuration}s)`);
 
     stepProgress(0.74, 0.08, 0.4, onProgress, 'Mixando trilha com BGM...');
-    const mixed = mixAndTrim(masterForDuck, duckedBgm, onLog, params);
+    const mixed = mixAndTrim(masterForDuck, duckedBgm, wrappedLog, params);
+    dlog?.log('mix', 'success', `Mix voz+BGM concluído (${(mixed.length / mixed.sampleRate).toFixed(2)}s)`);
     stepProgress(0.82, 0.05, 0.5, onProgress, 'Montando intro e outro...');
-    const assembled = concatenate(intro, mixed, outro, onLog, params);
-    const finalMaster = applyFinalMasterTarget(assembled, params, onLog);
+    const introDur = intro.length / intro.sampleRate;
+    const mixedDur = mixed.length / mixed.sampleRate;
+    dlog?.log('assemble', 'info', `Intro=${introDur.toFixed(2)}s, Bloco principal=${mixedDur.toFixed(2)}s, Outro=${(outro.length / outro.sampleRate).toFixed(2)}s`, { audioTs: 0 });
+    const assembled = concatenate(intro, mixed, outro, wrappedLog, params);
+    dlog?.log('assemble', 'success', `Episódio montado (${(assembled.length / assembled.sampleRate).toFixed(2)}s total)`, { audioTs: introDur });
+    const finalMaster = applyFinalMasterTarget(assembled, params, wrappedLog);
 
     const masterReport = buildMasterReport(finalMaster, params);
+    dlog?.log('loudness', 'success', `Master final: ${masterReport.loudness.lufs.toFixed(2)} LUFS / ${masterReport.loudness.truePeakDbtp.toFixed(2)} dBTP / ${masterReport.loudness.rmsDb.toFixed(2)} dB RMS`);
+    dlog?.attachData('master-report', masterReport);
     let outputBlob: Blob | undefined;
 
     if (exportMode !== 'none') {
       stepProgress(0.9, 0.1, 0.2, onProgress, 'Codificando MP3...');
       // Always produce a blob so callers can decide between download / upload / both
-      outputBlob = await encodeBufferToMp3Blob(finalMaster, onLog, params.outputBitrate, (fraction) => {
+      outputBlob = await encodeBufferToMp3Blob(finalMaster, wrappedLog, params.outputBitrate, (fraction) => {
         stepProgress(0.9, 0.1, fraction, onProgress, 'Codificando MP3...');
       });
+      dlog?.log('encode', 'success', `MP3 codificado: ${(outputBlob!.size / (1024 * 1024)).toFixed(2)} MB @ ${params.outputBitrate} kbps`);
       if (exportMode === 'download') {
         const a = document.createElement('a');
         const url = URL.createObjectURL(outputBlob);
@@ -334,11 +382,11 @@ export async function runPipeline(
         a.click();
         a.remove();
         setTimeout(() => URL.revokeObjectURL(url), 3000);
-        onLog(`Download disparado: ${a.download}`, 'info');
+        wrappedLog(`Download disparado: ${a.download}`, 'info');
       }
     }
 
-    onLog(`Exportacao final: ${masterReport.loudness.lufs.toFixed(1)} LUFS / ${masterReport.loudness.truePeakDbtp.toFixed(1)} dBTP`, 'success');
+    wrappedLog(`Exportacao final: ${masterReport.loudness.lufs.toFixed(1)} LUFS / ${masterReport.loudness.truePeakDbtp.toFixed(1)} dBTP`, 'success');
     const result: PipelineResult = {
       trackReports,
       masterReport,
@@ -365,7 +413,10 @@ export async function runBulkPipeline(
 ): Promise<void> {
   const exportMode = options.exportMode ?? 'download';
   const downloadIndividualItems = options.downloadIndividualItems ?? true;
+  const dlog = options.logger;
   onLog(`Iniciando fila bulk com ${input.items.length} itens`, 'step');
+  dlog?.log('bulk', 'step', `Iniciando bulk com ${input.items.length} itens`);
+  dlog?.log('bulk', 'info', `generateFinalEpisode=${input.generateFinalEpisode} downloadIndividualItems=${downloadIndividualItems}`);
   const v1Blobs: Blob[] = [];
   const sharedWorker = new VoiceWorkerClient();
 
@@ -379,12 +430,14 @@ export async function runBulkPipeline(
       const progressSpan = progressEnvelope / input.items.length;
       onProgress(progressBase * 100, `Processando ${item.filename}...`);
       onLog(`-- Episodio ${index + 1}/${input.items.length}: ${item.filename} --`, 'step');
+      dlog?.log('bulk', 'step', `===== Episódio ${index + 1}/${input.items.length}: ${item.filename} =====`);
 
       const itemOptions: PipelineRunOptions = {
         exportMode: input.generateFinalEpisode ? 'blob' : exportMode,
         maxVoiceConcurrency: options.maxVoiceConcurrency,
         processVoiceBuffer,
         returnFinalBuffer: false,
+        logger: dlog,
       };
 
       const result = await runPipeline(
@@ -414,6 +467,7 @@ export async function runBulkPipeline(
         if (downloadIndividualItems) {
           await downloadBlob(itemBlob, item.filename);
           onLog(`MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(1)} MB)`, 'success');
+          dlog?.log('bulk', 'success', `MP3 exportado: ${item.filename}.mp3 (${(itemBlob.size / (1024 * 1024)).toFixed(2)} MB)`);
           // Small delay between downloads to prevent browser throttling
           if (index < input.items.length - 1) {
             await new Promise(r => setTimeout(r, 2500));
@@ -423,12 +477,14 @@ export async function runBulkPipeline(
       }
 
       onLog(`Relatorio final: ${result.masterReport.loudness.lufs.toFixed(1)} LUFS`, 'info');
+      dlog?.log('bulk', 'info', `Relatório do episódio ${index + 1}: ${result.masterReport.loudness.lufs.toFixed(2)} LUFS`);
       await options.onItemEncoded?.(item, index, result);
       await new Promise((resolve) => setTimeout(resolve, 0));
     }
 
     if (input.generateFinalEpisode && v1Blobs.length > 0) {
       onLog('Gerando episodio final consolidado...', 'step');
+      dlog?.log('bulk', 'step', 'Montando MP3 consolidado de todos os episódios');
       onProgress(78, 'Montando MP3 consolidado...');
 
       const finalBlob = new Blob([
@@ -441,11 +497,13 @@ export async function runBulkPipeline(
       if (shouldDownloadFinal) {
         await downloadBlob(finalBlob, input.finalFilename || 'episodio_final');
         onLog('Episodio final consolidado exportado', 'success');
+        dlog?.log('bulk', 'success', `Episódio consolidado exportado (${(finalBlob.size / (1024 * 1024)).toFixed(2)} MB)`);
       }
       await options.onFinalEpisodeEncoded?.(finalBlob);
     }
 
     onProgress(100, 'Bulk finalizado');
+    dlog?.log('bulk', 'success', 'Bulk finalizado');
   } finally {
     sharedWorker.terminate();
   }
