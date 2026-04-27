@@ -292,13 +292,25 @@ function renderContextXml(payload: DayPayload, focusSectionKey?: string): string
   // Highlight the "direção" (editorial guidance) for the focused section.
   // This makes the human direction prominent and scoped to a specific section,
   // so the AI prioritizes it when generating that section's content.
-  if (focusSectionKey) {
-    const dirKey = SECTION_DIRECTION_KEYS[focusSectionKey];
-    if (dirKey) {
-      const dirVal = (ri[dirKey] || '').toString().trim();
-      if (dirVal) {
-        out += `\n\nDIREÇÃO EDITORIAL (seção "${focusSectionKey}") — siga estas instruções como prioridade máxima:\n${dirVal}`;
-      }
+  // When focused on a single section, only emit that section's blocks.
+  // Otherwise, emit blocks for ALL known sections that have content.
+  const sectionKeysToEmit = focusSectionKey
+    ? [focusSectionKey]
+    : Array.from(new Set([
+        ...Object.keys(SECTION_DIRECTION_KEYS),
+        ...Object.keys(SECTION_MANDATORY_KEYS),
+      ]));
+
+  for (const sk of sectionKeysToEmit) {
+    const dirKey = SECTION_DIRECTION_KEYS[sk];
+    const mandKey = SECTION_MANDATORY_KEYS[sk];
+    const dirVal = dirKey ? (ri[dirKey] || '').toString().trim() : '';
+    const mandVal = mandKey ? (ri[mandKey] || '').toString().trim() : '';
+    if (dirVal) {
+      out += `\n\nDIREÇÃO EDITORIAL (seção "${sk}") — siga estas instruções como prioridade máxima:\n${dirVal}`;
+    }
+    if (mandVal) {
+      out += `\n\nINFORMAÇÃO MANDATÓRIA (seção "${sk}") — esta informação DEVE estar presente na response, parafraseada de forma coerente e coesa. NÃO conta no limite de palavras (acrescente o necessário além do alvo para incorporá-la):\n${mandVal}`;
     }
   }
   return out;
@@ -309,8 +321,7 @@ function renderContextXml(payload: DayPayload, focusSectionKey?: string): string
 function weekContractHtml(dayPayloads: DayPayload[]): string {
   const days = dayPayloads.map(dp => {
     const tags = dp.required_sections.map(s => {
-      const words = SECTION_WORD_TARGETS[s.key] || MIN_LONGFORM_SECTION_WORDS;
-      return `    <section name="${s.key}">... (~${words} palavras)</section>`;
+      return `    <section name="${s.key}">... (${sectionWordSpec(s.key)})</section>`;
     }).join('\n');
     return `  <day publication_date="${dp.publication_date}">\n${tags}\n  </day>`;
   }).join('\n');
@@ -320,30 +331,35 @@ function weekContractHtml(dayPayloads: DayPayload[]): string {
   <target week_start="YYYY-MM-DD"></target>
 ${days}
 </snakepit_response>
-Todas seções obrigatórias. Respeite o target de palavras por seção.`;
+Todas seções obrigatórias. Respeite o alvo/mínimo de palavras por seção.
+NOTA: Texto declarado em "INFORMAÇÃO MANDATÓRIA (seção ...)" NÃO conta
+no alvo de palavras — trate como conteúdo extra obrigatório.`;
 }
 
 function dayContractHtml(payload: DayPayload): string {
   const tags = payload.required_sections.map(s => {
-    const words = SECTION_WORD_TARGETS[s.key] || MIN_LONGFORM_SECTION_WORDS;
-    return `  <section name="${s.key}">... (~${words} palavras)</section>`;
+    return `  <section name="${s.key}">... (${sectionWordSpec(s.key)})</section>`;
   }).join('\n');
   return `CONTRATO:
 <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="day">
   <target publication_date="${payload.publication_date}"></target>
 ${tags}
 </snakepit_response>
-Todas seções obrigatórias. Respeite o target de palavras por seção.`;
+Todas seções obrigatórias. Respeite o alvo/mínimo de palavras por seção.
+NOTA: Texto declarado em "INFORMAÇÃO MANDATÓRIA (seção ...)" NÃO conta
+no alvo de palavras — trate como conteúdo extra obrigatório.`;
 }
 
 function sectionContractHtml(payload: DayPayload, sectionKey: string, sectionLabel: string): string {
-  const words = SECTION_WORD_TARGETS[sectionKey] || MIN_LONGFORM_SECTION_WORDS;
+  const spec = sectionWordSpec(sectionKey);
   return `CONTRATO:
 <snakepit_response schema_version="${PROMPT_SCHEMA_VERSION}" scope="section">
   <target publication_date="${payload.publication_date}" section="${sectionKey}"></target>
   <section name="${sectionKey}">...</section>
 </snakepit_response>
-Apenas "${sectionLabel}". Aproximadamente ${words} palavras.`;
+Apenas "${sectionLabel}". ${spec.charAt(0).toUpperCase() + spec.slice(1)}.
+NOTA: Texto declarado em "INFORMAÇÃO MANDATÓRIA (seção ...)" NÃO conta
+no alvo de palavras — trate como conteúdo extra obrigatório.`;
 }
 
 function materialTitlesContract(weekStart: string, slots: { slot: string; date: string }[]): string {
