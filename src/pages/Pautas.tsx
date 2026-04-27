@@ -2012,7 +2012,7 @@ export default function Pautas() {
       </Dialog>
 
       <Dialog open={promptDialogOpen} onOpenChange={setPromptDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle>
               Protocolo de Prompt — {PROMPT_SCHEMA_VERSION} {activeSection ? `(${activeSection})` : `(${promptScope})`}
@@ -2022,17 +2022,17 @@ export default function Pautas() {
             </DialogDescription>
           </DialogHeader>
           {activePauta && (
-            <div className="space-y-4">
+            <div className="space-y-4 min-w-0">
               <div className="flex items-center gap-2 text-xs flex-wrap">
                 <Badge variant="secondary">Tom: {tone.label}</Badge>
                 <Badge variant="secondary">Scope: {promptScope}</Badge>
                 {bannedTerms.length > 0 && <Badge variant="outline">{bannedTerms.length} termos banidos</Badge>}
                 <Badge variant="outline">{activeSection ? `Seção: ${activeSection}` : promptScope === 'week' ? 'Semana completa' : 'Pauta completa'}</Badge>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <label className="text-sm font-medium">1. Prompt gerado ({promptScope})</label>
-                <div className="relative">
-                  <pre className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap max-h-[200px] overflow-y-auto">
+                <div className="relative min-w-0">
+                  <pre className="text-xs bg-muted p-3 rounded-md whitespace-pre-wrap break-words max-h-[260px] overflow-y-auto overflow-x-hidden w-full">
                     {promptScope === 'week' ? generateWeekPrompt() : generatePrompt(activePauta, activeSection || undefined)}
                   </pre>
                   <Button size="icon" variant="ghost" className="absolute top-1 right-1 h-7 w-7"
@@ -2041,14 +2041,14 @@ export default function Pautas() {
                   </Button>
                 </div>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-2 min-w-0">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-medium">2. Resposta (contrato {PROMPT_SCHEMA_VERSION})</label>
                   <Button size="sm" variant="secondary" onClick={handleGenerateAI} disabled={generating}>
                     {generating ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Gerando...</> : <><Zap className="h-3.5 w-3.5 mr-1.5" /> Gerar com IA</>}
                   </Button>
                 </div>
-                <Textarea rows={8} placeholder={`Cole aqui a resposta ou clique "Gerar com IA"...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
+                <Textarea className="w-full" rows={8} placeholder={`Cole aqui a resposta ou clique "Gerar com IA"...`} value={promptResponse} onChange={e => { setPromptResponse(e.target.value); setParseError(null); }} />
               </div>
               {parseError && (
                 <div className="p-3 rounded-md bg-destructive/10 border border-destructive/20 text-xs text-destructive">
