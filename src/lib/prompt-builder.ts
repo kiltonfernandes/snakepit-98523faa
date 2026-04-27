@@ -18,6 +18,48 @@ export const SECTION_WORD_TARGETS: Record<string, number> = {
 };
 export const DEFAULT_BRAND_TONE_TEMPERATURE = 55;
 
+// ─── Section ↔ Input mapping ────────────────────────────────────────────────
+// Maps each section key to the raw_inputs_json keys that constitute its
+// "insumo" (raw material). A section is considered "filled" when AT LEAST
+// ONE of its input keys has a non-empty value.
+export const SECTION_INPUT_KEYS: Record<string, string[]> = {
+  anniversary: ['anniversary'],
+  review_rafa: ['review_rafa_id'],
+  news: ['news_link'],
+  review_kilton: ['review_kilton_id'],
+  next_week_releases: ['selected_release_ids'],
+};
+
+// Maps each section key to the raw_inputs_json key that holds its
+// "Direção" (editorial guidance written by the human editor).
+export const SECTION_DIRECTION_KEYS: Record<string, string> = {
+  anniversary: 'comment_anniversary',
+  review_rafa: 'comment_review_rafa',
+  news: 'comment_news',
+  review_kilton: 'comment_review_kilton',
+  next_week_releases: 'comment_next_week_releases',
+};
+
+function isInputFilled(value: unknown): boolean {
+  if (value === undefined || value === null) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.length > 0;
+  return true;
+}
+
+export function sectionHasInput(pauta: Pauta, sectionKey: string): boolean {
+  const keys = SECTION_INPUT_KEYS[sectionKey];
+  if (!keys || keys.length === 0) return true; // unknown sections: don't bypass
+  const inputs = (pauta.raw_inputs_json || {}) as Record<string, unknown>;
+  return keys.some(k => isInputFilled(inputs[k]));
+}
+
+export function getFilledSectionKeys(pauta: Pauta): string[] {
+  const slot = getPautaSlot(pauta);
+  const sections = getSectionsForDay(slot);
+  return sections.filter(s => sectionHasInput(pauta, s.key)).map(s => s.key);
+}
+
 // ─── Tone profiles ──────────────────────────────────────────────────────────
 
 export interface ToneProfile {
