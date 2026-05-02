@@ -28,6 +28,8 @@ import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/t
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, type PromptBuildContext } from '@/lib/prompt-builder';
 import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/DirectionEditor';
 import { InsumosTable } from '@/components/pautas/InsumosTable';
+import { ContentTable } from '@/components/pautas/ContentTable';
+import { ManagementTable } from '@/components/pautas/ManagementTable';
 import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
 import { useViewMode } from '@/hooks/use-view-mode';
 import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
