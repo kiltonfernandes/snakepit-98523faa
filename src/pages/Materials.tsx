@@ -1150,13 +1150,10 @@ export default function Materials() {
             </div>
           </div>
 
-          {viewMode === 'table' && (
-            <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
-          )}
-          {viewMode === 'cards' && (
-          <>
-
           <TabsContent value="titles">
+            {viewMode === 'table' ? (
+              <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+            ) : (
             <WorkspaceShell
               weekLabel="Títulos da Semana"
               actions={
@@ -1215,9 +1212,13 @@ export default function Materials() {
                 );
               }}
             />
+            )}
           </TabsContent>
 
           <TabsContent value="descriptions">
+            {viewMode === 'table' ? (
+              <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+            ) : (
             <WorkspaceShell
               weekLabel="Descrições da Semana"
               actions={
@@ -1264,9 +1265,13 @@ export default function Materials() {
                 );
               }}
             />
+            )}
           </TabsContent>
 
           <TabsContent value="covers">
+            {viewMode === 'table' ? (
+              <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+            ) : (
             <WorkspaceShell
               weekLabel="Capas da Semana"
               renderDay={(day) => {
@@ -1296,9 +1301,8 @@ export default function Materials() {
                 );
               }}
             />
+            )}
           </TabsContent>
-          </>
-          )}
         </Tabs>
       )}
 

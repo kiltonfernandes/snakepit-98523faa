@@ -28,6 +28,8 @@ import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/t
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, type PromptBuildContext } from '@/lib/prompt-builder';
 import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/DirectionEditor';
 import { InsumosTable } from '@/components/pautas/InsumosTable';
+import { ContentTable } from '@/components/pautas/ContentTable';
+import { ManagementTable } from '@/components/pautas/ManagementTable';
 import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
 import { useViewMode } from '@/hooks/use-view-mode';
 import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
@@ -201,7 +203,9 @@ export default function Pautas() {
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('content');
-  const [inputsView, setInputsView] = useViewMode('pautas-insumos', 'table');
+  // Single view-mode shared across Pautas sub-tabs (Insumos, Conteúdo, Management).
+  // Flow is a guided wizard and ignores this toggle.
+  const [pageView, setPageView] = useViewMode('pautas', 'table');
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
@@ -1452,22 +1456,26 @@ export default function Pautas() {
                 <TabsTrigger value="flow">Flow</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
               </TabsList>
-              {activeTab === 'inputs' && (
-                <div className="flex items-center gap-2">
-                  <AutosaveBadge className="mr-2" />
-                  <ViewModeToggle mode={inputsView} onChange={setInputsView} className="mr-1" />
+              <div className="flex items-center gap-2">
+                <AutosaveBadge className="mr-2" />
+                {activeTab !== 'flow' && (
+                  <ViewModeToggle mode={pageView} onChange={setPageView} className="mr-1" />
+                )}
+                {activeTab === 'inputs' && (
+                  <>
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
                     {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Wand2 className="h-3.5 w-3.5" /> Auto Aniversários</>}
                   </Button>
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillNews} disabled={loadingNews}>
                     {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Newspaper className="h-3.5 w-3.5" /> Auto Notícias</>}
                   </Button>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
 
             <TabsContent value="inputs">
-              {inputsView === 'table' ? (
+              {pageView === 'table' ? (
                 <InsumosTable
                   pautas={weekPautas}
                   releases={releases}
@@ -1633,6 +1641,16 @@ export default function Pautas() {
             </TabsContent>
 
             <TabsContent value="content">
+              {pageView === 'table' ? (
+                <ContentTable
+                  pautas={weekPautas}
+                  getPautaSlot={getPautaSlot}
+                  onSectionChange={handleSectionChange}
+                  onPreview={(p) => setPreviewPauta(p)}
+                  onOpenPrompt={(p, key) => openPromptDialog(p, key)}
+                  onCopyPrompt={(p) => handleCopyPrompt(generatePrompt(p))}
+                />
+              ) : (
               <WorkspaceShell
                 excludeDays={['sunday']}
                 weekLabel={`Conteúdo – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
@@ -1716,6 +1734,7 @@ export default function Pautas() {
                   );
                 }}
               />
+              )}
             </TabsContent>
 
             <TabsContent value="flow">
@@ -1792,6 +1811,15 @@ export default function Pautas() {
                 </div>
 
                 {/* Progress cards grid */}
+                {pageView === 'table' ? (
+                  <ManagementTable
+                    pautas={weekPautas}
+                    materials={weekMats}
+                    getPautaSlot={getPautaSlot}
+                    updateMaterial={updateMaterial}
+                    computeStatus={computePautaStatus}
+                  />
+                ) : (
                 <WorkspaceShell
                   excludeDays={['sunday']}
                   weekLabel="Progresso por episódio"
@@ -1920,6 +1948,7 @@ export default function Pautas() {
                     );
                   }}
                 />
+                )}
               </div>
             </TabsContent>
           </Tabs>
