@@ -175,6 +175,18 @@ export default function Releases() {
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [sortField, setSortField] = useState<SortField>('release_date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [sortRules, setSortRules] = useState<SortRule[]>(() =>
+    loadLS<SortRule[]>('releases:sort', [{ field: 'release_date', dir: 'desc' }])
+  );
+  const [groupRules, setGroupRules] = useState<GroupRule[]>(() =>
+    loadLS<GroupRule[]>('releases:group', [])
+  );
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    () => new Set(loadLS<string[]>('releases:collapsed', []))
+  );
+  useEffect(() => { saveLS('releases:sort', sortRules); }, [sortRules]);
+  useEffect(() => { saveLS('releases:group', groupRules); }, [groupRules]);
+  useEffect(() => { saveLS('releases:collapsed', Array.from(collapsedGroups)); }, [collapsedGroups]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [viewMode, setViewMode] = useViewMode('releases', 'table');
   const [enrichingCountries, setEnrichingCountries] = useState(false);
