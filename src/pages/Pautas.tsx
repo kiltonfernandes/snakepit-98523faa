@@ -1641,6 +1641,16 @@ export default function Pautas() {
             </TabsContent>
 
             <TabsContent value="content">
+              {pageView === 'table' ? (
+                <ContentTable
+                  pautas={weekPautas}
+                  getPautaSlot={getPautaSlot}
+                  onSectionChange={handleSectionChange}
+                  onPreview={(p) => setPreviewPauta(p)}
+                  onOpenPrompt={(p, key) => openPromptDialog(p, key)}
+                  onCopyPrompt={(p) => handleCopyPrompt(generatePrompt(p))}
+                />
+              ) : (
               <WorkspaceShell
                 excludeDays={['sunday']}
                 weekLabel={`Conteúdo – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
