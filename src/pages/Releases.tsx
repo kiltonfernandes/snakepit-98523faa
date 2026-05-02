@@ -31,7 +31,9 @@ interface ImportSummary { valid: number; duplicates: number; invalid: number; er
 type QuickFilter = 'all' | 'today' | 'this_week' | 'last_week' | 'next_week' | 'this_month' | 'last_month' | 'next_month' | 'this_year' | 'last_year';
 type SortField = 'release_date' | 'artist' | 'album' | 'rating';
 type SortDir = 'asc' | 'desc';
-type ViewMode = 'table' | 'cards';
+import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
+import { useViewMode, ViewMode } from '@/hooks/use-view-mode';
+import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
 
 function getDateRange(filter: QuickFilter): [string, string] | null {
   if (filter === 'all') return null;
