@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { Release, EditorialWeek, Pauta, EpisodeMaterial, AppSettings, DaySlot, PautaSections } from '@/lib/types';
 import { DAY_SLOTS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
+import { enqueueUpdate, recoverAutosaveSnapshots } from '@/lib/autosave-queue';
 
 interface ActivityEntry {
   id: string;
@@ -137,7 +138,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     Promise.all([loadReleases(), loadWeeks(), loadPautas(), loadMaterials(), loadSettings(), loadActivityLog()])
-      .finally(() => setDataReady(true));
+      .finally(() => {
+        setDataReady(true);
+        // Re-enqueue any pending edits saved locally from a prior session/refresh.
+        recoverAutosaveSnapshots();
+      });
   }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings, loadActivityLog]);
 
   // Auto-recalc week statuses after pautas change
@@ -325,17 +330,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updatePauta = useCallback((id: string, p: Partial<Pauta>) => {
     setPautas(prev => prev.map(x => x.id === id ? { ...x, ...p } : x));
-    supabase.from('pautas' as any).update({ ...p, updated_at: now() } as any).eq('id', id).then();
+    // Route persistence through the autosave queue: debounced, ordered, retried,
+    // snapshot to localStorage so nothing is lost on refresh or transient errors.
+    enqueueUpdate('pautas', id, p as any);
   }, []);
 
   const getPautasForWeek = useCallback((weekId: string) => pautas.filter(p => p.week_id === weekId), [pautas]);
 
   const updateMaterial = useCallback((id: string, m: Partial<EpisodeMaterial>) => {
     setMaterials(prev => prev.map(x => x.id === id ? { ...x, ...m } : x));
-    supabase.from('episode_materials' as any).update({ ...m, updated_at: now() } as any).eq('id', id)
-      .then(({ error }) => {
-        if (error) console.error('[updateMaterial] Supabase error:', error.message, error);
-      });
+    enqueueUpdate('episode_materials', id, m as any);
   }, []);
 
   const getMaterialsForWeek = useCallback((weekId: string) => materials.filter(m => m.week_id === weekId), [materials]);

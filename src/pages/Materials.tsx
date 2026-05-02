@@ -9,6 +9,10 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
+import { useViewMode } from '@/hooks/use-view-mode';
+import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
+import { MaterialsTable } from '@/components/materials/MaterialsTable';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WorkspaceShell } from '@/components/workspace/WorkspaceShell';
 import { useApp } from '@/contexts/AppContext';
@@ -58,6 +62,7 @@ function extractSseText(raw: string): string {
 export default function Materials() {
   const { weeks, materials, pautas, releases, settings, getMaterialsForWeek, getPautasForWeek, updateMaterial, dataReady } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useViewMode('materials', 'table');
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
   const [imageUrl, setImageUrl] = useState('');
@@ -1133,11 +1138,23 @@ export default function Materials() {
 
       {weekMaterials.length > 0 && (
         <Tabs defaultValue="titles" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="titles">Títulos</TabsTrigger>
-            <TabsTrigger value="descriptions">Descrições</TabsTrigger>
-            <TabsTrigger value="covers">Capas</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <TabsList>
+              <TabsTrigger value="titles">Títulos</TabsTrigger>
+              <TabsTrigger value="descriptions">Descrições</TabsTrigger>
+              <TabsTrigger value="covers">Capas</TabsTrigger>
+            </TabsList>
+            <div className="flex items-center gap-3">
+              <AutosaveBadge />
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            </div>
+          </div>
+
+          {viewMode === 'table' && (
+            <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+          )}
+          {viewMode === 'cards' && (
+          <>
 
           <TabsContent value="titles">
             <WorkspaceShell
@@ -1280,6 +1297,8 @@ export default function Materials() {
               }}
             />
           </TabsContent>
+          </>
+          )}
         </Tabs>
       )}
 

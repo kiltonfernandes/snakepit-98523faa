@@ -31,7 +31,9 @@ interface ImportSummary { valid: number; duplicates: number; invalid: number; er
 type QuickFilter = 'all' | 'today' | 'this_week' | 'last_week' | 'next_week' | 'this_month' | 'last_month' | 'next_month' | 'this_year' | 'last_year';
 type SortField = 'release_date' | 'artist' | 'album' | 'rating';
 type SortDir = 'asc' | 'desc';
-type ViewMode = 'table' | 'cards';
+import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
+import { useViewMode, ViewMode } from '@/hooks/use-view-mode';
+import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
 
 function getDateRange(filter: QuickFilter): [string, string] | null {
   if (filter === 'all') return null;
@@ -163,7 +165,7 @@ export default function Releases() {
   const [sortField, setSortField] = useState<SortField>('release_date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [viewMode, setViewMode] = useViewMode('releases', 'table');
   const [enrichingCountries, setEnrichingCountries] = useState(false);
 
   // Repatriation modal
@@ -694,23 +696,8 @@ export default function Releases() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* View mode toggle */}
-        <div className="flex items-center rounded-md border border-border overflow-hidden">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-1.5 transition-colors ${viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}
-            title="Tabela"
-          >
-            <TableIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`p-1.5 transition-colors ${viewMode === 'cards' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}
-            title="Cards"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        </div>
+        <AutosaveBadge className="mr-1" />
+        <ViewModeToggle mode={viewMode} onChange={setViewMode} />
 
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
           <Upload className="h-4 w-4" /> Import

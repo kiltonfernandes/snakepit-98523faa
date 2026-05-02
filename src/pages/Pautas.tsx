@@ -27,6 +27,10 @@ import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants
 import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, type PromptBuildContext } from '@/lib/prompt-builder';
 import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/DirectionEditor';
+import { InsumosTable } from '@/components/pautas/InsumosTable';
+import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
+import { useViewMode } from '@/hooks/use-view-mode';
+import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
 
@@ -197,6 +201,7 @@ export default function Pautas() {
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('content');
+  const [inputsView, setInputsView] = useViewMode('pautas-insumos', 'table');
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
@@ -1448,21 +1453,30 @@ export default function Pautas() {
                 <TabsTrigger value="management">Management</TabsTrigger>
               </TabsList>
               {activeTab === 'inputs' && (
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
+                  <AutosaveBadge className="mr-2" />
+                  <ViewModeToggle mode={inputsView} onChange={setInputsView} className="mr-1" />
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
                     {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Wand2 className="h-3.5 w-3.5" /> Auto Aniversários</>}
                   </Button>
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillNews} disabled={loadingNews}>
                     {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Newspaper className="h-3.5 w-3.5" /> Auto Notícias</>}
                   </Button>
-                  <Button size="sm" className="gap-2" onClick={handleSaveAll}>
-                    <Save className="h-3.5 w-3.5" /> Salvar Todos
-                  </Button>
                 </div>
               )}
             </div>
 
             <TabsContent value="inputs">
+              {inputsView === 'table' ? (
+                <InsumosTable
+                  pautas={weekPautas}
+                  releases={releases}
+                  weekStart={selectedWeek.start_date}
+                  getPautaSlot={getPautaSlot}
+                  updateRawInput={updateRawInput}
+                  directionBinding={directionBinding}
+                />
+              ) : (
               <WorkspaceShell
                 excludeDays={['sunday']}
                 weekLabel={`Insumos – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
@@ -1598,9 +1612,7 @@ export default function Pautas() {
                         </div>
                       )}
 
-                      <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => toast.success('Inputs salvos')}>
-                        Salvar Inputs
-                      </Button>
+                      {/* autosave handles persistence; explicit button removed */}
                     </div>
                   );
 
@@ -1617,6 +1629,7 @@ export default function Pautas() {
                   );
                 }}
               />
+              )}
             </TabsContent>
 
             <TabsContent value="content">
