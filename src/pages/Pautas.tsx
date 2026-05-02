@@ -201,6 +201,7 @@ export default function Pautas() {
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('content');
+  const [inputsView, setInputsView] = useViewMode('pautas-insumos', 'table');
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
