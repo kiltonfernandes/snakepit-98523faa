@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2, RefreshCw, Users } from 'lucide-react';
+import { Disc, Plus, Search, Download, Upload, Trash2, Star, Filter, AlertCircle, CheckCircle, XCircle, ArrowUpDown, ClipboardPaste, LayoutGrid, TableIcon, FileText, Square, CheckSquare, ExternalLink, Link2, Globe, Loader2, RefreshCw, Users, ChevronRight, ChevronDown } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
@@ -34,6 +34,17 @@ type SortDir = 'asc' | 'desc';
 import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
 import { useViewMode, ViewMode } from '@/hooks/use-view-mode';
 import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
+import { SortRulesPopover } from '@/components/releases/SortRulesPopover';
+import { GroupRulesPopover } from '@/components/releases/GroupRulesPopover';
+import {
+  buildGroups,
+  compareWithRules,
+  loadLS,
+  saveLS,
+  type GroupNode,
+  type GroupRule,
+  type SortRule,
+} from '@/lib/releases-grouping';
 
 function getDateRange(filter: QuickFilter): [string, string] | null {
   if (filter === 'all') return null;
