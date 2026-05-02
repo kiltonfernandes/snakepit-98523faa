@@ -1734,6 +1734,7 @@ export default function Pautas() {
                   );
                 }}
               />
+              )}
             </TabsContent>
 
             <TabsContent value="flow">
