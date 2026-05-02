@@ -6,7 +6,6 @@ import { Check, Circle, ExternalLink } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { Pauta, EpisodeMaterial, DaySlot } from '@/lib/types';
 import { getSectionsForDay } from '@/lib/constants';
-import { computePautaStatus } from '@/lib/episode-status';
 import { cn } from '@/lib/utils';
 
 const DAY_LABEL: Record<DaySlot, string> = {
@@ -25,13 +24,14 @@ interface Props {
   materials: EpisodeMaterial[];
   getPautaSlot: (p: Pauta) => DaySlot;
   updateMaterial: (id: string, m: Partial<EpisodeMaterial>) => void;
+  computeStatus: (pauta: Pauta, mat: EpisodeMaterial | undefined) => Pauta['status'];
 }
 
 /**
  * Tabular Management view: per-day progress at a glance with inline editing
  * for spotify/repository links.
  */
-export function ManagementTable({ pautas, materials, getPautaSlot, updateMaterial }: Props) {
+export function ManagementTable({ pautas, materials, getPautaSlot, updateMaterial, computeStatus }: Props) {
   const rows = useMemo(() => {
     return SLOT_ORDER
       .map(slot => {
@@ -83,7 +83,7 @@ export function ManagementTable({ pautas, materials, getPautaSlot, updateMateria
                   </div>
                 </TableCell>
                 <TableCell>
-                  <StatusBadge status={computePautaStatus(pauta, mat)} />
+                  <StatusBadge status={computeStatus(pauta, mat)} />
                 </TableCell>
                 <TableCell>
                   <div className="space-y-1.5 w-[160px]">
