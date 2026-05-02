@@ -1297,6 +1297,8 @@ export default function Materials() {
               }}
             />
           </TabsContent>
+          </>
+          )}
         </Tabs>
       )}
 
