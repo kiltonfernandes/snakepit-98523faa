@@ -62,6 +62,7 @@ function extractSseText(raw: string): string {
 export default function Materials() {
   const { weeks, materials, pautas, releases, settings, getMaterialsForWeek, getPautasForWeek, updateMaterial, dataReady } = useApp();
   const [selectedWeekId, setSelectedWeekId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useViewMode('materials', 'table');
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverDaySlot, setCoverDaySlot] = useState<DaySlot | null>(null);
   const [imageUrl, setImageUrl] = useState('');
