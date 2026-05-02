@@ -41,3 +41,5 @@
 - [AI Usage Monitoring](mem://features/ai-usage-monitoring) — Token/cost tracking via ai_usage_logs
 - [OneDrive Upload](mem://features/onedrive-upload) — Rivaldo MP3 → Snakepit/YYYY-Www/ via Graph upload session, retry, materials sync, delete action
 - [Mentioned in Episode](mem://features/episode-mentioned-section) — Field on materials + pautas, AI enrichment via enrich-episode-description, idempotent HTML injection before institutional block
+
+- [Autosave Queue](mem://tech/autosave-queue) — Debounced/ordered/retried persistence for pauta+material inputs, with localStorage snapshot recovery
