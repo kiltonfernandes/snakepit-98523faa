@@ -5,7 +5,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ExternalLink, Pencil } from 'lucide-react';
 import { StatusBadge } from '@/components/StatusBadge';
 import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/DirectionEditor';
 import { Pauta, Release, DaySlot } from '@/lib/types';
@@ -86,9 +85,11 @@ export function InsumosTable({ pautas, releases, getPautaSlot, updateRawInput, d
                       value={inputs.anniversary || ''}
                       onChange={e => updateRawInput(pauta.id, 'anniversary', e.target.value)}
                     />
-                    <DirectionInline binding={directionBinding(pauta, 'comment_anniversary', 'mandatory_anniversary')}
-                      label="Aniversário"
-                      searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })} />
+                    <DirectionEditor
+                      sectionLabel="Aniversário"
+                      {...directionBinding(pauta, 'comment_anniversary', 'mandatory_anniversary')}
+                      searchQuery={buildSectionSearchQuery('anniversary', { anniversary: inputs.anniversary })}
+                    />
                   </div>
                 </TableCell>
 
@@ -101,9 +102,11 @@ export function InsumosTable({ pautas, releases, getPautaSlot, updateRawInput, d
                         value={inputs.news_link || ''}
                         onChange={e => updateRawInput(pauta.id, 'news_link', e.target.value)}
                       />
-                      <DirectionInline binding={directionBinding(pauta, 'comment_news', 'mandatory_news')}
-                        label="Notícias"
-                        searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })} />
+                      <DirectionEditor
+                        sectionLabel="Notícias"
+                        {...directionBinding(pauta, 'comment_news', 'mandatory_news')}
+                        searchQuery={buildSectionSearchQuery('news', { newsLink: inputs.news_link })}
+                      />
                     </div>
                   ) : <span className="text-[10px] text-muted-foreground">—</span>}
                 </TableCell>
