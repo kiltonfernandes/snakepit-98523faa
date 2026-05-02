@@ -1612,9 +1612,7 @@ export default function Pautas() {
                         </div>
                       )}
 
-                      <Button size="sm" variant="outline" className="w-full text-xs" onClick={() => toast.success('Inputs salvos')}>
-                        Salvar Inputs
-                      </Button>
+                      {/* autosave handles persistence; explicit button removed */}
                     </div>
                   );
 
