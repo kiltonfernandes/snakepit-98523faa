@@ -1475,7 +1475,7 @@ export default function Pautas() {
             </div>
 
             <TabsContent value="inputs">
-              {inputsView === 'table' ? (
+              {pageView === 'table' ? (
                 <InsumosTable
                   pautas={weekPautas}
                   releases={releases}
