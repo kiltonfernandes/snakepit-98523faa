@@ -1150,13 +1150,10 @@ export default function Materials() {
             </div>
           </div>
 
-          {viewMode === 'table' && (
-            <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
-          )}
-          {viewMode === 'cards' && (
-          <>
-
           <TabsContent value="titles">
+            {viewMode === 'table' ? (
+              <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+            ) : (
             <WorkspaceShell
               weekLabel="Títulos da Semana"
               actions={
