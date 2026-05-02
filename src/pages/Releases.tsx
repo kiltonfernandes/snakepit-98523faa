@@ -797,80 +797,121 @@ export default function Releases() {
       )}
 
       {/* Table View */}
-      {viewMode === 'table' && (
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[30px]"></TableHead>
-                  <SortHeader field="artist">Artista</SortHeader>
-                  <SortHeader field="album">Álbum</SortHeader>
-                  <SortHeader field="release_date">Data</SortHeader>
-                  <TableHead>País</TableHead>
-                  <TableHead>Gêneros</TableHead>
-                  <SortHeader field="rating">Rating</SortHeader>
-                  <TableHead className="w-[90px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.length === 0 ? (
+      {viewMode === 'table' && (() => {
+        const COL_COUNT = 8;
+        const renderRow = (r: Release) => (
+          <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50">
+            <TableCell onClick={e => e.stopPropagation()}>
+              <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" />
+            </TableCell>
+            <TableCell className="font-medium" onClick={() => openEdit(r)}><span className="inline-flex items-center gap-2">{renderFlag(r.country)}<span>{r.artist}</span></span></TableCell>
+            <TableCell onClick={() => openEdit(r)}>{r.album}</TableCell>
+            <TableCell className="text-muted-foreground text-sm" onClick={() => openEdit(r)}>{r.release_date}</TableCell>
+            <TableCell className="text-sm" onClick={() => openEdit(r)}>{r.country ? <span className="inline-flex items-center gap-2">{renderFlag(r.country)}<span>{r.country}</span></span> : <span className="text-muted-foreground/40">—</span>}</TableCell>
+            <TableCell onClick={() => openEdit(r)}>
+              <div className="flex gap-1 flex-wrap">
+                {(r.genres || []).slice(0, 3).map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
+              </div>
+            </TableCell>
+            <TableCell onClick={() => openEdit(r)}>
+              <div className="flex gap-0.5">
+                {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
+              </div>
+            </TableCell>
+            <TableCell>
+              <div className="flex items-center gap-0.5">
+                <Button variant="ghost" size="icon" className="h-7 w-7" title="Excluir este álbum"
+                  onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-7 w-7" title={`Excluir TODA a banda "${r.artist}" (todos os álbuns)`}
+                  onClick={(e) => { e.stopPropagation(); setDeleteBandConfirm(r.artist); }}>
+                  <Users className="h-3.5 w-3.5 text-destructive/80" />
+                </Button>
+              </div>
+            </TableCell>
+          </TableRow>
+        );
+
+        const renderGroup = (node: GroupNode): JSX.Element => {
+          const collapsed = collapsedGroups.has(node.key);
+          const allSelected = node.itemIds.length > 0 && node.itemIds.every(id => selectedIds.has(id));
+          const indent = node.level * 20;
+          return (
+            <Fragment key={node.key}>
+              <TableRow className="bg-muted/40 hover:bg-muted/60 border-y">
+                <TableCell colSpan={COL_COUNT} className="py-2">
+                  <div className="flex items-center gap-2" style={{ paddingLeft: indent }}>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(node.key)}
+                      className="text-muted-foreground hover:text-foreground"
+                      title={collapsed ? 'Expandir' : 'Recolher'}
+                    >
+                      {collapsed
+                        ? <ChevronRight className="h-4 w-4" />
+                        : <ChevronDown className="h-4 w-4" />}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); toggleGroupSelection(node.itemIds); }}
+                      title={allSelected ? 'Desmarcar grupo' : 'Selecionar grupo'}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {allSelected
+                        ? <CheckSquare className="h-3.5 w-3.5 text-primary" />
+                        : <Square className="h-3.5 w-3.5" />}
+                    </button>
+                    <span className="text-sm font-medium">{node.label}</span>
+                    <span className="text-xs text-muted-foreground">({node.count})</span>
+                  </div>
+                </TableCell>
+              </TableRow>
+              {!collapsed && node.children && node.children.map(renderGroup)}
+              {!collapsed && node.items && node.items.map(renderRow)}
+            </Fragment>
+          );
+        };
+
+        const isGrouped = groupRules.length > 0;
+        const flatLimit = 100;
+        const flatVisible = isGrouped ? filtered : filtered.slice(0, flatLimit);
+
+        return (
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
-                      {releases.length === 0 ? 'Nenhum lançamento cadastrado.' : 'Nenhum resultado encontrado.'}
-                    </TableCell>
+                    <TableHead className="w-[30px]"></TableHead>
+                    <SortHeader field="artist">Artista</SortHeader>
+                    <SortHeader field="album">Álbum</SortHeader>
+                    <SortHeader field="release_date">Data</SortHeader>
+                    <TableHead>País</TableHead>
+                    <TableHead>Gêneros</TableHead>
+                    <SortHeader field="rating">Rating</SortHeader>
+                    <TableHead className="w-[90px]"></TableHead>
                   </TableRow>
-                ) : filtered.slice(0, 100).map(r => (
-                  <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50">
-                    <TableCell onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={selectedIds.has(r.id)} onChange={() => toggleSelect(r.id)} className="rounded" />
-                    </TableCell>
-                    <TableCell className="font-medium" onClick={() => openEdit(r)}><span className="inline-flex items-center gap-2">{renderFlag(r.country)}<span>{r.artist}</span></span></TableCell>
-                    <TableCell onClick={() => openEdit(r)}>{r.album}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm" onClick={() => openEdit(r)}>{r.release_date}</TableCell>
-                    <TableCell className="text-sm" onClick={() => openEdit(r)}>{r.country ? <span className="inline-flex items-center gap-2">{renderFlag(r.country)}<span>{r.country}</span></span> : <span className="text-muted-foreground/40">—</span>}</TableCell>
-                    <TableCell onClick={() => openEdit(r)}>
-                      <div className="flex gap-1 flex-wrap">
-                        {(r.genres || []).slice(0, 3).map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
-                      </div>
-                    </TableCell>
-                    <TableCell onClick={() => openEdit(r)}>
-                      <div className="flex gap-0.5">
-                        {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Excluir este álbum"
-                          onClick={(e) => { e.stopPropagation(); setDeleteConfirmId(r.id); }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title={`Excluir TODA a banda "${r.artist}" (todos os álbuns)`}
-                          onClick={(e) => { e.stopPropagation(); setDeleteBandConfirm(r.artist); }}
-                        >
-                          <Users className="h-3.5 w-3.5 text-destructive/80" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {filtered.length > 100 && (
-              <p className="text-xs text-muted-foreground text-center py-3">Mostrando 100 de {filtered.length} resultados</p>
-            )}
-          </CardContent>
-        </Card>
-      )}
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={COL_COUNT} className="h-32 text-center text-muted-foreground">
+                        {releases.length === 0 ? 'Nenhum lançamento cadastrado.' : 'Nenhum resultado encontrado.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : isGrouped
+                    ? groupedTree.map(renderGroup)
+                    : flatVisible.map(renderRow)}
+                </TableBody>
+              </Table>
+              {!isGrouped && filtered.length > flatLimit && (
+                <p className="text-xs text-muted-foreground text-center py-3">Mostrando {flatLimit} de {filtered.length} resultados</p>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Card View — Compact horizontal cards */}
       {viewMode === 'cards' && (
