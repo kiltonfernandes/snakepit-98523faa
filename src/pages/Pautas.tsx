@@ -1948,6 +1948,7 @@ export default function Pautas() {
                     );
                   }}
                 />
+                )}
               </div>
             </TabsContent>
           </Tabs>
