@@ -1,5 +1,6 @@
 import type { Release } from '@/lib/types';
 import { normalizeCountryCode } from '@/lib/country-utils';
+import { getISOWeek, getISOWeekYear, parseISO } from 'date-fns';
 
 export type SortField = 'release_date' | 'artist' | 'album' | 'rating' | 'country' | 'genre';
 export type SortRule = { field: SortField; dir: 'asc' | 'desc' };
@@ -7,6 +8,7 @@ export type SortRule = { field: SortField; dir: 'asc' | 'desc' };
 export type GroupField =
   | 'release_year'
   | 'release_month'
+  | 'release_week'
   | 'release_decade'
   | 'country'
   | 'genre'
@@ -26,6 +28,7 @@ export const SORT_FIELD_LABELS: Record<SortField, string> = {
 export const GROUP_FIELD_LABELS: Record<GroupField, string> = {
   release_year: 'Ano',
   release_month: 'Ano-Mês',
+  release_week: 'Semana (ISO)',
   release_decade: 'Década',
   country: 'País',
   genre: 'Gênero (primeiro)',
@@ -69,6 +72,15 @@ export function groupValueOf(r: Release, field: GroupField, reviewIds?: Set<stri
   switch (field) {
     case 'release_year': return r.release_date ? r.release_date.slice(0, 4) : EMPTY;
     case 'release_month': return r.release_date ? r.release_date.slice(0, 7) : EMPTY;
+    case 'release_week': {
+      if (!r.release_date) return EMPTY;
+      try {
+        const d = parseISO(r.release_date);
+        const wy = getISOWeekYear(d);
+        const w = getISOWeek(d);
+        return `${wy}-W${String(w).padStart(2, '0')}`;
+      } catch { return EMPTY; }
+    }
     case 'release_decade': {
       if (!r.release_date) return EMPTY;
       const y = parseInt(r.release_date.slice(0, 4), 10);
@@ -83,6 +95,19 @@ export function groupValueOf(r: Release, field: GroupField, reviewIds?: Set<stri
     case 'rating': return r.rating != null ? `${r.rating}` : EMPTY;
     case 'has_review': return reviewIds?.has(r.id) ? 'Sim' : 'Não';
   }
+}
+
+/** Collect all group keys recursively (for expand/collapse all). */
+export function collectAllGroupKeys(nodes: GroupNode[]): string[] {
+  const out: string[] = [];
+  const walk = (ns: GroupNode[]) => {
+    for (const n of ns) {
+      out.push(n.key);
+      if (n.children) walk(n.children);
+    }
+  };
+  walk(nodes);
+  return out;
 }
 
 export interface GroupNode {

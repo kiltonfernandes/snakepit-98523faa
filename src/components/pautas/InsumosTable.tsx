@@ -210,10 +210,10 @@ export function InsumosTable({ pautas, releases, getPautaSlot, updateRawInput, d
       </Table>
 
       <Dialog open={!!expanded} onOpenChange={(o) => !o && setExpanded(null)}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] w-[95vw] h-[92vh] max-h-[92vh] flex flex-col p-0 gap-0">
           {expanded && (
             <>
-              <DialogHeader>
+              <DialogHeader className="px-6 py-4 border-b">
                 <DialogTitle className="flex items-center gap-2">
                   {DAY_LABEL_FULL[expanded.slot]} ·{' '}
                   <span className="text-sm font-normal text-muted-foreground">
@@ -222,13 +222,17 @@ export function InsumosTable({ pautas, releases, getPautaSlot, updateRawInput, d
                   <StatusBadge status={expanded.pauta.status} />
                 </DialogTitle>
               </DialogHeader>
-              <ExpandedRowEditor
-                pauta={expanded.pauta}
-                slot={expanded.slot}
-                releases={releases}
-                updateRawInput={updateRawInput}
-                directionBinding={directionBinding}
-              />
+              <ScrollArea className="flex-1">
+                <div className="px-6 py-5 max-w-4xl mx-auto">
+                  <ExpandedRowEditor
+                    pauta={expanded.pauta}
+                    slot={expanded.slot}
+                    releases={releases}
+                    updateRawInput={updateRawInput}
+                    directionBinding={directionBinding}
+                  />
+                </div>
+              </ScrollArea>
             </>
           )}
         </DialogContent>
