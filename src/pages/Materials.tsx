@@ -1265,9 +1265,13 @@ export default function Materials() {
                 );
               }}
             />
+            )}
           </TabsContent>
 
           <TabsContent value="covers">
+            {viewMode === 'table' ? (
+              <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+            ) : (
             <WorkspaceShell
               weekLabel="Capas da Semana"
               renderDay={(day) => {
@@ -1297,9 +1301,8 @@ export default function Materials() {
                 );
               }}
             />
+            )}
           </TabsContent>
-          </>
-          )}
         </Tabs>
       )}
 
