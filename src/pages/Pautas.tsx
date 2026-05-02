@@ -1456,18 +1456,22 @@ export default function Pautas() {
                 <TabsTrigger value="flow">Flow</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
               </TabsList>
-              {activeTab === 'inputs' && (
-                <div className="flex items-center gap-2">
-                  <AutosaveBadge className="mr-2" />
-                  <ViewModeToggle mode={inputsView} onChange={setInputsView} className="mr-1" />
+              <div className="flex items-center gap-2">
+                <AutosaveBadge className="mr-2" />
+                {activeTab !== 'flow' && (
+                  <ViewModeToggle mode={pageView} onChange={setPageView} className="mr-1" />
+                )}
+                {activeTab === 'inputs' && (
+                  <>
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillAnniversaries} disabled={loadingAnniversaries}>
                     {loadingAnniversaries ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Wand2 className="h-3.5 w-3.5" /> Auto Aniversários</>}
                   </Button>
                   <Button size="sm" variant="outline" className="gap-2" onClick={handleAutoFillNews} disabled={loadingNews}>
                     {loadingNews ? <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Buscando...</> : <><Newspaper className="h-3.5 w-3.5" /> Auto Notícias</>}
                   </Button>
-                </div>
-              )}
+                  </>
+                )}
+              </div>
             </div>
 
             <TabsContent value="inputs">
