@@ -1138,11 +1138,23 @@ export default function Materials() {
 
       {weekMaterials.length > 0 && (
         <Tabs defaultValue="titles" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="titles">Títulos</TabsTrigger>
-            <TabsTrigger value="descriptions">Descrições</TabsTrigger>
-            <TabsTrigger value="covers">Capas</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <TabsList>
+              <TabsTrigger value="titles">Títulos</TabsTrigger>
+              <TabsTrigger value="descriptions">Descrições</TabsTrigger>
+              <TabsTrigger value="covers">Capas</TabsTrigger>
+            </TabsList>
+            <div className="flex items-center gap-3">
+              <AutosaveBadge />
+              <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+            </div>
+          </div>
+
+          {viewMode === 'table' && (
+            <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+          )}
+          {viewMode === 'cards' && (
+          <>
 
           <TabsContent value="titles">
             <WorkspaceShell
