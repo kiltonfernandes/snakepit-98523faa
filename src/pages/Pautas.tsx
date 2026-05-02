@@ -1811,6 +1811,15 @@ export default function Pautas() {
                 </div>
 
                 {/* Progress cards grid */}
+                {pageView === 'table' ? (
+                  <ManagementTable
+                    pautas={weekPautas}
+                    materials={weekMats}
+                    getPautaSlot={getPautaSlot}
+                    updateMaterial={updateMaterial}
+                    computeStatus={computePautaStatus}
+                  />
+                ) : (
                 <WorkspaceShell
                   excludeDays={['sunday']}
                   weekLabel="Progresso por episódio"
