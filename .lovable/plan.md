@@ -1,123 +1,151 @@
-# Plano: Persistência blindada dos insumos + Overhaul UI tabular
+# Plano: Sorting + Grouping (Airtable-like) na aba Releases
 
-## Parte 1 — Persistência dos insumos (bug crítico)
+## Objetivo
 
-### Diagnóstico
+Trazer para a aba **Releases** (visão tabular) o mesmo modelo do Airtable:
 
-Hoje, cada tecla digitada em qualquer campo de **Pautas → Insumos** chama `updateRawInput` → `updatePauta` → `supabase.update(raw_inputs_json INTEIRO).eq(id)`. Não há:
+- **Sort** (ordenação) multi-nível, empilhável, asc/desc por campo, com prioridade.
+- **Group** (agrupamento) por um ou mais campos, criando blocos colapsáveis com **chevrons**.
+- Sort e Group convivem: dentro de cada grupo a ordenação configurada continua valendo.
 
-- Debounce → 1 request por keystroke (rate limit, ordem fora de sequência).
-- Garantia de ordem → request mais antigo pode chegar depois e sobrescrever.
-- Retry em falha de rede → digitação some sem aviso.
-- Indicador visual de "salvando/salvo".
-- Proteção ao fechar a aba com edição pendente.
+## Escopo
 
-O mesmo padrão existe em `updateMaterial` (Materiais) e edições inline de Releases.
+- Aplicar **somente na aba Releases** (`src/pages/Releases.tsx`), na **visão tabular**.
+- Visão Card permanece como está.
+- Persistência das preferências em `localStorage` (sem mudança de schema).
 
-### Correções
+## UX — toolbar da tabela
 
-1. **Novo hook `useAutosave**` (`src/hooks/use-autosave.ts`):
-  - Debounce de 600ms por entidade+campo.
-  - Fila por `id` com versionamento monotônico — request com versão menor é descartado ao retornar.
-  - Retry exponencial (3 tentativas) em falha de rede.
-  - Estado exposto: `idle | dirty | saving | saved | error`.
-  - `flush()` síncrono usado em `beforeunload` e ao trocar de pauta/aba.
-2. **Refatorar `AppContext.updatePauta`, `updateMaterial`, `updateRelease**`:
-  - Atualização local imediata (UI responsiva).
-  - Persistência roteada pelo `useAutosave` (debounced + ordenado).
-  - Manter API atual (chamadas existentes não quebram).
-3. **Indicador global "Salvando…/Salvo"** no header da aba Pautas (e Materiais), alimentado pelo estado da fila.
-4. `**beforeunload` guard**: se houver dirty na fila, bloqueia navegação até flush concluir.
-5. **Auto-recuperação local**: snapshot do `raw_inputs_json` em `localStorage` por pauta enquanto a fila estiver `dirty/saving`. Limpa ao confirmar `saved`. Se a página recarregar com snapshot pendente, reaplica e re-enfileira.  
-  
-mas precisa garantir a performance   
-  
-
-
-## Parte 2 — Overhaul de UI: Releases, Pautas, Materiais
-
-### Princípios
-
-- **Tabela como visão padrão** em todas as três abas.
-- **Toggle Card/Tabela** visível e consistente (mesmo componente do print: dois ícones, ativo destacado).
-- Remover redundâncias: ações duplicadas, blocos repetidos, headers verbosos.
-- Favorecer **fluxo de jornada**: ações principais sempre visíveis; ações raras em menus de overflow.
-
-### Componente compartilhado
-
-Criar `src/components/shared/ViewModeToggle.tsx` reutilizável (extraído do que já existe em Releases) + hook `useViewMode(key)` que persiste a escolha em `localStorage` por aba.
-
-### Releases (já tem toggle, só refinar)
-
-- Mover seletor para o mesmo padrão visual do print (compacto, canto direito da toolbar).
-- Tabela: priorizar colunas Artist · Album · Country · Genre · Rating · Date · Ações. Remover coluna "Comments" do default (mover para hover/expand).
-- Remover botão "Bandas" duplicado — virá como ação no menu overflow.
-
-### Pautas (NOVO — adicionar visão tabular)
-
-Sub-aba **Insumos**: além dos cards atuais (um por dia), adicionar visão tabular com:
+Adicionar dois botões na toolbar, ao lado do `ViewModeToggle`:
 
 ```text
-| Dia | Tipo | Aniversário | Notícia | Review Rafa | Review Kilton | Direção | Status |
+[ Buscar... ] [Filtros rápidos] ... [ Sort (2) ▾ ] [ Group (1) ▾ ] [ ▦ ⊞ ]
 ```
 
-- Cada célula é editável inline (popover compacto para campos longos).
-- Botão Direção abre o `DirectionEditor` modal já existente.
-- Status com badge dinâmico (pesquisa → publicado).
-- Sub-abas Insumos/Geração/Preview ganham o `ViewModeToggle` no canto superior direito.
-- Remover acordeões redundantes em telas largas.
+- O número entre parênteses mostra quantas regras estão ativas.
+- Botão fica destacado (variant=`secondary`) quando há regras.
+- Cada um abre um `Popover` com o editor de regras.
 
-### Materiais (NOVO — adicionar visão tabular)
+### Popover de Sort
 
-- Tabela:
+- Lista de regras empilhadas (drag-to-reorder simples via setas ↑↓).
+- Cada regra: `Campo` (Select) + `Asc/Desc` (toggle) + `Remover`.
+- Botão "Adicionar nível de ordenação".
+- Campos disponíveis: `Artist`, `Album`, `Release Date`, `Rating`, `Country`, `Genre (primeiro)`.
+
+### Popover de Group
+
+- Mesma mecânica: lista de campos de agrupamento empilháveis (multi-nível).
+- Cada nível: `Campo` + `Direção do header` (asc/desc) + `Remover`.
+- Botão "Adicionar nível de agrupamento".
+- Campos: `Release Date (Ano)`, `Release Date (Ano-Mês)`, `Country`, `Genre (primeiro)`, `Rating`, `Decade`, `Has review` (sim/não).
+
+## UX — tabela com grupos
+
+Quando há agrupamento ativo, a tabela passa a renderizar **headers de grupo** + linhas:
 
 ```text
-| Dia | Capa (thumb) | Título selecionado | Descrição (✓/✗) | Spotify | Repositório | Status |
+▾ Country: Brazil  (12)
+   ▾ Genre: Death Metal  (5)
+      [linhas de release...]
+   ▸ Genre: Black Metal  (4)   ← colapsado
+▸ Country: Norway  (8)
 ```
 
-- Click na linha abre o painel de edição lateral (Sheet) — não navega.
-- Visão Card permanece para trabalho visual de capas.
-- Remover seção redundante de "ações em massa" da topo — virá em menu overflow.
-
-### Toggle visual (replicando print)
-
-```text
-┌────────────┐
-│  ▦   ⊞    │   ← table icon (left) | cards icon (right)
-└────────────┘
-```
-
-Cores via tokens semânticos (`bg-primary` ativo, `bg-card` inativo). Sem cores hardcoded.
-
-## Arquivos afetados
-
-**Persistência:**
-
-- `src/hooks/use-autosave.ts` (novo)
-- `src/contexts/AppContext.tsx` (rotear updates)
-- `src/pages/Pautas.tsx`, `src/pages/Materials.tsx`, `src/pages/Releases.tsx` (indicador + flush em troca)
-
-**UI Overhaul:**
-
-- `src/components/shared/ViewModeToggle.tsx` (novo)
-- `src/hooks/use-view-mode.ts` (novo)
-- `src/pages/Releases.tsx` (refinar toolbar, mover botões)
-- `src/pages/Pautas.tsx` (adicionar tabela Insumos + toggle nas sub-abas)
-- `src/pages/Materials.tsx` (adicionar visão tabular + Sheet de edição)
-- `src/components/pautas/InsumosTable.tsx` (novo)
-- `src/components/materials/MaterialsTable.tsx` (novo)
+- Chevron `▸/▾` à esquerda do label do grupo (`ChevronRight` / `ChevronDown` do lucide).
+- Click no header alterna colapso. Estado por chave de grupo guardado em `useState` + `localStorage`.
+- Ações em massa: checkbox no header do grupo seleciona/deseleciona todas as linhas daquele grupo.
+- Contador de itens à direita do label.
+- Indentação progressiva por nível (nível 0 = 0px, nível 1 = 20px, etc.).
+- Cabeçalho de coluna da tabela continua sticky no topo.
 
 ## Detalhes técnicos
 
-- Debounce + fila ordenada usa `Map<string, { version: number; pending: Partial<T>; timer }>` por entidade.
-- `flush()` aguarda `Promise.all` da fila e retorna boolean.
-- `localStorage` keys: `autosave:pauta:<id>`, `autosave:material:<id>`.
-- ViewMode key em `localStorage`: `viewMode:releases | viewMode:pautas-insumos | viewMode:pautas-geracao | viewMode:materials`.
-- Toggle usa Tailwind tokens; sem cores diretas.
-- Tabelas usam `<Table>` shadcn com `sticky` header; respeitam ordem cronológica (Mon→Sun) conforme regra Core de memória.
+### Estado e persistência
+
+```ts
+type SortRule = { field: SortField; dir: 'asc' | 'desc' };
+type GroupRule = { field: GroupField; dir: 'asc' | 'desc' };
+
+const [sortRules, setSortRules] = useState<SortRule[]>(() => loadLS('releases:sort', [{ field: 'release_date', dir: 'desc' }]));
+const [groupRules, setGroupRules] = useState<GroupRule[]>(() => loadLS('releases:group', []));
+const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set(loadLS('releases:collapsed', [])));
+```
+
+- Persistir em `localStorage` em cada mudança (`useEffect`).
+- Migração suave: se já existir `sortField/sortDir` no estado atual, popular `sortRules` no boot.
+
+### Ordenação multi-nível
+
+```ts
+function compareWithRules(a: Release, b: Release, rules: SortRule[]): number {
+  for (const r of rules) {
+    const cmp = fieldCompare(a, b, r.field);
+    if (cmp !== 0) return r.dir === 'desc' ? -cmp : cmp;
+  }
+  return 0;
+}
+```
+
+`fieldCompare` cobre string, number, null-safe.
+
+### Agrupamento recursivo
+
+```ts
+type GroupNode = { key: string; label: string; level: number; items: Release[]; children?: GroupNode[] };
+
+function buildGroups(items: Release[], rules: GroupRule[], level = 0, parentKey = ''): GroupNode[] {
+  if (level >= rules.length) return [{ key: parentKey, label: '', level, items }];
+  const rule = rules[level];
+  const buckets = new Map<string, Release[]>();
+  for (const it of items) {
+    const k = groupValueOf(it, rule.field); // ex: 'Brazil', '2024-09', 'Death Metal', '—' p/ vazios
+    buckets.set(k, [...(buckets.get(k) || []), it]);
+  }
+  const sorted = Array.from(buckets.entries()).sort(([a], [b]) => rule.dir === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
+  return sorted.map(([k, arr]) => ({
+    key: `${parentKey}/${rule.field}=${k}`,
+    label: `${labelForField(rule.field)}: ${k} (${arr.length})`,
+    level,
+    items: arr,
+    children: buildGroups(arr, rules, level + 1, `${parentKey}/${rule.field}=${k}`),
+  }));
+}
+```
+
+### Render
+
+- Quando `groupRules.length === 0` → tabela atual (sem mudanças).
+- Quando há grupos → percorrer árvore e emitir:
+  - `<TableRow>` com `colspan` total contendo chevron + label + contador + checkbox de seleção em massa.
+  - Recursão para filhos; ao chegar no nível folha, emite as linhas de release ordenadas por `sortRules`.
+- Linhas dentro de um grupo respeitam a ordenação global.
+
+### Performance
+
+- `buildGroups` em `useMemo([filtered, groupRules])`.
+- Linhas filhas são memoizadas individualmente quando possível.
+- Para >2000 releases não há virtualização hoje; manter como está (nenhuma regressão), avaliar virtualização futura se necessário (fora do escopo).
+
+## Arquivos afetados
+
+- `src/pages/Releases.tsx` — adicionar estado, popovers, render com grupos.
+- `src/components/releases/SortRulesPopover.tsx` (novo) — editor de regras de sort.
+- `src/components/releases/GroupRulesPopover.tsx` (novo) — editor de regras de group.
+- `src/components/releases/ReleasesGroupedTable.tsx` (novo) — render recursivo da árvore de grupos.
+- `src/lib/releases-grouping.ts` (novo) — `compareWithRules`, `buildGroups`, `groupValueOf`, `labelForField`, helpers de localStorage.
 
 ## Não escopado
 
-- Mudanças de schema no banco (não necessárias).
-- Auth/RLS (mantém público como hoje).
-- Refator do gerador de pautas / Rivaldo (intocado).
+- Mudanças nas abas Pautas e Materiais (mantêm o que foi feito antes).
+- Filtros avançados estilo Airtable (ficam para outra rodada).
+- Virtualização de linhas.
+- Mudanças de schema no banco.
+
+## Aceite
+
+- Tabela sem regras: comportamento atual preservado.
+- Sort multi-nível funciona como desempate (ex.: Country asc → Release Date desc).
+- Group cria blocos colapsáveis com chevrons; estado de colapso persiste entre reloads.
+- Sort + Group combinados ordenam linhas dentro de cada bloco.
+- Preferências de sort/group/colapso persistem em `localStorage`.
