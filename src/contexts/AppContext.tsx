@@ -138,7 +138,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     Promise.all([loadReleases(), loadWeeks(), loadPautas(), loadMaterials(), loadSettings(), loadActivityLog()])
-      .finally(() => setDataReady(true));
+      .finally(() => {
+        setDataReady(true);
+        // Re-enqueue any pending edits saved locally from a prior session/refresh.
+        recoverAutosaveSnapshots();
+      });
   }, [loadReleases, loadWeeks, loadPautas, loadMaterials, loadSettings, loadActivityLog]);
 
   // Auto-recalc week statuses after pautas change
