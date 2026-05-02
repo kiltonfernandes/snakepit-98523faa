@@ -1467,6 +1467,16 @@ export default function Pautas() {
             </div>
 
             <TabsContent value="inputs">
+              {inputsView === 'table' ? (
+                <InsumosTable
+                  pautas={weekPautas}
+                  releases={releases}
+                  weekStart={selectedWeek.start_date}
+                  getPautaSlot={getPautaSlot}
+                  updateRawInput={updateRawInput}
+                  directionBinding={directionBinding}
+                />
+              ) : (
               <WorkspaceShell
                 excludeDays={['sunday']}
                 weekLabel={`Insumos – Semana de ${new Date(selectedWeek.start_date + 'T12:00:00').toLocaleDateString('pt-BR')}`}
