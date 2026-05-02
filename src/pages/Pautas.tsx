@@ -27,6 +27,10 @@ import { getSectionsForDay, DAY_SLOTS, NORMALIZED_GENRES } from '@/lib/constants
 import { Pauta, PautaSections, DaySlot, Release, EpisodeMaterial } from '@/lib/types';
 import { buildWeekPrompt, buildDayPrompt, buildSectionPrompt, toneProfileForTemperature, PROMPT_SCHEMA_VERSION, sectionHasInput, type PromptBuildContext } from '@/lib/prompt-builder';
 import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/DirectionEditor';
+import { InsumosTable } from '@/components/pautas/InsumosTable';
+import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
+import { useViewMode } from '@/hooks/use-view-mode';
+import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
 import { parsePautaResponse } from '@/lib/response-parser';
 import { toast } from 'sonner';
 
