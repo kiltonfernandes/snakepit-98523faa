@@ -407,8 +407,15 @@ export default function Releases() {
   }, [releases, updateRelease, loadReleases]);
 
   const toggleSort = (field: SortField) => {
-    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortField(field); setSortDir('desc'); }
+    setSortRules(prev => {
+      const top = prev[0];
+      if (top && top.field === field) {
+        const flipped: SortRule = { field, dir: top.dir === 'asc' ? 'desc' : 'asc' };
+        return [flipped, ...prev.slice(1)];
+      }
+      const rest = prev.filter(r => r.field !== field);
+      return [{ field, dir: 'desc' }, ...rest];
+    });
   };
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
@@ -640,26 +647,37 @@ export default function Releases() {
     });
   }, [filtered]);
 
-  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort(field)}>
-      <span className="flex items-center gap-1">
-        {children}
-        {sortField === field && <ArrowUpDown className="h-3 w-3" />}
-      </span>
-    </TableHead>
-  );
+  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => {
+    const ruleIdx = sortRules.findIndex(r => r.field === field);
+    const active = ruleIdx >= 0;
+    return (
+      <TableHead className="cursor-pointer select-none" onClick={() => toggleSort(field)}>
+        <span className="flex items-center gap-1">
+          {children}
+          {active && (
+            <span className="inline-flex items-center gap-0.5 text-primary">
+              <ArrowUpDown className="h-3 w-3" />
+              {sortRules.length > 1 && <span className="text-[9px]">{ruleIdx + 1}</span>}
+            </span>
+          )}
+        </span>
+      </TableHead>
+    );
+  };
 
-  // Group releases by date for card view
+  // Group releases by date for card view (always sorted by primary date direction)
   const groupedByDate = useMemo(() => {
     const map = new Map<string, typeof filtered>();
     filtered.forEach(r => {
       if (!map.has(r.release_date)) map.set(r.release_date, []);
       map.get(r.release_date)!.push(r);
     });
+    const dateRule = sortRules.find(r => r.field === 'release_date');
+    const dir: 'asc' | 'desc' = dateRule?.dir ?? 'desc';
     const entries = Array.from(map.entries());
-    entries.sort((a, b) => sortDir === 'desc' ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0]));
+    entries.sort((a, b) => dir === 'desc' ? b[0].localeCompare(a[0]) : a[0].localeCompare(b[0]));
     return entries;
-  }, [filtered, sortDir]);
+  }, [filtered, sortRules]);
 
   return (
     <div className="space-y-6">
