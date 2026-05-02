@@ -263,16 +263,37 @@ export default function Releases() {
       }
       return matchSearch && matchGenre && matchCountry && matchDate;
     });
-    result.sort((a, b) => {
-      let cmp = 0;
-      if (sortField === 'release_date') cmp = a.release_date.localeCompare(b.release_date);
-      else if (sortField === 'artist') cmp = a.artist.localeCompare(b.artist);
-      else if (sortField === 'album') cmp = a.album.localeCompare(b.album);
-      else if (sortField === 'rating') cmp = (a.rating || 0) - (b.rating || 0);
-      return sortDir === 'desc' ? -cmp : cmp;
-    });
+    const effectiveRules: SortRule[] = sortRules.length
+      ? sortRules
+      : [{ field: 'release_date', dir: 'desc' }];
+    result.sort((a, b) => compareWithRules(a, b, effectiveRules));
     return result;
-  }, [releases, search, genreFilter, countryFilter, quickFilter, sortField, sortDir]);
+  }, [releases, search, genreFilter, countryFilter, quickFilter, sortRules]);
+
+  const reviewIds = useMemo(() => new Set(reviewMap.keys()), [reviewMap]);
+
+  const groupedTree = useMemo<GroupNode[]>(() => {
+    if (groupRules.length === 0) return [];
+    return buildGroups(filtered, groupRules, sortRules.length ? sortRules : [{ field: 'release_date', dir: 'desc' }], reviewIds);
+  }, [filtered, groupRules, sortRules, reviewIds]);
+
+  const toggleGroup = useCallback((key: string) => {
+    setCollapsedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const toggleGroupSelection = useCallback((ids: string[]) => {
+    setSelectedIds(prev => {
+      const allSelected = ids.every(id => prev.has(id));
+      const next = new Set(prev);
+      if (allSelected) ids.forEach(id => next.delete(id));
+      else ids.forEach(id => next.add(id));
+      return next;
+    });
+  }, []);
 
   // Repatriation: enrich countries with progress modal
   const enrichCountries = useCallback(async (forceAll = false) => {
