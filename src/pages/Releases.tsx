@@ -39,6 +39,7 @@ import { GroupRulesPopover } from '@/components/releases/GroupRulesPopover';
 import {
   buildGroups,
   compareWithRules,
+  collectAllGroupKeys,
   loadLS,
   saveLS,
   type GroupNode,
@@ -761,6 +762,28 @@ export default function Releases() {
         <AutosaveBadge className="mr-1" />
         <SortRulesPopover rules={sortRules} onChange={setSortRules} />
         <GroupRulesPopover rules={groupRules} onChange={setGroupRules} />
+        {groupRules.length > 0 && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              title="Expandir todos os grupos"
+              onClick={() => setCollapsedGroups(new Set())}
+            >
+              <ChevronDown className="h-3.5 w-3.5" /> Expandir
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 gap-1.5"
+              title="Recolher todos os grupos"
+              onClick={() => setCollapsedGroups(new Set(collectAllGroupKeys(groupedTree)))}
+            >
+              <ChevronRight className="h-3.5 w-3.5" /> Recolher
+            </Button>
+          </>
+        )}
         <ViewModeToggle mode={viewMode} onChange={setViewMode} />
 
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
