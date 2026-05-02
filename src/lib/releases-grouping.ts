@@ -155,7 +155,7 @@ export function buildGroups(
       key,
       value: k,
       field: rule.field,
-      label: `${GROUP_FIELD_LABELS[rule.field]}: ${k}`,
+      label: k,
       level,
       count: arr.length,
       itemIds: arr.map(r => r.id),
