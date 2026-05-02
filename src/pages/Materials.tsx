@@ -1212,9 +1212,13 @@ export default function Materials() {
                 );
               }}
             />
+            )}
           </TabsContent>
 
           <TabsContent value="descriptions">
+            {viewMode === 'table' ? (
+              <MaterialsTable materials={weekMaterials} updateMaterial={updateMaterial} />
+            ) : (
             <WorkspaceShell
               weekLabel="Descrições da Semana"
               actions={
