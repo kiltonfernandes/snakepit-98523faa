@@ -169,29 +169,6 @@ export function InsumosTable({ pautas, releases, getPautaSlot, updateRawInput, d
   );
 }
 
-function DirectionInline({
-  binding, label, searchQuery,
-}: {
-  binding: { value: { direction: string; mandatory: string }; onChange: (v: { direction: string; mandatory: string }) => void };
-  label: string;
-  searchQuery: string;
-}) {
-  const filled = !!(binding.value.direction || binding.value.mandatory);
-  return (
-    <DirectionEditor
-      sectionLabel={label}
-      value={binding.value}
-      onChange={binding.onChange}
-      searchQuery={searchQuery}
-      trigger={
-        <Button type="button" variant="ghost" size="sm" className={`h-6 px-1.5 text-[10px] gap-1 ${filled ? 'text-primary' : 'text-muted-foreground'}`}>
-          <Pencil className="h-3 w-3" /> Direção{filled ? ' ✓' : ''}
-        </Button>
-      }
-    />
-  );
-}
-
 function ReviewCell({
   releases, currentId, onPick, direction, releaseLabel, sectionLabel, searchQuery,
 }: {
@@ -239,7 +216,12 @@ function ReviewCell({
           </div>
         </PopoverContent>
       </Popover>
-      <DirectionInline binding={direction} label={sectionLabel} searchQuery={searchQuery} />
+      <DirectionEditor
+        sectionLabel={sectionLabel}
+        value={direction.value}
+        onChange={direction.onChange}
+        searchQuery={searchQuery}
+      />
     </div>
   );
 }
