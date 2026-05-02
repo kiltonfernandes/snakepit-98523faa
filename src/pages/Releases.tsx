@@ -759,6 +759,8 @@ export default function Releases() {
         </AlertDialog>
 
         <AutosaveBadge className="mr-1" />
+        <SortRulesPopover rules={sortRules} onChange={setSortRules} />
+        <GroupRulesPopover rules={groupRules} onChange={setGroupRules} />
         <ViewModeToggle mode={viewMode} onChange={setViewMode} />
 
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
