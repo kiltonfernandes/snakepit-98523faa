@@ -165,7 +165,7 @@ export default function Releases() {
   const [sortField, setSortField] = useState<SortField>('release_date');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [viewMode, setViewMode] = useState<ViewMode>('cards');
+  const [viewMode, setViewMode] = useViewMode('releases', 'table');
   const [enrichingCountries, setEnrichingCountries] = useState(false);
 
   // Repatriation modal
