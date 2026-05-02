@@ -696,23 +696,8 @@ export default function Releases() {
           </AlertDialogContent>
         </AlertDialog>
 
-        {/* View mode toggle */}
-        <div className="flex items-center rounded-md border border-border overflow-hidden">
-          <button
-            onClick={() => setViewMode('table')}
-            className={`p-1.5 transition-colors ${viewMode === 'table' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}
-            title="Tabela"
-          >
-            <TableIcon className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => setViewMode('cards')}
-            className={`p-1.5 transition-colors ${viewMode === 'cards' ? 'bg-primary text-primary-foreground' : 'bg-card text-muted-foreground hover:text-foreground'}`}
-            title="Cards"
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-        </div>
+        <AutosaveBadge className="mr-1" />
+        <ViewModeToggle mode={viewMode} onChange={setViewMode} />
 
         <Button variant="outline" size="sm" className="gap-2" onClick={handleImport}>
           <Upload className="h-4 w-4" /> Import
