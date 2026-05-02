@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { Release, EditorialWeek, Pauta, EpisodeMaterial, AppSettings, DaySlot, PautaSections } from '@/lib/types';
 import { DAY_SLOTS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
+import { enqueueUpdate, recoverAutosaveSnapshots } from '@/lib/autosave-queue';
 
 interface ActivityEntry {
   id: string;
