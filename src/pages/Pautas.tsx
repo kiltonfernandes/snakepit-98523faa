@@ -203,7 +203,9 @@ export default function Pautas() {
   const [copied, setCopied] = useState(false);
   const [exportFormat, setExportFormat] = useState<'txt' | 'md' | 'json' | 'clipboard'>('clipboard');
   const [activeTab, setActiveTab] = useState('content');
-  const [inputsView, setInputsView] = useViewMode('pautas-insumos', 'table');
+  // Single view-mode shared across Pautas sub-tabs (Insumos, Conteúdo, Management).
+  // Flow is a guided wizard and ignores this toggle.
+  const [pageView, setPageView] = useViewMode('pautas', 'table');
   const [generating, setGenerating] = useState(false);
   const [flowStep, setFlowStep] = useState(0);
   const [flowGenerating, setFlowGenerating] = useState(false);
