@@ -1,151 +1,90 @@
-# Plano: Sorting + Grouping (Airtable-like) na aba Releases
+# Nova Pauta — Fluxo Guiado & Episódios Avulsos
 
-## Objetivo
+Adicionar um fluxo flexível para criar episódios sob demanda, sem precisar amarrar à grade da semana editorial, e uma aba dedicada para gerenciá-los.
 
-Trazer para a aba **Releases** (visão tabular) o mesmo modelo do Airtable:
+## Visão geral da experiência
 
-- **Sort** (ordenação) multi-nível, empilhável, asc/desc por campo, com prioridade.
-- **Group** (agrupamento) por um ou mais campos, criando blocos colapsáveis com **chevrons**.
-- Sort e Group convivem: dentro de cada grupo a ordenação configurada continua valendo.
+1. Na aba **Pautas**, novo botão `+ Nova Pauta` (ao lado dos controles já existentes).
+2. Abre um modal-wizard com etapas:
+   - **Etapa 1 — Conteúdo**: multiselect (checkboxes) com os blocos do episódio:
+     - Aniversário de álbum
+     - Review de álbum
+     - Notícia
+     - Entrevista
+   - O wizard monta dinamicamente as próximas etapas, uma por bloco marcado, na ordem escolhida.
+3. **Etapas por bloco** (mesmo padrão para todos):
+   - Campo de **insumo principal**:
+     - Review → lookup do disco em `releases` (combobox de busca).
+     - Demais → input de URL (com botão "validar / resolver").
+   - **Texto livre** (direção editorial / notas).
+   - **Prompt** pré-preenchido com o default da plataforma (de `prompt-defaults.ts`), editável.
+   - Botão **Copiar prompt** (mesma UX do que já existe em pautas semanais).
+   - Área **"Colar resposta da IA"** com parser (`parsePautaResponse`) → ao colar, registra o material parsed inline (com badge de status + warnings).
+4. **Etapas de materiais** (após todos os blocos):
+   - **Título do episódio** (mesma dinâmica copiar prompt → colar → parser de títulos).
+   - **Descrição** (template + copiar prompt → colar HTML/texto).
+   - **Capa** (prompt para gerador + URL/imagem; mantém o fluxo atual do Cover Generator).
+5. **Etapa final — Revisão & salvar**: resumo do episódio, data de publicação (opcional), botão "Criar episódio avulso".
 
-## Escopo
+## Aba Episódios Avulsos
 
-- Aplicar **somente na aba Releases** (`src/pages/Releases.tsx`), na **visão tabular**.
-- Visão Card permanece como está.
-- Persistência das preferências em `localStorage` (sem mudança de schema).
+Nova aba de topo em Pautas (ou na Workstation), irmã de Insumos / Conteúdo / Flow / Management. UI forte de organização:
 
-## UX — toolbar da tabela
+- Filtros: status, tipo(s) de bloco, intervalo de datas, busca livre.
+- Visão **tabular padrão da plataforma** (mesma toolbar de sort/group já usada em Releases / Insumos, conforme memória).
+- Cada linha = episódio avulso, com:
+  - Badges dos blocos contidos (Aniversário, Review, Notícia, Entrevista).
+  - `StatusBadge` reutilizado do workflow existente (Pesquisa → … → Publicado).
+  - Indicadores de completude (pauta, título, descrição, capa, salvo no OneDrive) — mesmo padrão de `EpisodeCompletionIndicators`.
+  - Ações rápidas: editar (reabre o wizard), abrir no Rivaldo, exportar, deletar (com `AlertDialog`).
+- Linha clicável abre **modal grande** (mesmo padrão dos modais expandidos de Insumos, 95vw x 92vh) para edição direta dos campos.
 
-Adicionar dois botões na toolbar, ao lado do `ViewModeToggle`:
+## Integração com Rivaldo + OneDrive
 
-```text
-[ Buscar... ] [Filtros rápidos] ... [ Sort (2) ▾ ] [ Group (1) ▾ ] [ ▦ ⊞ ]
-```
-
-- O número entre parênteses mostra quantas regras estão ativas.
-- Botão fica destacado (variant=`secondary`) quando há regras.
-- Cada um abre um `Popover` com o editor de regras.
-
-### Popover de Sort
-
-- Lista de regras empilhadas (drag-to-reorder simples via setas ↑↓).
-- Cada regra: `Campo` (Select) + `Asc/Desc` (toggle) + `Remover`.
-- Botão "Adicionar nível de ordenação".
-- Campos disponíveis: `Artist`, `Album`, `Release Date`, `Rating`, `Country`, `Genre (primeiro)`.
-
-### Popover de Group
-
-- Mesma mecânica: lista de campos de agrupamento empilháveis (multi-nível).
-- Cada nível: `Campo` + `Direção do header` (asc/desc) + `Remover`.
-- Botão "Adicionar nível de agrupamento".
-- Campos: `Release Date (Ano)`, `Release Date (Ano-Mês)`, `Country`, `Genre (primeiro)`, `Rating`, `Decade`, `Has review` (sim/não).
-
-## UX — tabela com grupos
-
-Quando há agrupamento ativo, a tabela passa a renderizar **headers de grupo** + linhas:
-
-```text
-▾ Country: Brazil  (12)
-   ▾ Genre: Death Metal  (5)
-      [linhas de release...]
-   ▸ Genre: Black Metal  (4)   ← colapsado
-▸ Country: Norway  (8)
-```
-
-- Chevron `▸/▾` à esquerda do label do grupo (`ChevronRight` / `ChevronDown` do lucide).
-- Click no header alterna colapso. Estado por chave de grupo guardado em `useState` + `localStorage`.
-- Ações em massa: checkbox no header do grupo seleciona/deseleciona todas as linhas daquele grupo.
-- Contador de itens à direita do label.
-- Indentação progressiva por nível (nível 0 = 0px, nível 1 = 20px, etc.).
-- Cabeçalho de coluna da tabela continua sticky no topo.
+- Episódios avulsos aparecem no Rivaldo na mesma listagem dos da semana, com flag visual "Avulso".
+- Upload para OneDrive segue o caminho atual `Snakepit/YYYY-Www/…`, derivando a semana ISO da `publication_date` do avulso (ou de uma pasta `Snakepit/Avulsos/YYYY-MM/` quando não houver data definida — comportamento a confirmar; ver pergunta abaixo).
+- `episode_materials.repository_url`, `cover_url`, etc. continuam sendo a fonte de verdade — sem fork no fluxo Rivaldo.
 
 ## Detalhes técnicos
 
-### Estado e persistência
+### Modelo de dados
+- Reaproveitar `pautas` + `episode_materials`. Adicionar:
+  - `pautas.is_standalone boolean default false`.
+  - `pautas.standalone_topics jsonb` — array de `{ type, prompt, response_text, parsed_json, url|release_id, notes }`.
+  - `episode_materials.is_standalone boolean default false`.
+- `week_id` continua obrigatório no schema; para avulsos, usar uma "semana sintética" por mês (`standalone-YYYY-MM`) criada on-demand — evita migração destrutiva e mantém Rivaldo/Materials funcionando sem branching.
+- Novo `pauta_type = 'standalone'` no enum lógico (campo é text, basta convenção).
 
-```ts
-type SortRule = { field: SortField; dir: 'asc' | 'desc' };
-type GroupRule = { field: GroupField; dir: 'asc' | 'desc' };
+### Wizard
+- Componente `src/components/pautas/NovaPautaWizard.tsx` (Dialog com `Stepper` interno).
+- Estado controlado por reducer (`useReducer`) com snapshot em `localStorage` (`nova_pauta_draft`) para recuperação — alinhado ao Autosave Queue.
+- Etapas geradas dinamicamente a partir dos checkboxes; usa os mesmos helpers `buildSectionPrompt` (estender `prompt-builder.ts` para suportar tópicos avulsos).
+- Parser: `parsePautaResponse` já cobre o contrato `snakepit_response`; reaproveitar.
+- Materiais (título/descrição/capa) chamam os mesmos builders usados em `MaterialsTable`.
 
-const [sortRules, setSortRules] = useState<SortRule[]>(() => loadLS('releases:sort', [{ field: 'release_date', dir: 'desc' }]));
-const [groupRules, setGroupRules] = useState<GroupRule[]>(() => loadLS('releases:group', []));
-const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set(loadLS('releases:collapsed', [])));
-```
+### Persistência
+- Ao concluir o wizard:
+  1. `upsert` da semana sintética.
+  2. `insert` em `pautas` (com `is_standalone=true`, `raw_inputs_json` consolidando os blocos, `sections_json` com saídas parseadas).
+  3. `insert` em `episode_materials` com `is_standalone=true`.
+  4. `activity_logs` registra criação.
 
-- Persistir em `localStorage` em cada mudança (`useEffect`).
-- Migração suave: se já existir `sortField/sortDir` no estado atual, popular `sortRules` no boot.
+### UI shared
+- Reutilizar `ContentTable`, `ManagementTable` como referência visual; criar `StandaloneEpisodesTable.tsx` com mesma toolbar de sort/group/expand.
+- Status workflow idêntico ao atual (`episode-status.ts`).
 
-### Ordenação multi-nível
+## Pontos a validar com o usuário
 
-```ts
-function compareWithRules(a: Release, b: Release, rules: SortRule[]): number {
-  for (const r of rules) {
-    const cmp = fieldCompare(a, b, r.field);
-    if (cmp !== 0) return r.dir === 'desc' ? -cmp : cmp;
-  }
-  return 0;
-}
-```
+1. **Data do episódio avulso**: obrigatória no wizard ou pode ficar "sem data" até o usuário agendar?
+2. **Pasta OneDrive para avulsos**: usar `Snakepit/YYYY-Www/` baseado na `publication_date`, ou pasta separada `Snakepit/Avulsos/`?
+3. **Tipos de bloco** fixos nos 4 propostos, ou já deixar extensível por template?
+4. **Aba Episódios Avulsos** deve ficar dentro de Pautas (nova tab) ou ser uma rota de topo no menu lateral?
 
-`fieldCompare` cobre string, number, null-safe.
+## Crítica do plano
 
-### Agrupamento recursivo
+- **Risco de duplicação de UX**: o wizard pode ficar muito parecido com o `InsumosTable` expandido. Mitigação: extrair um componente `SectionInputCard` reutilizado nos dois lugares (mesmo padrão: URL/release + texto + prompt + copiar + colar + parser).
+- **Risco de divergência de dados**: dois caminhos criando `episode_materials` aumentam chance de bugs de sync. Mitigação: usar um único serviço `createEpisodeMaterial()` consumido tanto pelo fluxo semanal quanto pelo wizard.
+- **Risco de poluir Pautas semanais**: filtrar `is_standalone` em todas as queries de Insumos / Conteúdo / Management para que avulsos só apareçam na aba dedicada.
+- **Risco de fricção no wizard**: 4 blocos + 3 telas de material = potencialmente 7 etapas. Mitigação: barra de progresso, botão "Salvar rascunho e sair", e permitir pular etapas de material (criando depois pela aba avulsos).
+- **Consistência com OneDrive**: usar semana ISO real evita branching no Rivaldo; precisa só de uma data válida no episódio. Forçar data no wizard simplifica o resto da plataforma.
 
-```ts
-type GroupNode = { key: string; label: string; level: number; items: Release[]; children?: GroupNode[] };
-
-function buildGroups(items: Release[], rules: GroupRule[], level = 0, parentKey = ''): GroupNode[] {
-  if (level >= rules.length) return [{ key: parentKey, label: '', level, items }];
-  const rule = rules[level];
-  const buckets = new Map<string, Release[]>();
-  for (const it of items) {
-    const k = groupValueOf(it, rule.field); // ex: 'Brazil', '2024-09', 'Death Metal', '—' p/ vazios
-    buckets.set(k, [...(buckets.get(k) || []), it]);
-  }
-  const sorted = Array.from(buckets.entries()).sort(([a], [b]) => rule.dir === 'desc' ? b.localeCompare(a) : a.localeCompare(b));
-  return sorted.map(([k, arr]) => ({
-    key: `${parentKey}/${rule.field}=${k}`,
-    label: `${labelForField(rule.field)}: ${k} (${arr.length})`,
-    level,
-    items: arr,
-    children: buildGroups(arr, rules, level + 1, `${parentKey}/${rule.field}=${k}`),
-  }));
-}
-```
-
-### Render
-
-- Quando `groupRules.length === 0` → tabela atual (sem mudanças).
-- Quando há grupos → percorrer árvore e emitir:
-  - `<TableRow>` com `colspan` total contendo chevron + label + contador + checkbox de seleção em massa.
-  - Recursão para filhos; ao chegar no nível folha, emite as linhas de release ordenadas por `sortRules`.
-- Linhas dentro de um grupo respeitam a ordenação global.
-
-### Performance
-
-- `buildGroups` em `useMemo([filtered, groupRules])`.
-- Linhas filhas são memoizadas individualmente quando possível.
-- Para >2000 releases não há virtualização hoje; manter como está (nenhuma regressão), avaliar virtualização futura se necessário (fora do escopo).
-
-## Arquivos afetados
-
-- `src/pages/Releases.tsx` — adicionar estado, popovers, render com grupos.
-- `src/components/releases/SortRulesPopover.tsx` (novo) — editor de regras de sort.
-- `src/components/releases/GroupRulesPopover.tsx` (novo) — editor de regras de group.
-- `src/components/releases/ReleasesGroupedTable.tsx` (novo) — render recursivo da árvore de grupos.
-- `src/lib/releases-grouping.ts` (novo) — `compareWithRules`, `buildGroups`, `groupValueOf`, `labelForField`, helpers de localStorage.
-
-## Não escopado
-
-- Mudanças nas abas Pautas e Materiais (mantêm o que foi feito antes).
-- Filtros avançados estilo Airtable (ficam para outra rodada).
-- Virtualização de linhas.
-- Mudanças de schema no banco.
-
-## Aceite
-
-- Tabela sem regras: comportamento atual preservado.
-- Sort multi-nível funciona como desempate (ex.: Country asc → Release Date desc).
-- Group cria blocos colapsáveis com chevrons; estado de colapso persiste entre reloads.
-- Sort + Group combinados ordenam linhas dentro de cada bloco.
-- Preferências de sort/group/colapso persistem em `localStorage`.
