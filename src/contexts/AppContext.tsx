@@ -443,7 +443,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       releases, weeks, pautas, materials, settings, activityLog,
       addRelease, updateRelease, deleteRelease,
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
-      addPauta, updatePauta, getPautasForWeek,
+      addPauta, updatePauta, deletePauta, getPautasForWeek,
       updateMaterial, getMaterialsForWeek, loadMaterialCover,
       updateSettings, logActivity, importReleases, loadReleases,
       savePromptSession,
