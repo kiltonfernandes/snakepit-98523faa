@@ -54,6 +54,8 @@ export interface Pauta {
   created_at: string;
   updated_at: string;
   finalized_at: string | null;
+  is_standalone?: boolean;
+  standalone_topics?: StandaloneTopic[];
 }
 
 export interface TitleOption {
@@ -81,6 +83,30 @@ export interface EpisodeMaterial {
   cover_saved_at: string | null;
   created_at: string;
   updated_at: string;
+  is_standalone?: boolean;
+}
+
+// ─── Standalone / Avulso episodes ────────────────────────────────────────────
+
+export type StandaloneTopicType = 'anniversary' | 'review' | 'news' | 'interview';
+
+export interface StandaloneTopic {
+  id: string;
+  type: StandaloneTopicType;
+  /** For review topics → release_id from `releases`. */
+  release_id?: string | null;
+  /** For url-based topics (news/anniversary/interview). */
+  url?: string | null;
+  /** Editor free-text notes / direction. */
+  notes: string;
+  /** Prompt sent to the AI (editable copy of the default). */
+  prompt_text: string;
+  /** Raw AI response pasted back by the editor. */
+  response_text: string;
+  /** Parsed body extracted from the AI response (if any). */
+  parsed_text?: string | null;
+  /** Warnings/notes about the parsing step. */
+  parse_warnings?: string[];
 }
 
 export interface AppSettings {
