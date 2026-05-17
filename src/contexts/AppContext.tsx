@@ -29,6 +29,7 @@ interface AppContextType {
   recalcWeekStatus: (weekId: string) => void;
   addPauta: (pauta: Pauta) => void;
   updatePauta: (id: string, p: Partial<Pauta>) => void;
+  deletePauta: (id: string) => void;
   getPautasForWeek: (weekId: string) => Pauta[];
   updateMaterial: (id: string, m: Partial<EpisodeMaterial>) => void;
   getMaterialsForWeek: (weekId: string) => EpisodeMaterial[];
@@ -334,6 +335,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     // snapshot to localStorage so nothing is lost on refresh or transient errors.
     enqueueUpdate('pautas', id, p as any);
   }, []);
+
+  const deletePauta = useCallback((id: string) => {
+    setPautas(prev => prev.filter(p => p.id !== id));
+    setMaterials(prev => prev.filter(m => m.source_pauta_id !== id));
+    void (async () => {
+      try {
+        await supabase.from('episode_materials' as any).delete().eq('source_pauta_id', id);
+        await supabase.from('pautas' as any).delete().eq('id', id);
+        logActivity('Pauta removida', id);
+      } catch (e) {
+        console.error('deletePauta failed', e);
+      }
+    })();
+  }, [logActivity]);
 
   const getPautasForWeek = useCallback((weekId: string) => pautas.filter(p => p.week_id === weekId), [pautas]);
 
