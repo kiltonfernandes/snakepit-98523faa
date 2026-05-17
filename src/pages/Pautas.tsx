@@ -30,6 +30,8 @@ import { DirectionEditor, buildSectionSearchQuery } from '@/components/pautas/Di
 import { InsumosTable } from '@/components/pautas/InsumosTable';
 import { ContentTable } from '@/components/pautas/ContentTable';
 import { ManagementTable } from '@/components/pautas/ManagementTable';
+import { NovaPautaWizard } from '@/components/pautas/NovaPautaWizard';
+import { StandaloneEpisodesTable } from '@/components/pautas/StandaloneEpisodesTable';
 import { ViewModeToggle } from '@/components/shared/ViewModeToggle';
 import { useViewMode } from '@/hooks/use-view-mode';
 import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
@@ -217,13 +219,15 @@ export default function Pautas() {
   const [progressLogs, setProgressLogs] = useState<string[]>([]);
   const [progressTitle, setProgressTitle] = useState('Gerando conteúdo...');
   const [weekCarouselStart, setWeekCarouselStart] = useState(() => {
-    const sorted = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const sorted = [...weeks].filter(w => !w.id.startsWith('standalone-')).sort((a, b) => a.start_date.localeCompare(b.start_date));
     const todayStr = new Date().toISOString().slice(0, 10);
     const idx = sorted.findIndex(w => w.start_date >= todayStr);
     return Math.max(0, idx >= 0 ? idx : sorted.length - 1);
   });
-  const selectedWeek = weeks.find(w => w.id === selectedWeekId) || weeks[0];
-  const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id) : [];
+  const realWeeks = useMemo(() => weeks.filter(w => !w.id.startsWith('standalone-')), [weeks]);
+  const selectedWeek = realWeeks.find(w => w.id === selectedWeekId) || realWeeks[0];
+  const weekPautas = selectedWeek ? getPautasForWeek(selectedWeek.id).filter(p => !p.is_standalone) : [];
+  const [novaPautaOpen, setNovaPautaOpen] = useState(false);
 
   const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
   const tone = toneProfileForTemperature(settings.brand_tone_temperature);
