@@ -1413,6 +1413,9 @@ export default function Pautas() {
           <Button size="sm" variant="secondary" className="gap-2" onClick={() => setAddPautaDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Pauta
           </Button>
+          <Button size="sm" variant="default" className="gap-2" onClick={() => setNovaPautaOpen(true)}>
+            <Sparkles className="h-4 w-4" /> Nova Pauta
+          </Button>
           <Button size="sm" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Nova Semana
           </Button>
@@ -1450,7 +1453,24 @@ export default function Pautas() {
         );
       })()}
 
-      {selectedWeek ? (
+      <NovaPautaWizard open={novaPautaOpen} onClose={() => setNovaPautaOpen(false)} onCreated={() => setActiveTab('standalone')} />
+
+      {activeTab === 'standalone' ? (
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
+          <div className="flex items-center justify-between">
+            <TabsList>
+              <TabsTrigger value="content">Conteúdo</TabsTrigger>
+              <TabsTrigger value="inputs">Insumos</TabsTrigger>
+              <TabsTrigger value="flow">Flow</TabsTrigger>
+              <TabsTrigger value="management">Management</TabsTrigger>
+              <TabsTrigger value="standalone">Episódios Avulsos</TabsTrigger>
+            </TabsList>
+          </div>
+          <TabsContent value="standalone">
+            <StandaloneEpisodesTable onCreateNew={() => setNovaPautaOpen(true)} />
+          </TabsContent>
+        </Tabs>
+      ) : selectedWeek ? (
         <>
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
             <div className="flex items-center justify-between">
@@ -1459,6 +1479,7 @@ export default function Pautas() {
                 <TabsTrigger value="inputs">Insumos</TabsTrigger>
                 <TabsTrigger value="flow">Flow</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
+                <TabsTrigger value="standalone">Episódios Avulsos</TabsTrigger>
               </TabsList>
               <div className="flex items-center gap-2">
                 <AutosaveBadge className="mr-2" />
