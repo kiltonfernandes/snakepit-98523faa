@@ -1,0 +1,850 @@
+/**
+ * Nova Pauta Wizard — fluxo guiado para criar episódios avulsos.
+ *
+ * Etapas:
+ *  0. Escolher tópicos (multiselect: aniversário, review, notícia, entrevista)
+ *  1..N. Uma etapa por tópico (input + prompt + copiar + colar)
+ *  N+1. Título (3 opções)
+ *  N+2. Descrição (HTML simples)
+ *  N+3. Capa (URL ou direção visual)
+ *  N+4. Revisão + salvar
+ *
+ * O wizard cria (ou reaproveita) uma "semana sintética" mensal com id
+ * `standalone-YYYY-MM` para satisfazer o NOT NULL de `pautas.week_id` sem
+ * poluir o carrossel semanal — a página de Pautas filtra esses IDs.
+ */
+import { useEffect, useMemo, useReducer, useState } from 'react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import {
+  Plus, Copy, Check, Trash2, ChevronLeft, ChevronRight, Loader2,
+  Calendar as CalendarIcon, X, Search,
+} from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+import { useApp } from '@/contexts/AppContext';
+import { Release, Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType, TitleOption, DaySlot } from '@/lib/types';
+import {
+  STANDALONE_TOPIC_META,
+  getStandaloneTopicPrompt,
+  getStandaloneTitlePrompt,
+  getStandaloneDescriptionPrompt,
+  getStandaloneCoverPrompt,
+} from '@/lib/standalone-prompts';
+
+const DRAFT_KEY = 'nova_pauta_draft_v1';
+const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
+
+// ─── Wizard state ───────────────────────────────────────────────────────────
+
+interface WizardState {
+  step: number;
+  selectedTypes: StandaloneTopicType[];
+  topics: StandaloneTopic[];
+  publicationDate: string; // YYYY-MM-DD
+  titleResponse: string;
+  titleOptions: TitleOption[];
+  selectedTitleIndex: number | null;
+  descriptionResponse: string;
+  descriptionHtml: string;
+  coverUrl: string;
+}
+
+const initialState = (): WizardState => ({
+  step: 0,
+  selectedTypes: [],
+  topics: [],
+  publicationDate: new Date().toISOString().slice(0, 10),
+  titleResponse: '',
+  titleOptions: [],
+  selectedTitleIndex: null,
+  descriptionResponse: '',
+  descriptionHtml: '',
+  coverUrl: '',
+});
+
+type Action =
+  | { kind: 'reset' }
+  | { kind: 'hydrate'; state: WizardState }
+  | { kind: 'setStep'; step: number }
+  | { kind: 'toggleType'; type: StandaloneTopicType }
+  | { kind: 'patchTopic'; id: string; patch: Partial<StandaloneTopic> }
+  | { kind: 'setField'; field: keyof WizardState; value: any };
+
+function reducer(state: WizardState, action: Action): WizardState {
+  switch (action.kind) {
+    case 'reset': return initialState();
+    case 'hydrate': return action.state;
+    case 'setStep': return { ...state, step: Math.max(0, action.step) };
+    case 'toggleType': {
+      const has = state.selectedTypes.includes(action.type);
+      const selectedTypes = has
+        ? state.selectedTypes.filter(t => t !== action.type)
+        : [...state.selectedTypes, action.type];
+      // Keep topics in stable order matching selection list
+      const orderedTypes = TOPIC_ORDER.filter(t => selectedTypes.includes(t));
+      const existing = new Map(state.topics.map(t => [t.type, t]));
+      const topics: StandaloneTopic[] = orderedTypes.map(t =>
+        existing.get(t) ?? {
+          id: crypto.randomUUID(),
+          type: t,
+          release_id: null,
+          url: '',
+          notes: '',
+          prompt_text: '',
+          response_text: '',
+          parsed_text: null,
+          parse_warnings: [],
+        },
+      );
+      return { ...state, selectedTypes: orderedTypes, topics };
+    }
+    case 'patchTopic':
+      return {
+        ...state,
+        topics: state.topics.map(t => (t.id === action.id ? { ...t, ...action.patch } : t)),
+      };
+    case 'setField':
+      return { ...state, [action.field]: action.value } as WizardState;
+    default: return state;
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+function standaloneWeekIdFor(dateStr: string): string {
+  return `standalone-${dateStr.slice(0, 7)}`; // YYYY-MM
+}
+
+function standaloneWeekStart(dateStr: string): string {
+  return `${dateStr.slice(0, 7)}-01`;
+}
+
+function parseTitleOptionsFromText(raw: string): TitleOption[] {
+  const STYLES: TitleOption['style'][] = ['clickbait', 'curiosidade', 'impacto'];
+  const lines = raw.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const cleaned = lines.map(l => l.replace(/^[-*•\d.\)\s]+/, '').replace(/^["'`]|["'`]$/g, '').trim()).filter(Boolean);
+  return cleaned.slice(0, 3).map((text, i) => ({ text, style: STYLES[i] ?? 'impacto' }));
+}
+
+function plainTextResponseFor(t: StandaloneTopic): string {
+  // For topics we just take the pasted response as the editorial content.
+  // (No snakepit contract parsing here — the wizard prompts are free-form.)
+  return (t.parsed_text || t.response_text || '').trim();
+}
+
+function aggregatedContent(topics: StandaloneTopic[]): string {
+  return topics.map(t => {
+    const meta = STANDALONE_TOPIC_META[t.type];
+    const body = plainTextResponseFor(t);
+    return `## ${meta.label}\n${body || '(sem conteúdo gerado)'}`;
+  }).join('\n\n');
+}
+
+function descriptionHtmlFromResponse(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/<\w+/.test(trimmed)) return trimmed; // already HTML
+  // Convert paragraphs/bullets minimally.
+  return trimmed.split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('');
+}
+
+// ─── Inline Add Release form ────────────────────────────────────────────────
+
+function AddReleaseInline({ onCreated, onCancel }: { onCreated: (r: Release) => void; onCancel: () => void }) {
+  const { addRelease, releases } = useApp();
+  const [artist, setArtist] = useState('');
+  const [album, setAlbum] = useState('');
+  const [releaseDate, setReleaseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [country, setCountry] = useState('');
+  const [genre, setGenre] = useState('');
+  const submit = () => {
+    if (!artist.trim() || !album.trim()) {
+      toast.error('Artista e álbum são obrigatórios');
+      return;
+    }
+    addRelease({
+      artist: artist.trim(),
+      album: album.trim(),
+      release_date: releaseDate,
+      country: country.trim() || null,
+      genres: genre.trim() ? [genre.trim()] : [],
+      rating: null,
+      comments: null,
+    } as any);
+    // The release will be inserted into context; find the freshly added one by artist+album+date
+    setTimeout(() => {
+      const created = [...releases].reverse().find(r => r.artist === artist.trim() && r.album === album.trim());
+      if (created) onCreated(created);
+      else onCancel(); // fallback: close form, user picks via search
+    }, 50);
+  };
+  return (
+    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+      <div className="text-xs font-semibold text-muted-foreground">+ Novo lançamento</div>
+      <div className="grid grid-cols-2 gap-2">
+        <Input placeholder="Artista" value={artist} onChange={(e) => setArtist(e.target.value)} />
+        <Input placeholder="Álbum" value={album} onChange={(e) => setAlbum(e.target.value)} />
+        <Input type="date" value={releaseDate} onChange={(e) => setReleaseDate(e.target.value)} />
+        <Input placeholder="País (opcional)" value={country} onChange={(e) => setCountry(e.target.value)} />
+        <Input placeholder="Gênero (opcional)" value={genre} onChange={(e) => setGenre(e.target.value)} className="col-span-2" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
+        <Button size="sm" onClick={submit}>Adicionar</Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Release picker (search + select) ───────────────────────────────────────
+
+function ReleasePicker({ value, onChange }: { value: string | null; onChange: (id: string | null) => void }) {
+  const { releases } = useApp();
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const selected = releases.find(r => r.id === value);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return releases.slice(0, 40);
+    return releases.filter(r =>
+      r.artist.toLowerCase().includes(q) || r.album.toLowerCase().includes(q),
+    ).slice(0, 40);
+  }, [releases, query]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex gap-2">
+        <Popover open={open} onOpenChange={setOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="flex-1 justify-start font-normal">
+              {selected ? (
+                <span className="truncate"><b>{selected.artist}</b> — {selected.album}</span>
+              ) : (
+                <span className="text-muted-foreground">Buscar disco em releases…</span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[480px] p-0" align="start">
+            <div className="border-b border-border p-2">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  autoFocus
+                  placeholder="Buscar por artista ou álbum..."
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  className="h-8 pl-7"
+                />
+              </div>
+            </div>
+            <ScrollArea className="max-h-80">
+              {filtered.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted-foreground">Nenhum release encontrado.</div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {filtered.map(r => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => { onChange(r.id); setOpen(false); }}
+                      className={cn(
+                        "block w-full px-3 py-2 text-left text-sm hover:bg-muted",
+                        r.id === value && "bg-muted",
+                      )}
+                    >
+                      <div className="font-medium">{r.artist} — {r.album}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {r.release_date} {r.country ? `· ${r.country}` : ''} {r.genres?.length ? `· ${r.genres[0]}` : ''}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </PopoverContent>
+        </Popover>
+        <Button variant="outline" size="icon" title="Novo lançamento" onClick={() => setShowAddForm(s => !s)}>
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      {showAddForm && (
+        <AddReleaseInline
+          onCreated={(r) => { onChange(r.id); setShowAddForm(false); }}
+          onCancel={() => setShowAddForm(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// ─── Copy + paste reusable card ─────────────────────────────────────────────
+
+function CopyButton({ text, disabled }: { text: string; disabled?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      disabled={disabled || !text}
+      onClick={() => {
+        navigator.clipboard.writeText(text);
+        setCopied(true);
+        toast.success('Prompt copiado');
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? <Check className="mr-1 h-3.5 w-3.5" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
+      Copiar prompt
+    </Button>
+  );
+}
+
+// ─── Topic step ─────────────────────────────────────────────────────────────
+
+function TopicStep({
+  topic, dispatch,
+}: { topic: StandaloneTopic; dispatch: React.Dispatch<Action> }) {
+  const meta = STANDALONE_TOPIC_META[topic.type];
+  const { releases } = useApp();
+  const selectedRelease = topic.release_id ? releases.find(r => r.id === topic.release_id) : null;
+
+  // Build the prompt from default + current inputs (only when prompt is empty / autogenerated)
+  const inputLabel = meta.inputKind === 'release'
+    ? selectedRelease
+      ? `${selectedRelease.artist} — ${selectedRelease.album} (${selectedRelease.release_date}${selectedRelease.country ? `, ${selectedRelease.country}` : ''})`
+      : ''
+    : topic.url || '';
+
+  // Auto-fill prompt_text on first render or when input changes and user hasn't customized.
+  useEffect(() => {
+    const fresh = getStandaloneTopicPrompt(topic.type, { input: inputLabel, notes: topic.notes });
+    if (!topic.prompt_text || topic.prompt_text === topic._lastAutoPrompt) {
+      dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh, _lastAutoPrompt: fresh } as any });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inputLabel, topic.notes, topic.type]);
+
+  const onPaste = (val: string) => {
+    dispatch({
+      kind: 'patchTopic',
+      id: topic.id,
+      patch: { response_text: val, parsed_text: val.trim() },
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <span className="text-2xl">{meta.icon}</span>
+        <h3 className="text-lg font-semibold">{meta.label}</h3>
+      </div>
+
+      <div className="space-y-2">
+        <Label>{meta.inputLabel}</Label>
+        {meta.inputKind === 'release' ? (
+          <ReleasePicker
+            value={topic.release_id || null}
+            onChange={(id) => dispatch({ kind: 'patchTopic', id: topic.id, patch: { release_id: id } })}
+          />
+        ) : (
+          <Input
+            placeholder="https://..."
+            value={topic.url || ''}
+            onChange={(e) => dispatch({ kind: 'patchTopic', id: topic.id, patch: { url: e.target.value } })}
+          />
+        )}
+        <p className="text-xs text-muted-foreground">{meta.inputHint}</p>
+      </div>
+
+      <div className="space-y-2">
+        <Label>Direção editorial / notas</Label>
+        <Textarea
+          rows={3}
+          placeholder="Ângulo, tom, pontos obrigatórios..."
+          value={topic.notes}
+          onChange={(e) => dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: e.target.value } })}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Prompt (editável)</Label>
+          <CopyButton text={topic.prompt_text} />
+        </div>
+        <Textarea
+          rows={10}
+          value={topic.prompt_text}
+          onChange={(e) => dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: e.target.value } })}
+          className="font-mono text-xs"
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label>Cole aqui a resposta da IA</Label>
+        <Textarea
+          rows={10}
+          placeholder="Cole o output gerado pela sua IA..."
+          value={topic.response_text}
+          onChange={(e) => onPaste(e.target.value)}
+        />
+        {topic.response_text && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Check className="h-3.5 w-3.5 text-emerald-500" />
+            Resposta registrada ({topic.response_text.length} caracteres).
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Material steps (title / description / cover) ───────────────────────────
+
+function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
+  const content = aggregatedContent(state.topics);
+  const prompt = getStandaloneTitlePrompt(content);
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">🏷️ Título do episódio</h3>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Prompt</Label>
+          <CopyButton text={prompt} />
+        </div>
+        <Textarea rows={8} readOnly value={prompt} className="font-mono text-xs" />
+      </div>
+      <div className="space-y-2">
+        <Label>Cole as 3 opções de título (uma por linha)</Label>
+        <Textarea
+          rows={6}
+          value={state.titleResponse}
+          onChange={(e) => {
+            const v = e.target.value;
+            const opts = parseTitleOptionsFromText(v);
+            dispatch({ kind: 'setField', field: 'titleResponse', value: v });
+            dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
+            if (state.selectedTitleIndex == null && opts.length) {
+              dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
+            }
+          }}
+          placeholder="Opção 1...\nOpção 2...\nOpção 3..."
+        />
+      </div>
+      {state.titleOptions.length > 0 && (
+        <div className="space-y-2">
+          <Label>Escolha o título</Label>
+          <div className="space-y-2">
+            {state.titleOptions.map((opt, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: i })}
+                className={cn(
+                  "flex w-full items-start gap-3 rounded-md border p-3 text-left transition-colors",
+                  state.selectedTitleIndex === i ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
+                )}
+              >
+                <div className={cn("mt-1 h-4 w-4 shrink-0 rounded-full border-2", state.selectedTitleIndex === i ? "border-primary bg-primary" : "border-muted-foreground")} />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{opt.text}</div>
+                  <Badge variant="outline" className="mt-1 text-[10px] uppercase">{opt.style}</Badge>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
+  const title = state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text || '' : '';
+  const content = aggregatedContent(state.topics);
+  const prompt = getStandaloneDescriptionPrompt(title, content);
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">📝 Descrição do episódio</h3>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Prompt</Label>
+          <CopyButton text={prompt} />
+        </div>
+        <Textarea rows={8} readOnly value={prompt} className="font-mono text-xs" />
+      </div>
+      <div className="space-y-2">
+        <Label>Cole a descrição (HTML ou texto)</Label>
+        <Textarea
+          rows={10}
+          value={state.descriptionResponse}
+          onChange={(e) => {
+            dispatch({ kind: 'setField', field: 'descriptionResponse', value: e.target.value });
+            dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(e.target.value) });
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
+  const content = aggregatedContent(state.topics);
+  const prompt = getStandaloneCoverPrompt(content);
+  return (
+    <div className="space-y-4">
+      <h3 className="text-lg font-semibold">🎨 Capa</h3>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <Label>Prompt visual (opcional)</Label>
+          <CopyButton text={prompt} />
+        </div>
+        <Textarea rows={5} readOnly value={prompt} className="font-mono text-xs" />
+      </div>
+      <div className="space-y-2">
+        <Label>URL da capa</Label>
+        <Input
+          placeholder="https://...jpg"
+          value={state.coverUrl}
+          onChange={(e) => dispatch({ kind: 'setField', field: 'coverUrl', value: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Você pode editar a capa depois pela aba Episódios Avulsos usando o Cover Generator da plataforma.
+        </p>
+        {state.coverUrl && (
+          <img src={state.coverUrl} alt="Preview" className="mt-2 h-40 w-40 rounded border border-border object-cover" />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main wizard ────────────────────────────────────────────────────────────
+
+export interface NovaPautaWizardProps {
+  open: boolean;
+  onClose: () => void;
+  onCreated?: (pautaId: string) => void;
+}
+
+export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardProps) {
+  const { addPauta, logActivity } = useApp();
+  const [state, dispatch] = useReducer(reducer, undefined, initialState);
+  const [saving, setSaving] = useState(false);
+
+  // Recover draft on open
+  useEffect(() => {
+    if (!open) return;
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as WizardState;
+        if (parsed && typeof parsed === 'object') dispatch({ kind: 'hydrate', state: { ...initialState(), ...parsed } });
+      }
+    } catch {}
+  }, [open]);
+
+  // Persist draft
+  useEffect(() => {
+    if (!open) return;
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(state)); } catch {}
+  }, [state, open]);
+
+  // Step layout: 0 = topics select, 1..N = per-topic, N+1=title, N+2=desc, N+3=cover, N+4=review
+  const N = state.topics.length;
+  const TOTAL = 1 + N + 4;
+  const stepKind: 'select' | 'topic' | 'title' | 'description' | 'cover' | 'review' =
+    state.step === 0 ? 'select'
+    : state.step <= N ? 'topic'
+    : state.step === N + 1 ? 'title'
+    : state.step === N + 2 ? 'description'
+    : state.step === N + 3 ? 'cover'
+    : 'review';
+  const topicForStep = stepKind === 'topic' ? state.topics[state.step - 1] : null;
+
+  const canAdvance = (() => {
+    if (stepKind === 'select') return state.selectedTypes.length > 0;
+    if (stepKind === 'topic' && topicForStep) {
+      const meta = STANDALONE_TOPIC_META[topicForStep.type];
+      const hasInput = meta.inputKind === 'release' ? !!topicForStep.release_id : !!topicForStep.url?.trim();
+      return hasInput && !!topicForStep.response_text.trim();
+    }
+    if (stepKind === 'title') return state.titleOptions.length > 0 && state.selectedTitleIndex != null;
+    if (stepKind === 'description') return !!state.descriptionHtml.trim();
+    if (stepKind === 'cover') return true; // optional
+    return true;
+  })();
+
+  const stepLabel = (() => {
+    if (stepKind === 'select') return 'Conteúdo do episódio';
+    if (stepKind === 'topic' && topicForStep) return `Bloco ${state.step}/${N} · ${STANDALONE_TOPIC_META[topicForStep.type].label}`;
+    if (stepKind === 'title') return 'Título';
+    if (stepKind === 'description') return 'Descrição';
+    if (stepKind === 'cover') return 'Capa';
+    return 'Revisão';
+  })();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const weekId = standaloneWeekIdFor(state.publicationDate);
+      const weekStart = standaloneWeekStart(state.publicationDate);
+      // Ensure synthetic week exists
+      await supabase.from('editorial_weeks' as any).upsert({
+        id: weekId,
+        start_date: weekStart,
+        status: 'draft',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      } as any, { onConflict: 'id' });
+
+      const wd = new Date(state.publicationDate + 'T12:00:00').getDay();
+      const slotMap: Record<number, DaySlot> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+
+      const sectionsJson: Record<string, string> = {};
+      const rawInputs: Record<string, unknown> = {
+        standalone: true,
+        topics: state.topics.map(t => ({
+          type: t.type,
+          release_id: t.release_id || null,
+          url: t.url || null,
+          notes: t.notes,
+        })),
+      };
+      for (const t of state.topics) {
+        sectionsJson[`standalone_${t.type}`] = plainTextResponseFor(t);
+      }
+      const renderedText = aggregatedContent(state.topics);
+
+      const pautaId = crypto.randomUUID();
+      const newPauta: Pauta = {
+        id: pautaId,
+        week_id: weekId,
+        publication_date: state.publicationDate,
+        pauta_type: 'weekday' as any,
+        status: 'pesquisa',
+        raw_inputs_json: rawInputs,
+        sections_json: sectionsJson as any,
+        rendered_markdown: null,
+        rendered_text: renderedText,
+        warnings_json: [],
+        discovered_links_json: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        finalized_at: null,
+        is_standalone: true,
+        standalone_topics: state.topics,
+      } as any;
+
+      // Add to context (also persists)
+      addPauta(newPauta);
+      // Also flag the standalone fields server-side (addPauta may not know them)
+      await supabase.from('pautas' as any).update({
+        is_standalone: true,
+        standalone_topics: state.topics as any,
+      }).eq('id', pautaId);
+
+      const material: EpisodeMaterial = {
+        id: crypto.randomUUID(),
+        week_id: weekId,
+        slot_key: slotMap[wd] || 'monday',
+        episode_date: state.publicationDate,
+        source_pauta_id: pautaId,
+        title_options_json: state.titleOptions,
+        selected_title_index: state.selectedTitleIndex,
+        description_html: state.descriptionHtml || null,
+        cover_url: state.coverUrl || null,
+        cover_source_url: null,
+        spotify_link: null,
+        repository_url: null,
+        repository_file_id: null,
+        repository_provider: null,
+        repository_uploaded_at: null,
+        mentioned_in_episode: null,
+        cover_saved_at: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_standalone: true,
+      } as any;
+      await supabase.from('episode_materials' as any).insert(material as any);
+
+      logActivity('create_standalone_pauta', `Episódio avulso criado para ${state.publicationDate} (${state.topics.length} blocos)`);
+      toast.success('Episódio avulso criado!');
+      localStorage.removeItem(DRAFT_KEY);
+      dispatch({ kind: 'reset' });
+      onCreated?.(pautaId);
+      onClose();
+    } catch (e: any) {
+      console.error(e);
+      toast.error(`Falha ao salvar: ${e?.message || e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    onClose();
+  };
+  const handleDiscard = () => {
+    localStorage.removeItem(DRAFT_KEY);
+    dispatch({ kind: 'reset' });
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
+      <DialogContent className="max-w-[1200px] w-[95vw] h-[92vh] flex flex-col p-0 gap-0">
+        <DialogHeader className="border-b border-border px-6 py-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <DialogTitle>Nova Pauta · Episódio Avulso</DialogTitle>
+              <DialogDescription>{stepLabel}</DialogDescription>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground">Etapa {state.step + 1} de {TOTAL}</span>
+              <Progress value={((state.step + 1) / TOTAL) * 100} className="w-40" />
+            </div>
+          </div>
+        </DialogHeader>
+
+        <ScrollArea className="flex-1 px-6 py-6">
+          <div className="mx-auto max-w-4xl">
+            {stepKind === 'select' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold">O que você vai falar nesse episódio?</h3>
+                  <p className="text-sm text-muted-foreground">Escolha um ou mais blocos. Cada bloco vira uma etapa do fluxo.</p>
+                </div>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {TOPIC_ORDER.map(type => {
+                    const m = STANDALONE_TOPIC_META[type];
+                    const checked = state.selectedTypes.includes(type);
+                    return (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => dispatch({ kind: 'toggleType', type })}
+                        className={cn(
+                          "flex items-start gap-3 rounded-lg border-2 p-4 text-left transition-colors",
+                          checked ? "border-primary bg-primary/5" : "border-border hover:bg-muted/50",
+                        )}
+                      >
+                        <Checkbox checked={checked} className="mt-0.5" />
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 text-base font-medium">
+                            <span>{m.icon}</span>
+                            <span>{m.label}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-muted-foreground">{m.inputHint}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <Separator />
+                <div className="space-y-2">
+                  <Label>Data de publicação</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" className="w-60 justify-start font-normal">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {format(new Date(state.publicationDate + 'T12:00:00'), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        weekStartsOn={1}
+                        selected={new Date(state.publicationDate + 'T12:00:00')}
+                        onSelect={(d) => d && dispatch({ kind: 'setField', field: 'publicationDate', value: d.toISOString().slice(0, 10) })}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              </div>
+            )}
+
+            {stepKind === 'topic' && topicForStep && (
+              <TopicStep topic={topicForStep} dispatch={dispatch} />
+            )}
+            {stepKind === 'title' && <TitleStep state={state} dispatch={dispatch} />}
+            {stepKind === 'description' && <DescriptionStep state={state} dispatch={dispatch} />}
+            {stepKind === 'cover' && <CoverStep state={state} dispatch={dispatch} />}
+
+            {stepKind === 'review' && (
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold">Revisão</h3>
+                <div className="rounded-md border border-border p-4 text-sm">
+                  <div><b>Data:</b> {state.publicationDate}</div>
+                  <div className="mt-2"><b>Blocos ({state.topics.length}):</b></div>
+                  <ul className="ml-4 list-disc text-muted-foreground">
+                    {state.topics.map(t => {
+                      const m = STANDALONE_TOPIC_META[t.type];
+                      const ok = !!t.response_text.trim();
+                      return <li key={t.id}>{m.icon} {m.label} — {ok ? '✓ resposta registrada' : '⚠ vazio'}</li>;
+                    })}
+                  </ul>
+                  <div className="mt-2">
+                    <b>Título:</b> {state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text : <span className="text-muted-foreground">não definido</span>}
+                  </div>
+                  <div><b>Descrição:</b> {state.descriptionHtml ? `${state.descriptionHtml.length} caracteres` : <span className="text-muted-foreground">vazia</span>}</div>
+                  <div><b>Capa:</b> {state.coverUrl ? 'definida' : <span className="text-muted-foreground">vazia</span>}</div>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Ao confirmar, o episódio será criado na aba <b>Episódios Avulsos</b> e ficará disponível no Rivaldo para gravação/upload.
+                </p>
+              </div>
+            )}
+          </div>
+        </ScrollArea>
+
+        <DialogFooter className="border-t border-border px-6 py-3">
+          <div className="flex w-full items-center justify-between">
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={handleDiscard}>
+                <Trash2 className="mr-1 h-4 w-4" /> Descartar
+              </Button>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                disabled={state.step === 0}
+                onClick={() => dispatch({ kind: 'setStep', step: state.step - 1 })}
+              >
+                <ChevronLeft className="mr-1 h-4 w-4" /> Voltar
+              </Button>
+              {stepKind === 'review' ? (
+                <Button onClick={handleSave} disabled={saving}>
+                  {saving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />}
+                  Criar episódio avulso
+                </Button>
+              ) : (
+                <Button
+                  disabled={!canAdvance}
+                  onClick={() => dispatch({ kind: 'setStep', step: state.step + 1 })}
+                >
+                  Avançar <ChevronRight className="ml-1 h-4 w-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
