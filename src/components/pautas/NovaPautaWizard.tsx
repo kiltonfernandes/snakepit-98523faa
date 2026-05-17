@@ -331,11 +331,14 @@ function TopicStep({
       : ''
     : topic.url || '';
 
-  // Auto-fill prompt_text on first render or when input changes and user hasn't customized.
+  // Track auto-generated prompt locally so we only overwrite when the user
+  // hasn't manually edited the prompt.
+  const [lastAuto, setLastAuto] = useState<string>('');
   useEffect(() => {
     const fresh = getStandaloneTopicPrompt(topic.type, { input: inputLabel, notes: topic.notes });
-    if (!topic.prompt_text || topic.prompt_text === topic._lastAutoPrompt) {
-      dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh, _lastAutoPrompt: fresh } as any });
+    if (!topic.prompt_text || topic.prompt_text === lastAuto) {
+      setLastAuto(fresh);
+      dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputLabel, topic.notes, topic.type]);
