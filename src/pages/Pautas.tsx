@@ -1420,7 +1420,7 @@ export default function Pautas() {
       </div>
 
       {weeks.length > 0 && (() => {
-        const sortedWeeks = [...weeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
+        const sortedWeeks = [...realWeeks].sort((a, b) => a.start_date.localeCompare(b.start_date));
         const visible = 4;
         const visibleWeeks = sortedWeeks.slice(weekCarouselStart, weekCarouselStart + visible);
         const canPrev = weekCarouselStart > 0;
