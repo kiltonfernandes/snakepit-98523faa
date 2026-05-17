@@ -149,6 +149,7 @@ export type Database = {
           description_html: string | null
           episode_date: string
           id: string
+          is_standalone: boolean
           mentioned_in_episode: string | null
           repository_file_id: string | null
           repository_provider: string | null
@@ -170,6 +171,7 @@ export type Database = {
           description_html?: string | null
           episode_date: string
           id: string
+          is_standalone?: boolean
           mentioned_in_episode?: string | null
           repository_file_id?: string | null
           repository_provider?: string | null
@@ -191,6 +193,7 @@ export type Database = {
           description_html?: string | null
           episode_date?: string
           id?: string
+          is_standalone?: boolean
           mentioned_in_episode?: string | null
           repository_file_id?: string | null
           repository_provider?: string | null
@@ -319,12 +322,14 @@ export type Database = {
           discovered_links_json: Json
           finalized_at: string | null
           id: string
+          is_standalone: boolean
           pauta_type: string
           publication_date: string
           raw_inputs_json: Json
           rendered_markdown: string | null
           rendered_text: string | null
           sections_json: Json
+          standalone_topics: Json
           status: string
           template_id: string | null
           updated_at: string
@@ -336,12 +341,14 @@ export type Database = {
           discovered_links_json?: Json
           finalized_at?: string | null
           id: string
+          is_standalone?: boolean
           pauta_type?: string
           publication_date: string
           raw_inputs_json?: Json
           rendered_markdown?: string | null
           rendered_text?: string | null
           sections_json?: Json
+          standalone_topics?: Json
           status?: string
           template_id?: string | null
           updated_at?: string
@@ -353,12 +360,14 @@ export type Database = {
           discovered_links_json?: Json
           finalized_at?: string | null
           id?: string
+          is_standalone?: boolean
           pauta_type?: string
           publication_date?: string
           raw_inputs_json?: Json
           rendered_markdown?: string | null
           rendered_text?: string | null
           sections_json?: Json
+          standalone_topics?: Json
           status?: string
           template_id?: string | null
           updated_at?: string
