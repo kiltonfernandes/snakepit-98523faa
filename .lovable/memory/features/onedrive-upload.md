@@ -10,7 +10,8 @@ type: feature
 **Client helper**: `src/lib/storage/onedrive.ts` — chunked upload (10 MiB) directly to Graph pre-signed URL after edge initiates session.
 
 ### Folder & naming
-- `Snakepit/{YYYY}-W{NN}/` (ISO week of the episode_date).
+- Weekly episodes: `Snakepit/{YYYY}-W{NN}/` (ISO week of the episode_date).
+- Standalone (avulso) episodes: `Snakepit/Avulsos/{YYYY}-{MM}/` (month of the episode_date). Selected automatically when the material has `is_standalone = true`. Helper: `buildOneDriveFolderPath({ episodeDate, isStandalone })` in `src/lib/storage/onedrive.ts`. Single Rivaldo, bulk per-row, and bulk retry all honor this routing.
 - Filename = sanitized title (lowercase, `_` separators, `.mp3`).
 - Conflict behavior: `replace` (re-upload overwrites).
 

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useRef } from 
 import { AudioParams, DEFAULT_PARAMS, DEFAULT_PROCESSING_PROFILE, LogEntry, MasterReport, ProcessingProfile, TrackReport } from '@/lib/audio/types';
 import { runPipeline, PipelineInput } from '@/lib/audio/pipeline';
 import { DetailedLogger } from '@/lib/audio/detailed-logger';
-import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
+import { buildOneDriveFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
 
@@ -10,6 +10,8 @@ export interface PipelineUploadOptions {
   enabled: boolean;
   episodeMaterialId?: string;
   episodeDate?: string; // YYYY-MM-DD
+  /** When true, route the upload to Snakepit/Avulsos/YYYY-MM instead of the weekly folder. */
+  isStandalone?: boolean;
 }
 
 interface RivaldoState {
@@ -92,7 +94,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           addLog('Enviando para OneDrive...', 'step');
           dlog.log('upload', 'step', 'Iniciando upload para OneDrive');
           setProgressLabel('Enviando para OneDrive...');
-          const folderPath = buildEpisodeFolderPath(upload?.episodeDate);
+          const folderPath = buildOneDriveFolderPath({ episodeDate: upload?.episodeDate, isStandalone: upload?.isStandalone });
           const filename = sanitizeFilename(input.filename);
           const uploaded = await uploadEpisodeToOneDrive({
             folderPath,

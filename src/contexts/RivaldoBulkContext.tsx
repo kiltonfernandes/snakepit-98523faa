@@ -4,7 +4,7 @@ import { runBulkPipeline, BulkItem } from '@/lib/audio/pipeline';
 import { AudioParams, DEFAULT_PARAMS, LogEntry, ProcessingProfile, DEFAULT_PROCESSING_PROFILE } from '@/lib/audio/types';
 import { DetailedLogger } from '@/lib/audio/detailed-logger';
 import { loadPresetAsFile } from '@/lib/assets/presets';
-import { buildEpisodeFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
+import { buildOneDriveFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { useApp } from '@/contexts/AppContext';
 import { supabase } from '@/integrations/supabase/client';
 import { downloadBlob } from '@/lib/audio/encoder';
@@ -31,6 +31,8 @@ export interface BulkQueueRow {
   dayIndex: number | null;
   materialId?: string;
   episodeDate?: string;
+  /** When true, the upload goes to Snakepit/Avulsos/YYYY-MM instead of the ISO-week folder. */
+  isStandalone?: boolean;
 }
 
 export type BulkUploadStatus = {
@@ -229,7 +231,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
             if (input.uploadToCloud && result.outputBlob) {
               setUploadStatuses(prev => ({ ...prev, [row.id]: { state: 'uploading' } }));
               try {
-                const folderPath = buildEpisodeFolderPath(row.episodeDate);
+                const folderPath = buildOneDriveFolderPath({ episodeDate: row.episodeDate, isStandalone: row.isStandalone });
                 const filename = sanitizeFilename(row.filename.trim());
                 addLog(`Upload OneDrive: ${folderPath}/${filename}...`, 'step');
                 const uploaded = await uploadEpisodeToOneDrive({
@@ -337,7 +339,7 @@ export function RivaldoBulkProvider({ children }: { children: React.ReactNode })
         { exportMode: 'blob', returnFinalBuffer: false },
       );
       if (!result.outputBlob) throw new Error('Encode não retornou blob');
-      const folderPath = buildEpisodeFolderPath(row.episodeDate);
+      const folderPath = buildOneDriveFolderPath({ episodeDate: row.episodeDate, isStandalone: row.isStandalone });
       const filename = sanitizeFilename(row.filename.trim());
       const uploaded = await uploadEpisodeToOneDrive({
         folderPath,
