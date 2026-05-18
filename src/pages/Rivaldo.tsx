@@ -79,15 +79,20 @@ const Rivaldo = () => {
         const dayName = DAY_NAMES[d.getDay()] || '';
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const label = `[${dayName}] - ${title}`;
+        const isStandalone = !!m.is_standalone;
+        const label = isStandalone
+          ? `[Avulso ${dd}/${mm}] - ${title}`
+          : `[${dayName}] - ${title}`;
         return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url, isStandalone: !!m.is_standalone };
       })
       .filter(o => o.value);
 
-    // Group by week
+    // Group by week; standalones are bucketed into a single "Avulsos" group regardless of synthetic week_id
     const groups: { weekLabel: string; weekId: string; items: typeof eligibleMaterials }[] = [];
     const byWeek = new Map<string, typeof eligibleMaterials>();
+    const standalones: typeof eligibleMaterials = [];
     for (const item of eligibleMaterials) {
+      if (item.isStandalone) { standalones.push(item); continue; }
       if (!byWeek.has(item.week_id)) byWeek.set(item.week_id, []);
       byWeek.get(item.week_id)!.push(item);
     }
@@ -105,6 +110,11 @@ const Rivaldo = () => {
       // Oldest → newest
       return (wa?.start_date || '').localeCompare(wb?.start_date || '');
     });
+
+    if (standalones.length > 0) {
+      standalones.sort((a, b) => a.date.localeCompare(b.date));
+      groups.push({ weekLabel: 'Episódios Avulsos', weekId: '__standalone__', items: standalones });
+    }
 
     return groups;
   }, [materials, pautas, weeks]);
