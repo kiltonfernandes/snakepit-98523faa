@@ -375,7 +375,11 @@ function CopyExportRow({
 }
 
 // Build the full audit text — every prompt + parsed response for the episode.
-function buildAuditText(state: WizardState): string {
+function buildAuditText(
+  state: WizardState,
+  releases: Release[] = [],
+  settings: Partial<import('@/lib/types').AppSettings> | null = null,
+): string {
   const lines: string[] = [];
   lines.push(`# Auditoria — Episódio Avulso`);
   lines.push(`Data de publicação: ${state.publicationDate}`);
@@ -387,6 +391,11 @@ function buildAuditText(state: WizardState): string {
     lines.push(`## Bloco ${i + 1} — ${meta.icon} ${meta.label}`);
     if (t.url) lines.push(`URL: ${t.url}`);
     if (t.release_id) lines.push(`Release ID: ${t.release_id}`);
+    const ref = t.release_id ? releases.find(r => r.id === t.release_id) : null;
+    if (ref) {
+      lines.push(`Release vinculado:`);
+      lines.push(buildReleaseBlock(ref));
+    }
     if (t.notes) lines.push(`Notas: ${t.notes}`);
     lines.push('');
     lines.push(`### Prompt`);
@@ -397,11 +406,11 @@ function buildAuditText(state: WizardState): string {
     lines.push('');
   });
   // Material prompts
-  const aggregated = aggregatedContent(state.topics);
+  const aggregated = aggregatedContent(state.topics, releases);
   lines.push(`────────────────────────────────────────`);
   lines.push(`## Título`);
   lines.push(`### Prompt`);
-  lines.push(getStandaloneTitlePrompt(aggregated));
+  lines.push(getStandaloneTitlePrompt(aggregated, settings));
   lines.push('');
   lines.push(`### Opções coladas`);
   lines.push(state.titleResponse || '(vazio)');
@@ -412,7 +421,7 @@ function buildAuditText(state: WizardState): string {
   lines.push(`────────────────────────────────────────`);
   lines.push(`## Descrição`);
   lines.push(`### Prompt`);
-  lines.push(getStandaloneDescriptionPrompt(title, aggregated));
+  lines.push(getStandaloneDescriptionPrompt(title, aggregated, settings));
   lines.push('');
   lines.push(`### HTML registrado`);
   lines.push(state.descriptionHtml || '(vazio)');
@@ -420,7 +429,7 @@ function buildAuditText(state: WizardState): string {
   lines.push(`────────────────────────────────────────`);
   lines.push(`## Capa`);
   lines.push(`### Prompt visual`);
-  lines.push(getStandaloneCoverPrompt(aggregated));
+  lines.push(getStandaloneCoverPrompt(aggregated, settings));
   lines.push('');
   lines.push(`URL: ${state.coverUrl || '(vazia)'}`);
   return lines.join('\n');
