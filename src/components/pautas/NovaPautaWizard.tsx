@@ -44,6 +44,7 @@ import {
   getStandaloneTitlePrompt,
   getStandaloneDescriptionPrompt,
   getStandaloneCoverPrompt,
+  buildReleaseBlock,
 } from '@/lib/standalone-prompts';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
@@ -147,11 +148,17 @@ function plainTextResponseFor(t: StandaloneTopic): string {
   return (t.parsed_text || t.response_text || '').trim();
 }
 
-function aggregatedContent(topics: StandaloneTopic[]): string {
+function aggregatedContent(topics: StandaloneTopic[], releases: Release[] = []): string {
   return topics.map(t => {
     const meta = STANDALONE_TOPIC_META[t.type];
     const body = plainTextResponseFor(t);
-    return `## ${meta.label}\n${body || '(sem conteúdo gerado)'}`;
+    const ref = t.release_id ? releases.find(r => r.id === t.release_id) : null;
+    const refBlock = ref
+      ? `\n[Release vinculado]\n${buildReleaseBlock(ref)}\n`
+      : t.url
+        ? `\n[Link de origem] ${t.url}\n`
+        : '';
+    return `## ${meta.label}${refBlock}\n${body || '(sem conteúdo gerado)'}`;
   }).join('\n\n');
 }
 
