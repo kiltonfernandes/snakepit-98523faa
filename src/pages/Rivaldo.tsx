@@ -80,7 +80,7 @@ const Rivaldo = () => {
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
         const label = `[${dayName}] - ${title}`;
-        return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url };
+        return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url, isStandalone: !!m.is_standalone };
       })
       .filter(o => o.value);
 
@@ -194,7 +194,7 @@ const Rivaldo = () => {
     await rivaldo.startPipeline(
       { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
       audioParams,
-      { enabled: uploadToCloud, episodeMaterialId: selectedEpisode?.materialId, episodeDate: selectedEpisode?.date }
+      { enabled: uploadToCloud, episodeMaterialId: selectedEpisode?.materialId, episodeDate: selectedEpisode?.date, isStandalone: selectedEpisode?.isStandalone }
     );
 
     // Memory purge: clear file references after export
