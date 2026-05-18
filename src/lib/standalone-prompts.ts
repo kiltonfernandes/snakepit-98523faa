@@ -8,7 +8,7 @@
  * The prompts intentionally re-use the Heavynauta voice rules from the
  * weekly pautas pipeline so the editorial tone stays consistent.
  */
-import { StandaloneTopicType } from './types';
+import { StandaloneTopicType, Release, AppSettings } from './types';
 
 export interface StandaloneTopicMeta {
   type: StandaloneTopicType;
@@ -59,6 +59,52 @@ Voz editorial: precisa, equilibrada, sem clickbait enganoso, respeitosa com todo
 Português (BR), clareza ESL B1, frases curtas, sem markdown além de [Texto](url) para catálogo.
 Nunca invente fatos. Se faltar insumo, faça um fallback honesto.`;
 
+// ─── Dynamic context blocks ────────────────────────────────────────────────
+
+/** Renders a release as a labeled block. Skips empty fields. */
+export function buildReleaseBlock(release: Release | null | undefined): string {
+  if (!release) return '(nenhum release vinculado)';
+  const lines: string[] = [];
+  lines.push(`Artista: ${release.artist}`);
+  lines.push(`Álbum: ${release.album}`);
+  if (release.release_date) lines.push(`Lançamento: ${release.release_date}`);
+  if (release.country) lines.push(`País: ${release.country}`);
+  if (release.genres?.length) lines.push(`Gêneros: ${release.genres.join(', ')}`);
+  if (release.rating != null) lines.push(`Nota interna: ${release.rating}`);
+  if (release.comments) lines.push(`Comentários do editor: ${release.comments}`);
+  const links: Array<[string, string | null | undefined]> = [
+    ['Spotify', release.spotify_url],
+    ['Bandcamp', release.bandcamp_url],
+    ['YouTube', release.youtube_url],
+    ['Apple Music', release.apple_music_url],
+    ['Deezer', release.deezer_url],
+    ['Metal Archives', release.metal_archives_url],
+  ];
+  const present = links.filter(([, v]) => !!v);
+  if (present.length) {
+    lines.push('Links de catálogo:');
+    for (const [label, url] of present) lines.push(`- ${label}: ${url}`);
+  }
+  return lines.join('\n');
+}
+
+/** Renders the platform-wide editorial guardrails (banned terms, tone temp). */
+export function buildPlatformBlock(settings: Partial<AppSettings> | null | undefined): string {
+  if (!settings) return '(sem regras adicionais)';
+  const lines: string[] = [];
+  if (typeof settings.brand_tone_temperature === 'number') {
+    lines.push(`Temperatura editorial (0=cirúrgico, 100=incendiário): ${settings.brand_tone_temperature}`);
+  }
+  const banned = (settings.banned_terms_text || '').trim();
+  if (banned) {
+    lines.push('Termos PROIBIDOS (não usar nem variações):');
+    for (const t of banned.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)) {
+      lines.push(`- ${t}`);
+    }
+  }
+  return lines.length ? lines.join('\n') : '(sem regras adicionais)';
+}
+
 // ─── Per-topic prompts ──────────────────────────────────────────────────────
 
 const PROMPT_ANNIVERSARY = `${SHARED_VOICE_RULES}
@@ -72,6 +118,12 @@ TAREFA: Escreva uma seção editorial sobre o aniversário de um álbum.
 
 INSUMO PRINCIPAL:
 {{input}}
+
+DADOS DA PLATAFORMA SOBRE O DISCO (use como verdade):
+{{release_block}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}
 
 DIREÇÃO EDITORIAL:
 {{notes}}`;
@@ -88,6 +140,12 @@ TAREFA: Escreva uma review aprofundada do álbum abaixo.
 DISCO ALVO:
 {{input}}
 
+DADOS COMPLETOS DO RELEASE (banco da plataforma):
+{{release_block}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}
+
 DIREÇÃO EDITORIAL:
 {{notes}}`;
 
@@ -100,6 +158,9 @@ TAREFA: Transforme a notícia abaixo em uma matéria editorial Heavynauta.
 
 URL DA NOTÍCIA:
 {{input}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}
 
 DIREÇÃO EDITORIAL:
 {{notes}}`;
@@ -205,6 +266,12 @@ REGRAS FINAIS
 INSUMO DO CONVIDADO/ÁLBUM:
 {{input}}
 
+DADOS DO RELEASE (se vinculado):
+{{release_block}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}
+
 DIREÇÃO EDITORIAL EXTRA:
 {{notes}}`;
 
@@ -218,7 +285,10 @@ Cada opção em uma linha, sem numeração nem marcadores. Estilos:
 Máximo ~65 caracteres por título. Máximo 1 emoji.
 
 CONTEÚDO DO EPISÓDIO:
-{{content}}`;
+{{content}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}`;
 
 const PROMPT_DESCRIPTION = `${SHARED_VOICE_RULES}
 
@@ -233,7 +303,10 @@ TÍTULO ESCOLHIDO:
 {{title}}
 
 CONTEÚDO DO EPISÓDIO:
-{{content}}`;
+{{content}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}`;
 
 const PROMPT_COVER = `${SHARED_VOICE_RULES}
 
@@ -242,7 +315,10 @@ Estilo Heavynauta: visual editorial pesado, contrastado, tipografia forte.
 Em uma frase de até 30 palavras, dê uma direção visual concreta (cor, mood, elementos).
 
 CONTEÚDO DO EPISÓDIO:
-{{content}}`;
+{{content}}
+
+REGRAS EDITORIAIS DA PLATAFORMA:
+{{platform_block}}`;
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -250,26 +326,39 @@ function fill(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, k) => (vars[k] ?? '').trim() || '(não informado)');
 }
 
+export interface StandaloneTopicPromptCtx {
+  input: string;
+  notes: string;
+  release?: Release | null;
+  platform?: Partial<AppSettings> | null;
+}
+
 export function getStandaloneTopicPrompt(
   type: StandaloneTopicType,
-  vars: { input: string; notes: string },
+  vars: StandaloneTopicPromptCtx,
 ): string {
+  const filled = {
+    input: vars.input,
+    notes: vars.notes,
+    release_block: buildReleaseBlock(vars.release),
+    platform_block: buildPlatformBlock(vars.platform),
+  };
   switch (type) {
-    case 'anniversary': return fill(PROMPT_ANNIVERSARY, vars);
-    case 'review':      return fill(PROMPT_REVIEW, vars);
-    case 'news':        return fill(PROMPT_NEWS, vars);
-    case 'interview':   return fill(PROMPT_INTERVIEW, vars);
+    case 'anniversary': return fill(PROMPT_ANNIVERSARY, filled);
+    case 'review':      return fill(PROMPT_REVIEW, filled);
+    case 'news':        return fill(PROMPT_NEWS, filled);
+    case 'interview':   return fill(PROMPT_INTERVIEW, filled);
   }
 }
 
-export function getStandaloneTitlePrompt(content: string): string {
-  return fill(PROMPT_TITLE, { content });
+export function getStandaloneTitlePrompt(content: string, platform?: Partial<AppSettings> | null): string {
+  return fill(PROMPT_TITLE, { content, platform_block: buildPlatformBlock(platform) });
 }
 
-export function getStandaloneDescriptionPrompt(title: string, content: string): string {
-  return fill(PROMPT_DESCRIPTION, { title, content });
+export function getStandaloneDescriptionPrompt(title: string, content: string, platform?: Partial<AppSettings> | null): string {
+  return fill(PROMPT_DESCRIPTION, { title, content, platform_block: buildPlatformBlock(platform) });
 }
 
-export function getStandaloneCoverPrompt(content: string): string {
-  return fill(PROMPT_COVER, { content });
+export function getStandaloneCoverPrompt(content: string, platform?: Partial<AppSettings> | null): string {
+  return fill(PROMPT_COVER, { content, platform_block: buildPlatformBlock(platform) });
 }
