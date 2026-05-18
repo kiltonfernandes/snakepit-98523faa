@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, Copy, Check, Trash2, ChevronLeft, ChevronRight, Loader2,
-  Calendar as CalendarIcon, X, Search,
+  Calendar as CalendarIcon, X, Search, Download,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -315,6 +315,110 @@ function CopyButton({ text, disabled }: { text: string; disabled?: boolean }) {
   );
 }
 
+// Generic copy/export toolbar for any block of text (prompts, parsed responses, audit dumps).
+function downloadTextFile(filename: string, text: string, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
+function CopyExportRow({
+  text, filename, label = 'Copiar', exportLabel = 'Exportar', disabled,
+}: {
+  text: string;
+  filename: string;
+  label?: string;
+  exportLabel?: string;
+  disabled?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const empty = !text?.trim();
+  return (
+    <div className="flex gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled || empty}
+        onClick={() => {
+          navigator.clipboard.writeText(text);
+          setCopied(true);
+          toast.success(`${label} — copiado`);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <Check className="mr-1 h-3.5 w-3.5" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
+        {label}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled || empty}
+        onClick={() => { downloadTextFile(filename, text); toast.success(`Exportado: ${filename}`); }}
+      >
+        <Download className="mr-1 h-3.5 w-3.5" />
+        {exportLabel}
+      </Button>
+    </div>
+  );
+}
+
+// Build the full audit text — every prompt + parsed response for the episode.
+function buildAuditText(state: WizardState): string {
+  const lines: string[] = [];
+  lines.push(`# Auditoria — Episódio Avulso`);
+  lines.push(`Data de publicação: ${state.publicationDate}`);
+  lines.push(`Blocos: ${state.topics.length}`);
+  lines.push('');
+  state.topics.forEach((t, i) => {
+    const meta = STANDALONE_TOPIC_META[t.type];
+    lines.push(`────────────────────────────────────────`);
+    lines.push(`## Bloco ${i + 1} — ${meta.icon} ${meta.label}`);
+    if (t.url) lines.push(`URL: ${t.url}`);
+    if (t.release_id) lines.push(`Release ID: ${t.release_id}`);
+    if (t.notes) lines.push(`Notas: ${t.notes}`);
+    lines.push('');
+    lines.push(`### Prompt`);
+    lines.push(t.prompt_text || '(vazio)');
+    lines.push('');
+    lines.push(`### Resposta registrada`);
+    lines.push(t.response_text || '(vazio)');
+    lines.push('');
+  });
+  // Material prompts
+  const aggregated = aggregatedContent(state.topics);
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`## Título`);
+  lines.push(`### Prompt`);
+  lines.push(getStandaloneTitlePrompt(aggregated));
+  lines.push('');
+  lines.push(`### Opções coladas`);
+  lines.push(state.titleResponse || '(vazio)');
+  lines.push('');
+  lines.push(`Selecionado: ${state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text : '(nenhum)'}`);
+  lines.push('');
+  const title = state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text || '' : '';
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`## Descrição`);
+  lines.push(`### Prompt`);
+  lines.push(getStandaloneDescriptionPrompt(title, aggregated));
+  lines.push('');
+  lines.push(`### HTML registrado`);
+  lines.push(state.descriptionHtml || '(vazio)');
+  lines.push('');
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`## Capa`);
+  lines.push(`### Prompt visual`);
+  lines.push(getStandaloneCoverPrompt(aggregated));
+  lines.push('');
+  lines.push(`URL: ${state.coverUrl || '(vazia)'}`);
+  return lines.join('\n');
+}
+
 // ─── Topic step ─────────────────────────────────────────────────────────────
 
 function TopicStep({
@@ -388,7 +492,12 @@ function TopicStep({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt (editável)</Label>
-          <CopyButton text={topic.prompt_text} />
+          <CopyExportRow
+            text={topic.prompt_text}
+            filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
+            label="Copiar prompt"
+            exportLabel="Exportar prompt"
+          />
         </div>
         <Textarea
           rows={10}
@@ -399,7 +508,15 @@ function TopicStep({
       </div>
 
       <div className="space-y-2">
-        <Label>Cole aqui a resposta da IA</Label>
+        <div className="flex items-center justify-between">
+          <Label>Cole aqui a resposta da IA</Label>
+          <CopyExportRow
+            text={topic.response_text}
+            filename={`resposta_${topic.type}_${topic.id.slice(0, 6)}.txt`}
+            label="Copiar resposta"
+            exportLabel="Exportar resposta"
+          />
+        </div>
         <Textarea
           rows={10}
           placeholder="Cole o output gerado pela sua IA..."
@@ -428,12 +545,20 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt</Label>
-          <CopyButton text={prompt} />
+          <CopyExportRow text={prompt} filename="prompt_titulo.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={8} readOnly value={prompt} className="font-mono text-xs" />
       </div>
       <div className="space-y-2">
-        <Label>Cole as 3 opções de título (uma por linha)</Label>
+        <div className="flex items-center justify-between">
+          <Label>Cole as 3 opções de título (uma por linha)</Label>
+          <CopyExportRow
+            text={state.titleResponse}
+            filename="resposta_titulos.txt"
+            label="Copiar opções"
+            exportLabel="Exportar opções"
+          />
+        </div>
         <Textarea
           rows={6}
           value={state.titleResponse}
@@ -487,12 +612,20 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt</Label>
-          <CopyButton text={prompt} />
+          <CopyExportRow text={prompt} filename="prompt_descricao.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={8} readOnly value={prompt} className="font-mono text-xs" />
       </div>
       <div className="space-y-2">
-        <Label>Cole a descrição (HTML ou texto)</Label>
+        <div className="flex items-center justify-between">
+          <Label>Cole a descrição (HTML ou texto)</Label>
+          <CopyExportRow
+            text={state.descriptionHtml}
+            filename="descricao.html"
+            label="Copiar HTML"
+            exportLabel="Exportar HTML"
+          />
+        </div>
         <Textarea
           rows={10}
           value={state.descriptionResponse}
@@ -515,7 +648,7 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt visual (opcional)</Label>
-          <CopyButton text={prompt} />
+          <CopyExportRow text={prompt} filename="prompt_capa.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={5} readOnly value={prompt} className="font-mono text-xs" />
       </div>
@@ -791,7 +924,15 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
 
             {stepKind === 'review' && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Revisão</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold">Revisão & Auditoria</h3>
+                  <CopyExportRow
+                    text={buildAuditText(state)}
+                    filename={`auditoria_avulso_${state.publicationDate}.md`}
+                    label="Copiar auditoria completa"
+                    exportLabel="Exportar .md"
+                  />
+                </div>
                 <div className="rounded-md border border-border p-4 text-sm">
                   <div><b>Data:</b> {state.publicationDate}</div>
                   <div className="mt-2"><b>Blocos ({state.topics.length}):</b></div>
@@ -808,6 +949,48 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
                   <div><b>Descrição:</b> {state.descriptionHtml ? `${state.descriptionHtml.length} caracteres` : <span className="text-muted-foreground">vazia</span>}</div>
                   <div><b>Capa:</b> {state.coverUrl ? 'definida' : <span className="text-muted-foreground">vazia</span>}</div>
                 </div>
+
+                <div className="space-y-3">
+                  {state.topics.map((t, i) => {
+                    const meta = STANDALONE_TOPIC_META[t.type];
+                    return (
+                      <div key={t.id} className="rounded-md border border-border p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <div className="text-sm font-semibold">
+                            Bloco {i + 1} — {meta.icon} {meta.label}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs">Prompt final</Label>
+                              <CopyExportRow
+                                text={t.prompt_text}
+                                filename={`prompt_${meta.label.toLowerCase()}_${i + 1}.txt`}
+                                label="Copiar"
+                                exportLabel="Exportar"
+                              />
+                            </div>
+                            <Textarea readOnly rows={6} value={t.prompt_text} className="font-mono text-[11px]" />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs">Texto parsed (resposta registrada)</Label>
+                              <CopyExportRow
+                                text={t.response_text}
+                                filename={`resposta_${meta.label.toLowerCase()}_${i + 1}.txt`}
+                                label="Copiar"
+                                exportLabel="Exportar"
+                              />
+                            </div>
+                            <Textarea readOnly rows={6} value={t.response_text} className="font-mono text-[11px]" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <p className="text-xs text-muted-foreground">
                   Ao confirmar, o episódio será criado na aba <b>Episódios Avulsos</b> e ficará disponível no Rivaldo para gravação/upload.
                 </p>
