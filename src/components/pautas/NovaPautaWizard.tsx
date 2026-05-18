@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, Copy, Check, Trash2, ChevronLeft, ChevronRight, Loader2,
-  Calendar as CalendarIcon, X, Search,
+  Calendar as CalendarIcon, X, Search, Download, FileDown,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -313,6 +313,110 @@ function CopyButton({ text, disabled }: { text: string; disabled?: boolean }) {
       Copiar prompt
     </Button>
   );
+}
+
+// Generic copy/export toolbar for any block of text (prompts, parsed responses, audit dumps).
+function downloadTextFile(filename: string, text: string, mime = 'text/plain;charset=utf-8') {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+}
+
+function CopyExportRow({
+  text, filename, label = 'Copiar', exportLabel = 'Exportar', disabled,
+}: {
+  text: string;
+  filename: string;
+  label?: string;
+  exportLabel?: string;
+  disabled?: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const empty = !text?.trim();
+  return (
+    <div className="flex gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled || empty}
+        onClick={() => {
+          navigator.clipboard.writeText(text);
+          setCopied(true);
+          toast.success(`${label} — copiado`);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <Check className="mr-1 h-3.5 w-3.5" /> : <Copy className="mr-1 h-3.5 w-3.5" />}
+        {label}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={disabled || empty}
+        onClick={() => { downloadTextFile(filename, text); toast.success(`Exportado: ${filename}`); }}
+      >
+        <Download className="mr-1 h-3.5 w-3.5" />
+        {exportLabel}
+      </Button>
+    </div>
+  );
+}
+
+// Build the full audit text — every prompt + parsed response for the episode.
+function buildAuditText(state: WizardState): string {
+  const lines: string[] = [];
+  lines.push(`# Auditoria — Episódio Avulso`);
+  lines.push(`Data de publicação: ${state.publicationDate}`);
+  lines.push(`Blocos: ${state.topics.length}`);
+  lines.push('');
+  state.topics.forEach((t, i) => {
+    const meta = STANDALONE_TOPIC_META[t.type];
+    lines.push(`────────────────────────────────────────`);
+    lines.push(`## Bloco ${i + 1} — ${meta.icon} ${meta.label}`);
+    if (t.url) lines.push(`URL: ${t.url}`);
+    if (t.release_id) lines.push(`Release ID: ${t.release_id}`);
+    if (t.notes) lines.push(`Notas: ${t.notes}`);
+    lines.push('');
+    lines.push(`### Prompt`);
+    lines.push(t.prompt_text || '(vazio)');
+    lines.push('');
+    lines.push(`### Resposta registrada`);
+    lines.push(t.response_text || '(vazio)');
+    lines.push('');
+  });
+  // Material prompts
+  const aggregated = aggregatedContent(state.topics);
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`## Título`);
+  lines.push(`### Prompt`);
+  lines.push(getStandaloneTitlePrompt(aggregated));
+  lines.push('');
+  lines.push(`### Opções coladas`);
+  lines.push(state.titleResponse || '(vazio)');
+  lines.push('');
+  lines.push(`Selecionado: ${state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text : '(nenhum)'}`);
+  lines.push('');
+  const title = state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text || '' : '';
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`## Descrição`);
+  lines.push(`### Prompt`);
+  lines.push(getStandaloneDescriptionPrompt(title, aggregated));
+  lines.push('');
+  lines.push(`### HTML registrado`);
+  lines.push(state.descriptionHtml || '(vazio)');
+  lines.push('');
+  lines.push(`────────────────────────────────────────`);
+  lines.push(`## Capa`);
+  lines.push(`### Prompt visual`);
+  lines.push(getStandaloneCoverPrompt(aggregated));
+  lines.push('');
+  lines.push(`URL: ${state.coverUrl || '(vazia)'}`);
+  return lines.join('\n');
 }
 
 // ─── Topic step ─────────────────────────────────────────────────────────────
