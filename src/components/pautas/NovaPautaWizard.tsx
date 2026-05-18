@@ -492,7 +492,12 @@ function TopicStep({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt (editável)</Label>
-          <CopyButton text={topic.prompt_text} />
+          <CopyExportRow
+            text={topic.prompt_text}
+            filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
+            label="Copiar prompt"
+            exportLabel="Exportar prompt"
+          />
         </div>
         <Textarea
           rows={10}
@@ -503,7 +508,15 @@ function TopicStep({
       </div>
 
       <div className="space-y-2">
-        <Label>Cole aqui a resposta da IA</Label>
+        <div className="flex items-center justify-between">
+          <Label>Cole aqui a resposta da IA</Label>
+          <CopyExportRow
+            text={topic.response_text}
+            filename={`resposta_${topic.type}_${topic.id.slice(0, 6)}.txt`}
+            label="Copiar resposta"
+            exportLabel="Exportar resposta"
+          />
+        </div>
         <Textarea
           rows={10}
           placeholder="Cole o output gerado pela sua IA..."
@@ -532,12 +545,20 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt</Label>
-          <CopyButton text={prompt} />
+          <CopyExportRow text={prompt} filename="prompt_titulo.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={8} readOnly value={prompt} className="font-mono text-xs" />
       </div>
       <div className="space-y-2">
-        <Label>Cole as 3 opções de título (uma por linha)</Label>
+        <div className="flex items-center justify-between">
+          <Label>Cole as 3 opções de título (uma por linha)</Label>
+          <CopyExportRow
+            text={state.titleResponse}
+            filename="resposta_titulos.txt"
+            label="Copiar opções"
+            exportLabel="Exportar opções"
+          />
+        </div>
         <Textarea
           rows={6}
           value={state.titleResponse}
@@ -591,12 +612,20 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt</Label>
-          <CopyButton text={prompt} />
+          <CopyExportRow text={prompt} filename="prompt_descricao.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={8} readOnly value={prompt} className="font-mono text-xs" />
       </div>
       <div className="space-y-2">
-        <Label>Cole a descrição (HTML ou texto)</Label>
+        <div className="flex items-center justify-between">
+          <Label>Cole a descrição (HTML ou texto)</Label>
+          <CopyExportRow
+            text={state.descriptionHtml}
+            filename="descricao.html"
+            label="Copiar HTML"
+            exportLabel="Exportar HTML"
+          />
+        </div>
         <Textarea
           rows={10}
           value={state.descriptionResponse}
@@ -619,7 +648,7 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt visual (opcional)</Label>
-          <CopyButton text={prompt} />
+          <CopyExportRow text={prompt} filename="prompt_capa.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={5} readOnly value={prompt} className="font-mono text-xs" />
       </div>
