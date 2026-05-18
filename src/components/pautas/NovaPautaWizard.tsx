@@ -924,7 +924,15 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
 
             {stepKind === 'review' && (
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Revisão</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-lg font-semibold">Revisão & Auditoria</h3>
+                  <CopyExportRow
+                    text={buildAuditText(state)}
+                    filename={`auditoria_avulso_${state.publicationDate}.md`}
+                    label="Copiar auditoria completa"
+                    exportLabel="Exportar .md"
+                  />
+                </div>
                 <div className="rounded-md border border-border p-4 text-sm">
                   <div><b>Data:</b> {state.publicationDate}</div>
                   <div className="mt-2"><b>Blocos ({state.topics.length}):</b></div>
@@ -941,6 +949,48 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
                   <div><b>Descrição:</b> {state.descriptionHtml ? `${state.descriptionHtml.length} caracteres` : <span className="text-muted-foreground">vazia</span>}</div>
                   <div><b>Capa:</b> {state.coverUrl ? 'definida' : <span className="text-muted-foreground">vazia</span>}</div>
                 </div>
+
+                <div className="space-y-3">
+                  {state.topics.map((t, i) => {
+                    const meta = STANDALONE_TOPIC_META[t.type];
+                    return (
+                      <div key={t.id} className="rounded-md border border-border p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                          <div className="text-sm font-semibold">
+                            Bloco {i + 1} — {meta.icon} {meta.label}
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs">Prompt final</Label>
+                              <CopyExportRow
+                                text={t.prompt_text}
+                                filename={`prompt_${meta.label.toLowerCase()}_${i + 1}.txt`}
+                                label="Copiar"
+                                exportLabel="Exportar"
+                              />
+                            </div>
+                            <Textarea readOnly rows={6} value={t.prompt_text} className="font-mono text-[11px]" />
+                          </div>
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between">
+                              <Label className="text-xs">Texto parsed (resposta registrada)</Label>
+                              <CopyExportRow
+                                text={t.response_text}
+                                filename={`resposta_${meta.label.toLowerCase()}_${i + 1}.txt`}
+                                label="Copiar"
+                                exportLabel="Exportar"
+                              />
+                            </div>
+                            <Textarea readOnly rows={6} value={t.response_text} className="font-mono text-[11px]" />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <p className="text-xs text-muted-foreground">
                   Ao confirmar, o episódio será criado na aba <b>Episódios Avulsos</b> e ficará disponível no Rivaldo para gravação/upload.
                 </p>
