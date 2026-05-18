@@ -549,8 +549,9 @@ function TopicStep({
 // ─── Material steps (title / description / cover) ───────────────────────────
 
 function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
-  const content = aggregatedContent(state.topics);
-  const prompt = getStandaloneTitlePrompt(content);
+  const { releases, settings } = useApp();
+  const content = aggregatedContent(state.topics, releases);
+  const prompt = getStandaloneTitlePrompt(content, settings);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">🏷️ Título do episódio</h3>
@@ -615,9 +616,10 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
 }
 
 function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
+  const { releases, settings } = useApp();
   const title = state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text || '' : '';
-  const content = aggregatedContent(state.topics);
-  const prompt = getStandaloneDescriptionPrompt(title, content);
+  const content = aggregatedContent(state.topics, releases);
+  const prompt = getStandaloneDescriptionPrompt(title, content, settings);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">📝 Descrição do episódio</h3>
@@ -652,8 +654,9 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
 }
 
 function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
-  const content = aggregatedContent(state.topics);
-  const prompt = getStandaloneCoverPrompt(content);
+  const { releases, settings } = useApp();
+  const content = aggregatedContent(state.topics, releases);
+  const prompt = getStandaloneCoverPrompt(content, settings);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">🎨 Capa</h3>
