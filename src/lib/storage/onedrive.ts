@@ -45,6 +45,26 @@ export function buildEpisodeFolderPath(episodeDate?: string): string {
   return `Snakepit/${buildIsoWeekFolder(date)}`;
 }
 
+/**
+ * Builds the OneDrive folder path for standalone (avulso) episodes.
+ * Routes everything under `Snakepit/Avulsos/YYYY-MM/` (grouped by month of the episode date,
+ * falling back to the current month). Keeps standalone material organized separately from
+ * the weekly Snakepit/YYYY-Www/ folders.
+ */
+export function buildStandaloneFolderPath(episodeDate?: string): string {
+  const date = episodeDate ? new Date(`${episodeDate}T12:00:00`) : new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `Snakepit/Avulsos/${year}-${month}`;
+}
+
+/** Convenience selector: standalone routes to Avulsos folder, weekly to ISO-week folder. */
+export function buildOneDriveFolderPath(opts: { episodeDate?: string; isStandalone?: boolean }): string {
+  return opts.isStandalone
+    ? buildStandaloneFolderPath(opts.episodeDate)
+    : buildEpisodeFolderPath(opts.episodeDate);
+}
+
 /** Sanitizes a filename for OneDrive (no <>:"/\|?*) and strips control chars. */
 export function sanitizeFilename(name: string): string {
   const cleaned = name
