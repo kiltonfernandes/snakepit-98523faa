@@ -703,7 +703,7 @@ export interface NovaPautaWizardProps {
 }
 
 export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardProps) {
-  const { addPauta, logActivity } = useApp();
+  const { addPauta, logActivity, releases, settings } = useApp();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [saving, setSaving] = useState(false);
 
@@ -951,7 +951,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-lg font-semibold">Revisão & Auditoria</h3>
                   <CopyExportRow
-                    text={buildAuditText(state)}
+                    text={buildAuditText(state, releases, settings)}
                     filename={`auditoria_avulso_${state.publicationDate}.md`}
                     label="Copiar auditoria completa"
                     exportLabel="Exportar .md"
