@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, Copy, Check, Trash2, ChevronLeft, ChevronRight, Loader2,
-  Calendar as CalendarIcon, X, Search, Download, FileDown,
+  Calendar as CalendarIcon, X, Search, Download,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
