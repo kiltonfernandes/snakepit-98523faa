@@ -935,6 +935,62 @@ export default function CalendarView() {
             <DialogDescription>Preview da pauta</DialogDescription>
           </DialogHeader>
           {previewPauta && (() => {
+            // Standalone pauta: render topics-based layout with release links
+            if (previewPauta.is_standalone) {
+              const d = new Date(previewPauta.publication_date + 'T12:00:00');
+              const topics = (previewPauta.standalone_topics || []) as StandaloneTopic[];
+              return (
+                <div className="space-y-6 p-4">
+                  <header className="border-b border-white/20 pb-4 text-center">
+                    <h1 className="text-2xl font-bold text-white">SNAKEPIT · AVULSO</h1>
+                    <h2 className="mt-2 text-lg font-semibold text-white/80">
+                      {d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}
+                    </h2>
+                  </header>
+                  {topics.length === 0 && (
+                    <p className="text-center text-white/40 italic">Sem blocos definidos.</p>
+                  )}
+                  {topics.map((t) => {
+                    const meta = STANDALONE_TOPIC_META[t.type];
+                    const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
+                    const text = (t.parsed_text || t.response_text || '').trim();
+                    return (
+                      <article key={t.id} className="border-t border-white/10 pt-4 space-y-3">
+                        <h3 className="text-lg font-bold uppercase tracking-wider text-white">
+                          {meta?.icon} {meta?.label}
+                        </h3>
+                        {rel && (
+                          <div className="rounded-md bg-white/5 p-3 text-sm text-white/80">
+                            <div className="font-semibold text-white">{rel.artist} — {rel.album}</div>
+                            {rel.release_date && <div className="text-white/50 text-xs">{rel.release_date}{rel.country ? ` · ${rel.country}` : ''}</div>}
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {rel.spotify_url && <a href={rel.spotify_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-emerald-400">Spotify</a>}
+                              {rel.youtube_url && <a href={rel.youtube_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-red-400">YouTube</a>}
+                              {rel.bandcamp_url && <a href={rel.bandcamp_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-cyan-400">Bandcamp</a>}
+                              {rel.apple_music_url && <a href={rel.apple_music_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-pink-400">Apple Music</a>}
+                              {rel.deezer_url && <a href={rel.deezer_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-purple-400">Deezer</a>}
+                              {rel.metal_archives_url && <a href={rel.metal_archives_url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-amber-400">Metal Archives</a>}
+                            </div>
+                          </div>
+                        )}
+                        {t.url && !rel && (
+                          <a href={t.url} target="_blank" rel="noopener noreferrer" className="text-xs underline text-emerald-400 break-all">{t.url}</a>
+                        )}
+                        {t.notes?.trim() && (
+                          <p className="text-sm italic text-white/50 whitespace-pre-wrap">📝 {t.notes}</p>
+                        )}
+                        {text ? (
+                          <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{text}</div>
+                        ) : (
+                          <p className="text-base italic text-white/30">Seção sem resposta da IA ainda.</p>
+                        )}
+                      </article>
+                    );
+                  })}
+                </div>
+              );
+            }
+
             const d = new Date(previewPauta.publication_date + 'T12:00:00');
             const wd = d.getDay();
             const slotMap: Record<number, string> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
