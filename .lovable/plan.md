@@ -1,3 +1,70 @@
+# Integrar episódios avulsos ao fluxo completo
+
+Hoje a pauta avulsa é criada pelo wizard, mas o resto da plataforma trata ela como "meio órfã": a linha em Pautas → Episódios Avulsos só mostra Editar/Excluir, o modal do Calendário abre vazio, e a capa preenchida no wizard não aparece no editor avulso nem no Pacote do episódio. Este plano fecha o ciclo para que o avulso se comporte igual a um episódio semanal.
+
+## O que muda na experiência
+
+1. **Linha do episódio avulso ganha "Visualizar"**
+   Na tabela `Episódios Avulsos` aparece um botão de olho (`Eye`) antes do Editar. Ao clicar abre exatamente o mesmo modal "Pacote do episódio" usado no Calendário (título selecionado, descrição HTML, capa, link Spotify, Mencionado no episódio, Ações rápidas, OneDrive). Tudo já preenchido com o que veio do wizard.
+
+2. **Modal do Calendário deixa de abrir vazio**
+   Quando clico no episódio avulso no Calendário, o "Pacote do episódio" carrega título, descrição, capa, Spotify e tudo o que foi definido no wizard — mesma experiência do print 4 do usuário.
+
+3. **"Visualizar pauta" funciona no avulso**
+   Dentro do Pacote do episódio (tanto do Calendário quanto da nova ação na tabela), clicar em "Visualizar pauta" abre o preview da pauta avulsa renderizada (blocos por tipo, com notas e resposta da IA) pronta para gravar.
+
+4. **Capa preenchida no wizard persiste em todas as telas**
+   O `cover_url` (e o `cover_source_url`, quando aplicável) salvo no wizard reverbera no editor da aba Episódios Avulsos e no Pacote do episódio. Nada mais aparece em branco depois de uma criação.
+
+## Causa raiz dos bugs (parte técnica)
+
+- `NovaPautaWizard.handleSave` insere o `episode_material` direto no Supabase mas **não chama `addMaterial` do `AppContext`**, então o array `materials` em memória não recebe o registro. Resultado: `CalendarView` (`materials.find(...)`) não acha nada e o modal abre vazio até o próximo reload; e o `StandaloneEpisodesTable` (que também lê de `materials`) renderiza o editor sem capa/descrição/título.
+- O editor atual da tabela de avulsos é um modal próprio, mais pobre que o "Pacote do episódio". Precisamos reutilizar o componente do Calendário para ter paridade.
+- O salvamento do wizard grava `cover_url` mas não `cover_source_url`; ao reabrir o "Gerar capa", o campo URL aparece vazio. Persistir os dois resolve.
+
+## Mudanças por arquivo
+
+### `src/contexts/AppContext.tsx`
+- Garantir que existe (ou expor) `addMaterial(material)` que faz `setMaterials(prev => [...prev, material])` + `supabase.insert`. Se já houver `addMaterials` (plural), criar wrapper singular.
+
+### `src/components/pautas/NovaPautaWizard.tsx`
+- Em `handleSave`:
+  - Trocar `supabase.from('episode_materials').insert(material)` por `addMaterial(material)` (mesma assinatura do contexto), para que apareça imediatamente no Calendário e na tabela.
+  - Persistir `cover_source_url: state.coverUrl || null` junto com `cover_url`, para o editor de capa abrir já preenchido.
+- Manter o resto do save igual.
+
+### `src/components/pautas/StandaloneEpisodesTable.tsx`
+- Adicionar ação **Visualizar** (ícone `Eye`) antes de Editar, que abre o mesmo "Pacote do episódio" do Calendário.
+- Substituir o `StandaloneEpisodeEditor` atual pela reutilização do **EpisodePackageModal** extraído (ver abaixo). O Editar passa a abrir o mesmo modal em modo edição (já é tudo editável lá dentro).
+- Remover código duplicado de descrição/capa/spotify daqui.
+
+### `src/components/episodes/EpisodePackageModal.tsx` (novo)
+- Extrair o JSX e os handlers do "Pacote do episódio" hoje embutidos em `src/pages/CalendarView.tsx` (linhas ~650–905) para um componente reutilizável.
+- Props: `material`, `pauta?`, `open`, `onOpenChange`, `onPreviewPauta`.
+- O componente fica responsável por: copiar título, editar/limpar "Mencionado no episódio", editar descrição HTML, gerar/baixar capa, link Spotify, OneDrive (download/abrir/excluir), Ações rápidas (Visualizar pauta, Copiar link compartilhável, Abrir workspace, Baixar pacote, Spotify for Creators).
+- Internamente continua usando `useApp()` (`updateMaterial`, `loadMaterialCover`, etc.).
+
+### `src/pages/CalendarView.tsx`
+- Substituir o bloco grande do "Pacote do episódio" pelo novo `<EpisodePackageModal />`.
+- Reaproveitar o `previewPauta` dialog que já existe; ele é passado como callback `onPreviewPauta` para o componente.
+- Para episódio avulso: `getPautasForDate` já retorna o pauta avulso (filtra por `publication_date`), e o `materials.find(m => m.episode_date === ...)` passa a achar o material assim que o `addMaterial` for chamado no wizard.
+
+### Visualizar pauta avulsa (preview)
+- O preview hoje (`previewPauta` no CalendarView) usa o renderer semanal por slot do dia da semana. Para avulso, detectar `pauta.is_standalone` e renderizar `standalone_topics` (ícone + label + notas + resposta da IA), reutilizando o estilo do `StandaloneEpisodeEditor` em modo leitura.
+
+## Fora de escopo
+
+- Nenhuma mudança em RLS/migrations: as colunas (`cover_url`, `cover_source_url`, `description_html`, `is_standalone`) já existem.
+- Nenhuma mudança no upload OneDrive / Rivaldo — já está roteado para `Snakepit/Avulsos/…`.
+- Nenhuma mudança nos prompts dinâmicos do wizard.
+
+## Critério de aceite
+
+- Criar uma pauta avulsa pelo wizard → ela aparece imediatamente (sem refresh) no Calendário com modal preenchido.
+- A linha de Episódios Avulsos tem 3 ações: Visualizar, Editar, Excluir.
+- "Visualizar" (tabela) e clique no Calendário abrem o **mesmo** modal "Pacote do episódio".
+- "Visualizar pauta" dentro desse modal mostra os blocos avulsos com notas + resposta da IA prontos para gravar.
+- A capa preenchida no wizard aparece tanto no editor avulso quanto no Pacote do episódio sem precisar repreencher.
 # Nova Pauta — Fluxo Guiado & Episódios Avulsos
 
 Adicionar um fluxo flexível para criar episódios sob demanda, sem precisar amarrar à grade da semana editorial, e uma aba dedicada para gerenciá-los.
