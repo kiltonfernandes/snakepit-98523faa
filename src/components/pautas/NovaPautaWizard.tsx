@@ -841,7 +841,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         updated_at: new Date().toISOString(),
         is_standalone: true,
       } as any;
-      await supabase.from('episode_materials' as any).insert(material as any);
+      addMaterial(material);
 
       logActivity('create_standalone_pauta', `Episódio avulso criado para ${state.publicationDate} (${state.topics.length} blocos)`);
       toast.success('Episódio avulso criado!');
