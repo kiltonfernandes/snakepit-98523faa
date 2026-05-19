@@ -31,6 +31,7 @@ interface AppContextType {
   updatePauta: (id: string, p: Partial<Pauta>) => void;
   deletePauta: (id: string) => void;
   getPautasForWeek: (weekId: string) => Pauta[];
+  addMaterial: (material: EpisodeMaterial) => void;
   updateMaterial: (id: string, m: Partial<EpisodeMaterial>) => void;
   getMaterialsForWeek: (weekId: string) => EpisodeMaterial[];
   updateSettings: (s: Partial<AppSettings>) => void;
