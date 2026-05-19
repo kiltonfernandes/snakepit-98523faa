@@ -703,7 +703,7 @@ export interface NovaPautaWizardProps {
 }
 
 export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardProps) {
-  const { addPauta, logActivity, releases, settings } = useApp();
+  const { addPauta, addMaterial, logActivity, releases, settings } = useApp();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [saving, setSaving] = useState(false);
 
@@ -829,7 +829,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         selected_title_index: state.selectedTitleIndex,
         description_html: state.descriptionHtml || null,
         cover_url: state.coverUrl || null,
-        cover_source_url: null,
+        cover_source_url: state.coverUrl || null,
         spotify_link: null,
         repository_url: null,
         repository_file_id: null,
