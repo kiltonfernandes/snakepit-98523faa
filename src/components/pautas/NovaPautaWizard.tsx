@@ -703,7 +703,7 @@ export interface NovaPautaWizardProps {
 }
 
 export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardProps) {
-  const { addPauta, logActivity, releases, settings } = useApp();
+  const { addPauta, addMaterial, logActivity, releases, settings } = useApp();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [saving, setSaving] = useState(false);
 
@@ -829,7 +829,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         selected_title_index: state.selectedTitleIndex,
         description_html: state.descriptionHtml || null,
         cover_url: state.coverUrl || null,
-        cover_source_url: null,
+        cover_source_url: state.coverUrl || null,
         spotify_link: null,
         repository_url: null,
         repository_file_id: null,
@@ -841,7 +841,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         updated_at: new Date().toISOString(),
         is_standalone: true,
       } as any;
-      await supabase.from('episode_materials' as any).insert(material as any);
+      addMaterial(material);
 
       logActivity('create_standalone_pauta', `Episódio avulso criado para ${state.publicationDate} (${state.topics.length} blocos)`);
       toast.success('Episódio avulso criado!');

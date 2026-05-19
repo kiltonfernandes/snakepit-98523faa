@@ -5,51 +5,54 @@ Hoje a pauta avulsa é criada pelo wizard, mas o resto da plataforma trata ela c
 ## O que muda na experiência
 
 1. **Linha do episódio avulso ganha "Visualizar"**
-   Na tabela `Episódios Avulsos` aparece um botão de olho (`Eye`) antes do Editar. Ao clicar abre exatamente o mesmo modal "Pacote do episódio" usado no Calendário (título selecionado, descrição HTML, capa, link Spotify, Mencionado no episódio, Ações rápidas, OneDrive). Tudo já preenchido com o que veio do wizard.
-
+  Na tabela `Episódios Avulsos` aparece um botão de olho (`Eye`) antes do Editar. Ao clicar abre exatamente o mesmo modal "Pacote do episódio" usado no Calendário (título selecionado, descrição HTML, capa, link Spotify, Mencionado no episódio, Ações rápidas, OneDrive). Tudo já preenchido com o que veio do wizard.
 2. **Modal do Calendário deixa de abrir vazio**
-   Quando clico no episódio avulso no Calendário, o "Pacote do episódio" carrega título, descrição, capa, Spotify e tudo o que foi definido no wizard — mesma experiência do print 4 do usuário.
-
+  Quando clico no episódio avulso no Calendário, o "Pacote do episódio" carrega título, descrição, capa, Spotify e tudo o que foi definido no wizard — mesma experiência do print 4 do usuário.
 3. **"Visualizar pauta" funciona no avulso**
-   Dentro do Pacote do episódio (tanto do Calendário quanto da nova ação na tabela), clicar em "Visualizar pauta" abre o preview da pauta avulsa renderizada (blocos por tipo, com notas e resposta da IA) pronta para gravar.
-
+  Dentro do Pacote do episódio (tanto do Calendário quanto da nova ação na tabela), clicar em "Visualizar pauta" abre o preview da pauta avulsa renderizada (blocos por tipo, com notas e resposta da IA) pronta para gravar. por exmeplo se houver release ou anuversario, ele deve trazer os botoes de youtube, spotify e Metal Archives por exmplo
 4. **Capa preenchida no wizard persiste em todas as telas**
-   O `cover_url` (e o `cover_source_url`, quando aplicável) salvo no wizard reverbera no editor da aba Episódios Avulsos e no Pacote do episódio. Nada mais aparece em branco depois de uma criação.
+  O `cover_url` (e o `cover_source_url`, quando aplicável) salvo no wizard reverbera no editor da aba Episódios Avulsos e no Pacote do episódio. Nada mais aparece em branco depois de uma criação.
 
 ## Causa raiz dos bugs (parte técnica)
 
-- `NovaPautaWizard.handleSave` insere o `episode_material` direto no Supabase mas **não chama `addMaterial` do `AppContext`**, então o array `materials` em memória não recebe o registro. Resultado: `CalendarView` (`materials.find(...)`) não acha nada e o modal abre vazio até o próximo reload; e o `StandaloneEpisodesTable` (que também lê de `materials`) renderiza o editor sem capa/descrição/título.
+- `NovaPautaWizard.handleSave` insere o `episode_material` direto no Supabase mas **não chama `addMaterial` do `AppContext**`, então o array `materials` em memória não recebe o registro. Resultado: `CalendarView` (`materials.find(...)`) não acha nada e o modal abre vazio até o próximo reload; e o `StandaloneEpisodesTable` (que também lê de `materials`) renderiza o editor sem capa/descrição/título.
 - O editor atual da tabela de avulsos é um modal próprio, mais pobre que o "Pacote do episódio". Precisamos reutilizar o componente do Calendário para ter paridade.
 - O salvamento do wizard grava `cover_url` mas não `cover_source_url`; ao reabrir o "Gerar capa", o campo URL aparece vazio. Persistir os dois resolve.
 
 ## Mudanças por arquivo
 
 ### `src/contexts/AppContext.tsx`
+
 - Garantir que existe (ou expor) `addMaterial(material)` que faz `setMaterials(prev => [...prev, material])` + `supabase.insert`. Se já houver `addMaterials` (plural), criar wrapper singular.
 
 ### `src/components/pautas/NovaPautaWizard.tsx`
+
 - Em `handleSave`:
   - Trocar `supabase.from('episode_materials').insert(material)` por `addMaterial(material)` (mesma assinatura do contexto), para que apareça imediatamente no Calendário e na tabela.
   - Persistir `cover_source_url: state.coverUrl || null` junto com `cover_url`, para o editor de capa abrir já preenchido.
 - Manter o resto do save igual.
 
 ### `src/components/pautas/StandaloneEpisodesTable.tsx`
+
 - Adicionar ação **Visualizar** (ícone `Eye`) antes de Editar, que abre o mesmo "Pacote do episódio" do Calendário.
 - Substituir o `StandaloneEpisodeEditor` atual pela reutilização do **EpisodePackageModal** extraído (ver abaixo). O Editar passa a abrir o mesmo modal em modo edição (já é tudo editável lá dentro).
 - Remover código duplicado de descrição/capa/spotify daqui.
 
 ### `src/components/episodes/EpisodePackageModal.tsx` (novo)
+
 - Extrair o JSX e os handlers do "Pacote do episódio" hoje embutidos em `src/pages/CalendarView.tsx` (linhas ~650–905) para um componente reutilizável.
 - Props: `material`, `pauta?`, `open`, `onOpenChange`, `onPreviewPauta`.
 - O componente fica responsável por: copiar título, editar/limpar "Mencionado no episódio", editar descrição HTML, gerar/baixar capa, link Spotify, OneDrive (download/abrir/excluir), Ações rápidas (Visualizar pauta, Copiar link compartilhável, Abrir workspace, Baixar pacote, Spotify for Creators).
 - Internamente continua usando `useApp()` (`updateMaterial`, `loadMaterialCover`, etc.).
 
 ### `src/pages/CalendarView.tsx`
+
 - Substituir o bloco grande do "Pacote do episódio" pelo novo `<EpisodePackageModal />`.
 - Reaproveitar o `previewPauta` dialog que já existe; ele é passado como callback `onPreviewPauta` para o componente.
 - Para episódio avulso: `getPautasForDate` já retorna o pauta avulso (filtra por `publication_date`), e o `materials.find(m => m.episode_date === ...)` passa a achar o material assim que o `addMaterial` for chamado no wizard.
 
 ### Visualizar pauta avulsa (preview)
+
 - O preview hoje (`previewPauta` no CalendarView) usa o renderer semanal por slot do dia da semana. Para avulso, detectar `pauta.is_standalone` e renderizar `standalone_topics` (ícone + label + notas + resposta da IA), reutilizando o estilo do `StandaloneEpisodeEditor` em modo leitura.
 
 ## Fora de escopo
@@ -65,6 +68,7 @@ Hoje a pauta avulsa é criada pelo wizard, mas o resto da plataforma trata ela c
 - "Visualizar" (tabela) e clique no Calendário abrem o **mesmo** modal "Pacote do episódio".
 - "Visualizar pauta" dentro desse modal mostra os blocos avulsos com notas + resposta da IA prontos para gravar.
 - A capa preenchida no wizard aparece tanto no editor avulso quanto no Pacote do episódio sem precisar repreencher.
+
 # Nova Pauta — Fluxo Guiado & Episódios Avulsos
 
 Adicionar um fluxo flexível para criar episódios sob demanda, sem precisar amarrar à grade da semana editorial, e uma aba dedicada para gerenciá-los.
@@ -86,420 +90,417 @@ Adicionar um fluxo flexível para criar episódios sob demanda, sem precisar ama
       **INPUT (sempre vou te enviar)**  
       **FORMATO DA RESPOSTA (obrigatório)**  
       A resposta deve vir com **apenas** as seções abaixo, nesta ordem, e **sem nenhuma linha extra antes ou depois**:
-        1. **Introdução (falas fixas)**
-        2. **Perguntas — Faixa a Faixa | [NOME DO ÁLBUM] (5–7)**
-        3. **Segway para Fechando a Conta (falas fixas)**
-        4. **Perguntas — Fechando a Conta | [NOME DO ÁLBUM] (5)**
-        5. **Segway de Encerramento (falas fixas)**
-        **Regras de formatação (muito importante):**
-        - Use emojis nos títulos para guiar a leitura (ex.: 🎙️, 🎸, 💸, ✅, 🚀).
-        - Use headings assim:
-        - Use **negrito** para nomes dos hosts e rótulos importantes.
-        - Use *itálico* para observações de tom e intenção (curtas).
-        - Use *destaque com fundo* para frases-chave (ex.: CTA e “no seu tempo”) usando:
-        - Nas listas de perguntas, mantenha só a pergunta, mas pode destacar 1 expressão-chave com fundo se ajudar o host a lembrar o gancho.
-        - Não inclua "Convidado(s)", "Banda/Projeto", "Álbum", "Ano", "Links" como seções no final. Esses dados já estão no input.
-        - Não inclua perguntas como "você prefere..." no final.
-        - Não use citações, nem marcadores de fonte (ex.: "whiplash+1", "[web]", "[page]", etc.).
-        - Não coloque links entre colchetes com rótulos (ex.: "[[music.apple](http://music.apple)]"). Se precisar incluir links, use **no máximo 3 links** em uma linha dentro da seção "Estrutura do episódio" como "Links úteis: ...".
-        - Não inclua a seção "Estrutura do episódio" na pauta final. (Você usa isso só internamente na gravação.)
-        - As seções de perguntas devem conter **somente as perguntas**, numeradas, sem parágrafos de contextualização.
-        - **Convidado(s):** [NOME DO CONVIDADO]
-        - **Banda/Projeto:** [BANDA/PROJETO]
-        - **Álbum:** [NOME DO ÁLBUM]
-        - **Ano:** [ANO]
-        - **Links (se houver):** [LINKS] (Spotify, Bandcamp, Metal Archives, site oficial, etc.)
-        **REGRA DE PLURAL (quando houver 2+ convidados)**  
-        Quando [NOME DO CONVIDADO] tiver mais de um nome:
-        - No roteiro, trate como **[NOMES DOS CONVIDADOS]** (ex.: "Fulano e Sicrano" ou "Fulano, Sicrano e Beltrano").
-        - Ao longo da pauta, distribua as perguntas: alterne quem responde e inclua chamadas do tipo:
-        - Se houver funções/cargos, use isso para direcionar perguntas (ex.: letra pro vocal, arranjo pro guitarrista, ritmo pro baterista), sem entrar em papo técnico de gear.
-        **PESQUISA RÁPIDA (obrigatória, mas NÃO aparece na pauta final)**  
-        Antes de escrever a pauta, faça uma pesquisa curta para não ficar genérico.  
-        **Regras da pesquisa (uso interno):**
-        - Priorize fontes confiáveis e diretas (site oficial, Bandcamp, Spotify, Metal Archives, entrevistas, press release, label).
-        - Se houver links no input, use esses links como prioridade.
-        - Se não houver links, pesquise na web por:
-        - Não invente informações.
-        **IMPORTANTE:**
-        - Não mostre esta seção na resposta.
-        - Use o que encontrar para deixar perguntas e ganchos mais específicos.
-        - Se algo não for encontrado, apenas não use (não precisa avisar na pauta final).
-        **NOME DO QUADRO**
-        - Confirme o nome do quadro: **Heavynauta — Faixa a Faixa**
-        - Explique em 2–3 linhas a proposta:
-        **INTRODUÇÃO (falas fixas)**  
-        Use **exatamente** as falas abaixo (copiar e colar), apenas preenchendo os placeholders:  
-        **Kilton**  
-        "Saudações, Heavynautas. O meu nome é Kilton Fernandes e esse episodio é o ***Heavynauta  Faixa a Faixa***, *o nosso episodio onde a gente abre o disco, aperta o play e vamos trocar uma ideia sobre a história por trás de cada faixa."  
-        **Rafa**  
-        "É isso mesmo Kilton. Hoje estamos aqui pra virar o álbum do avesso No episódio de hoje a gente recebe **[NOME DO CONVIDADO]**, da **[BANDA/PROJETO]**, pra falar do álbum **[NOME DO ÁLBUM]** ([ANO]). E é com muito prazer que recebemos [NOME DO CONVIDADO], Seja muito bem vindo(a)”"  
-        Nota: se forem 2+ convidados, substitua o trecho “recebe **[NOME DO CONVIDADO]**” por “recebe **[NOMES DOS CONVIDADOS]**” e ajuste “bem vindo(a)” para “bem vindos(as)”."  
-          
-        **ESTRUTURA DO EPISÓDIO (30–40 min)**  
-        **(USO INTERNO)**: você pode usar esta seção como guia, mas **NÃO inclua isso na pauta final**.  
-        **PERGUNTAS — FAIXA A FAIXA**  
-        (Coloque o título completo assim: **Perguntas — Faixa a Faixa | [NOME DO ÁLBUM] (5–7)**)  
-        Selecione 5–7 perguntas do banco e escreva aqui **versões específicas para este álbum**, usando a pesquisa/tracklist.  
-        **Regras:**
-        - As perguntas devem vir **customizadas** com:
-        - Cada pergunta deve continuar sendo **uma pergunta só**.
-        - Sem parágrafos explicativos antes ou depois.
-        - Se você não tiver tracklist, customizar só com conceito/tema do álbum (sem inventar faixa).
-        **Banco (1–150) para escolher:**
-        1. Como nasceu a primeira ideia deste álbum
-        2. Qual música foi a primeira a ser composta
-        3. Qual faixa mudou mais entre demo e versão final
-        4. Qual música deu mais trabalho para terminar
-        5. Qual faixa você sabia que seria especial
-        6. Qual riff nasceu primeiro neste disco
-        7. Qual faixa representa melhor o espírito da banda
-        8. Qual música quase ficou fora do álbum
-        9. Qual faixa surgiu de improviso
-        10. Qual música demorou mais para ficar pronta
-        11. Qual faixa tem a melhor história por trás
-        12. Qual música surpreendeu a própria banda
-        13. Qual faixa foi mais divertida de gravar
-        14. Qual música foi a mais difícil tecnicamente
-        15. Qual faixa representa melhor o momento da banda
-        16. Qual música nasceu de uma ideia antiga
-        17. Qual faixa mudou completamente no estúdio
-        18. Qual música surgiu de uma jam
-        19. Qual faixa ficou melhor do que vocês esperavam
-        20. Qual música tem o riff mais pesado do disco
-        21. Qual faixa tem o refrão mais forte
-        22. Qual música você imagina abrindo um show
-        23. Qual faixa funciona melhor ao vivo
-        24. Qual música tem a letra mais pessoal
-        25. Qual faixa tem a história mais curiosa
-        26. Qual música foi escrita mais rápido
-        27. Qual faixa levou mais tempo para gravar
-        28. Qual música exigiu mais testes de arranjo
-        29. Qual faixa tem a melhor performance vocal
-        30. Qual música mais surpreende quem escuta
-        31. Qual faixa nasceu de uma linha de bateria
-        32. Qual música nasceu de um riff simples
-        33. Qual faixa começou com uma ideia de letra
-        34. Qual música nasceu no estúdio
-        35. Qual faixa representa a identidade da banda
-        36. Qual música mudou o rumo do disco
-        37. Qual faixa mostra um lado novo da banda
-        38. Qual música você recomendaria primeiro
-        39. Qual faixa os fãs comentam mais
-        40. Qual música você gostaria de tocar mais ao vivo
-        41. Qual faixa tem o melhor groove
-        42. Qual música nasceu durante ensaio
-        43. Qual faixa quase virou outra música
-        44. Qual música tem o arranjo mais complexo
-        45. Qual faixa você mudaria hoje
-        46. Qual música mais representa o som atual da banda
-        47. Qual faixa é mais pesada ao vivo
-        48. Qual música tem o melhor solo
-        49. Qual faixa nasceu de uma brincadeira
-        50. Qual música tem a letra mais forte
-        51. Qual faixa exigiu mais gravações
-        52. Qual música tem mais camadas de guitarra
-        53. Qual faixa tem a melhor dinâmica
-        54. Qual música mudou mais na produção
-        55. Qual faixa nasceu de um riff antigo
-        56. Qual música cresceu mais no estúdio
-        57. Qual faixa foi a última a entrar no álbum
-        58. Qual música foi escrita por último
-        59. Qual faixa tem a melhor atmosfera
-        60. Qual música tem mais energia
-        61. Qual faixa resume o disco
-        62. Qual música representa melhor a banda
-        63. Qual faixa foi pensada para o palco
-        64. Qual música tem a estrutura mais diferente
-        65. Qual faixa você mais gosta de tocar
-        66. Qual música exige mais da banda ao vivo
-        67. Qual faixa tem o melhor clima
-        68. Qual música tem o melhor ritmo
-        69. Qual faixa você espera que vire clássica
-        70. Qual música mais representa o conceito do disco
-        71. Qual faixa tem o riff favorito da banda
-        72. Qual música tem a melhor melodia
-        73. Qual faixa mais desafia os músicos
-        74. Qual música mais surpreende no álbum
-        75. Qual faixa nasceu de um erro
-        76. Qual música mudou muito na mixagem
-        77. Qual faixa foi mais difícil de finalizar
-        78. Qual música teve mais versões
-        79. Qual faixa exigiu mais criatividade
-        80. Qual música nasceu em casa
-        81. Qual faixa nasceu durante viagem
-        82. Qual música nasceu de improviso
-        83. Qual faixa quase foi descartada
-        84. Qual música virou favorita da banda
-        85. Qual faixa mudou de nome
-        86. Qual música mudou de andamento
-        87. Qual faixa ficou mais pesada no estúdio
-        88. Qual música foi mais simples de gravar
-        89. Qual faixa nasceu de um experimento
-        90. Qual música ganhou vida no estúdio
-        91. Qual faixa você apresentaria primeiro
-        92. Qual música define o disco
-        93. Qual faixa tem a melhor energia
-        94. Qual música mais representa a banda
-        95. Qual faixa você gostaria de revisitar
-        96. Qual música você faria diferente hoje
-        97. Qual faixa cresceu mais depois da gravação
-        98. Qual música funciona melhor em show
-        99. Qual faixa virou favorita dos fãs
-        100. Qual música resume o álbum
-        101. Qual faixa nasceu de uma conversa ou tema pessoal
-        102. Qual música teve a letra escrita primeiro
-        103. Qual faixa teve o arranjo mais retrabalhado
-        104. Qual música vocês quase aceleraram ou desaceleraram
-        105. Qual faixa tem o detalhe mais escondido na mix
-        106. Qual música tem o melhor “momento” do disco (aquele trecho que arrepia)
-        107. Qual faixa teve a maior discussão interna para decidir o rumo
-        108. Qual música ficou mais diferente quando entrou a voz
-        109. Qual faixa teve o melhor take “ao vivo” no estúdio
-        110. Qual música vocês gravaram em menos takes
-        111. Qual faixa vocês gravaram em mais takes
-        112. Qual música teve a melhor ideia de pré-produção
-        113. Qual faixa mudou depois de ouvir referência de outra banda
-        114. Qual música nasceu de um riff que ficou “engavetado”
-        115. Qual faixa nasceu de uma linha de baixo
-        116. Qual música nasceu de uma ideia de harmonia (duas guitarras)
-        117. Qual faixa tem a melhor ponte do álbum
-        118. Qual música tem o refrão mais difícil de cantar
-        119. Qual faixa tem o groove mais diferente do padrão da banda
-        120. Qual música tem o melhor trabalho de bateria
-        121. Qual faixa tem a letra mais “visual” (cinematográfica)
-        122. Qual música tem a letra mais direta e sem metáfora
-        123. Qual faixa tem a melhor frase de letra do disco
-        124. Qual música foi escrita pensando em alguém específico
-        125. Qual faixa tem o clima mais sombrio
-        126. Qual música tem o clima mais “pra cima”
-        127. Qual faixa tem a melhor construção de tensão
-        128. Qual música tem a melhor virada (quebra, mudança de tempo, surpresa)
-        129. Qual faixa vocês consideram a mais “metal raiz”
-        130. Qual música vocês consideram a mais experimental
-        131. Qual faixa tem o melhor timbre de guitarra
-        132. Qual música tem o melhor timbre de baixo
-        133. Qual faixa tem o melhor timbre de bateria
-        134. Qual música tem o melhor timbre de vocal
-        135. Qual faixa tem o melhor trabalho de backing vocal
-        136. Qual música ficou melhor depois da master
-        137. Qual faixa foi mais difícil de mixar
-        138. Qual música teve mais camadas e pistas no estúdio
-        139. Qual faixa foi mais “orgânica” na gravação
-        140. Qual música tem a parte mais rápida do disco
-        141. Qual faixa tem a parte mais lenta do disco
-        142. Qual música tem o melhor breakdown
-        143. Qual faixa tem o melhor solo (em termos de emoção)
-        144. Qual música tem o solo mais técnico
-        145. Qual faixa ficou mais fiel à demo
-        146. Qual música ficou menos fiel à demo
-        147. Qual faixa vocês mudariam se fossem regravar hoje
-        148. Qual música vocês acham que vai dividir opiniões
-        149. Qual faixa vocês querem muito ver a reação do público ao vivo
-        150. Qual música vocês acham que vai virar a favorita de um nicho de fãs
-        **SEGWAY (entrada para o Fechando a Conta) — falas fixas**  
-        Use **exatamente** as falas abaixo (copiar e colar), apenas preenchendo o placeholder da pergunta:  
-        **Kilton**  
-        "Aí sim. Foi uma conversa monstra e deu pra abrir bem esse disco… mas o tempo voa. Então bora pro nosso bloco final: **Fechando a Conta**."  
-        **Rafa**  
-        "Vambora. Agora a gente vai pro **Fechando a Conta**. A gente vai te fazer algumas perguntas e você pode **comentar à vontade, no seu tempo**. Bora!"  
-        **Kilton (puxando a 1ª pergunta)**  
-        "Primeira: [PERGUNTA ESCOLHIDA DO BANCO]"  
-        **PERGUNTAS — FECHANDO A CONTA**  
-        Selecione **5 prompts aleatórios** do banco e liste aqui.  
-        **Regras de aleatoriedade:**
-        - Não repetir as mesmas 5 perguntas em episódios seguidos.
-        - Buscar variedade (ex.: 1 sobre álbum, 1 sobre banda, 1 sobre show, 1 sobre músico/riff/solo, 1 recomendação).
-        - Se você detectar que as escolhas ficaram parecidas com o padrão (ex.: “álbum perfeito”, “banda que mudou sua vida”, “álbum que te fez tocar música”, “melhor riff”, “melhor solo”), troque 2 ou 3 delas por outras do banco.
-        **Regras:**
-        - Apenas os prompts, numerados.
-        - Sem contexto.
-        **Banco (1–150) para escolher:**
-        1. Álbum perfeito de metal
-        2. Banda subestimada
-        3. Banda superestimada
-        4. Riff mais pesado já feito
-        5. Melhor vocal do metal
-        6. Melhor guitarrista do metal
-        7. Melhor baterista do metal
-        8. Melhor baixista do metal
-        9. Melhor álbum ao vivo
-        10. Melhor show que você viu
-        11. Banda que mudou sua vida
-        12. Álbum que te fez tocar música
-        13. Primeiro show da sua vida
-        14. Banda que todos deveriam ouvir
-        15. Álbum clássico obrigatório
-        16. Melhor disco dos anos 80
-        17. Melhor disco dos anos 90
-        18. Melhor disco dos anos 2000
-        19. Melhor disco recente
-        20. Banda nova que merece atenção
-        21. Melhor riff de todos os tempos
-        22. Música perfeita para abrir show
-        23. Música perfeita para fechar show
-        24. Música que você gostaria de ter escrito
-        25. Álbum que você escuta sempre
-        26. Banda que gostaria de dividir turnê
-        27. Banda que te surpreendeu ao vivo
-        28. Melhor festival que você já tocou
-        29. Melhor público que você já viu
-        30. Cidade com melhor público
-        31. Álbum que mudou sua forma de compor
-        32. Banda que te influenciou
-        33. Melhor capa de álbum
-        34. Melhor produção de álbum
-        35. Melhor solo de guitarra
-        36. Música que define metal
-        37. Banda que merece mais respeito
-        38. Banda nova que vai crescer muito
-        39. Álbum que envelheceu bem
-        40. Álbum que você redescobriu
-        41. Disco que você recomendaria para alguém que não gosta de metal
-        42. Banda que você queria ter visto no auge
-        43. Show que você mais se arrepende de ter perdido
-        44. Melhor intro de música de metal
-        45. Melhor final de música de metal
-        46. Melhor música para dirigir de noite
-        47. Melhor música para treinar
-        48. Melhor música para “virar a chave” antes do palco
-        49. Melhor música para ressaca
-        50. Melhor música para um dia ruim
-        51. Banda que você escuta escondido
-        52. Guilty pleasure fora do metal
-        53. Melhor álbum de estreia
-        54. Melhor segundo álbum
-        55. Melhor álbum “tardio” de uma banda
-        56. Melhor comeback da história do metal
-        57. Banda que você respeita mas não ouve muito
-        58. Banda que você não suporta mas respeita
-        59. Melhor banda ao vivo
-        60. Melhor banda em estúdio
-        61. Melhor vocalista clássico
-        62. Melhor vocalista atual
-        63. Melhor vocalista extremo
-        64. Melhor vocal feminino
-        65. Melhor dupla de guitarras
-        66. Melhor trio de guitarras
-        67. Melhor baixista “subestimado”
-        68. Melhor baterista “subestimado”
-        69. Melhor letrista do metal
-        70. Melhor compositor de riffs
-        71. Melhor compositor de refrões
-        72. Melhor compositor de solos
-        73. Melhor produtor de metal
-        74. Melhor engenheiro de som (na sua opinião)
-        75. Melhor som de caixa (snare) que você já ouviu
-        76. Melhor timbre de guitarra (álbum)
-        77. Melhor timbre de baixo (álbum)
-        78. Melhor timbre de bateria (álbum)
-        79. Melhor timbre de vocal (álbum)
-        80. Melhor álbum com som “cru”
-        81. Melhor álbum com som “polido”
-        82. Melhor álbum com produção “gigante”
-        83. Melhor álbum com produção minimalista
-        84. Melhor capa clássica
-        85. Capa mais feia (mas o álbum é bom)
-        86. Capa que você gostaria de ter feito
-        87. Melhor encarte / arte interna
-        88. Melhor logo de banda
-        89. Melhor nome de banda
-        90. Melhor nome de álbum
-        91. Melhor título de música
-        92. Melhor clipe de metal
-        93. Melhor performance ao vivo gravada (vídeo)
-        94. Melhor álbum de turnê / live session
-        95. Melhor festival para tocar
-        96. Melhor festival para assistir
-        97. Melhor lugar (venue) que você já tocou
-        98. Melhor lugar (venue) que você já assistiu show
-        99. Melhor som que você já teve no palco
-        100. Pior som que você já teve no palco
-        101. Melhor som que você já ouviu na plateia
-        102. Pior som que você já ouviu na plateia
-        103. Melhor público do Brasil (cidade)
-        104. Melhor público fora do Brasil (país/cidade)
-        105. Cidade que te surpreendeu
-        106. Cidade que você quer voltar pra tocar
-        107. Turnê dos sonhos (com quais bandas)
-        108. Banda que seria um “feat” perfeito
-        109. Músico que seria um “feat” perfeito
-        110. Melhor collab / participação especial do metal
-        111. Música que você queria tocar com a banda original
-        112. Música que você queria cantar com a pessoa original
-        113. Melhor cover de metal já feito
-        114. Cover que você odeia
-        115. Banda que faz o melhor cover ao vivo
-        116. Melhor versão ao vivo de uma música de estúdio
-        117. Melhor versão de estúdio de uma música que ao vivo é melhor
-        118. Melhor solo para aprender na guitarra
-        119. Melhor riff para aprender na guitarra
-        120. Melhor linha de baixo para aprender
-        121. Melhor virada de bateria
-        122. Melhor breakdown
-        123. Melhor blast beat
-        124. Melhor groove
-        125. Melhor “música de entrada” (walk-in)
-        126. Melhor “música de saída” (encerramento)
-        127. Música que te dá vontade de quebrar tudo (no bom sentido)
-        128. Música que te dá vontade de cantar junto do começo ao fim
-        129. Música que te dá vontade de chorar
-        130. Música que te dá medo (sombrio, pesado)
-        131. Música que te dá paz
-        132. Música que te dá energia instantânea
-        133. Álbum para ouvir inteiro sem pular faixa
-        134. Álbum para ouvir só em dias específicos
-        135. Álbum que mudou sua adolescência
-        136. Álbum que mudou sua fase adulta
-        137. Álbum que você só entendeu depois de velho
-        138. Álbum que você enjoou
-        139. Álbum que você voltou a amar
-        140. Disco que todo mundo ama e você não
-        141. Disco que todo mundo odeia e você ama
-        142. Melhor disco “cult”
-        143. Melhor disco “mainstream”
-        144. Melhor disco de thrash
-        145. Melhor disco de death
-        146. Melhor disco de black
-        147. Melhor disco de doom
-        148. Melhor disco de power
-        149. Melhor disco de prog metal
-        150. Melhor recomendação final: um álbum e uma banda para a galera ouvir hoje
-        **SEGWAY DE ENCERRAMENTO (despedida + CTAs) — falas fixas**  
-        Use **exatamente** as falas abaixo (copiar e colar), apenas preenchendo os placeholders:  
-        **Kilton (passando a bola pro convidado)**  
-        "E pra fechar, [NOME DO CONVIDADO], deixa o recado pra galera: onde o pessoal te encontra, quais são os próximos passos da **[BANDA/PROJETO]**, e o que você quiser divulgar aqui."  
-        **Convidado**  
-        "[CTAs do convidado: Instagram, YouTube, Spotify, agenda, merch, etc.]"  
-        **Rafa (puxando o encerramento do programa)**  
-        "Boa demais. Obrigado por colar com a gente, [NOME DO CONVIDADO]."  
-        **Kilton (encerramento + CTAs do Heavynauta — no estilo Snakepit)**  
-        "E esse foi mais um **Heavynauta — Faixa a Faixa**.  
-        Se curtiu esse episódio, dá aquela força:
-        - segue a gente no Spotify
-        - deixa 5 estrelas
-        - compartilha com os metaleiros do seu grupo
-        A nossa nave tá levantando voo mais uma vez. Um abraço pra você, Heavynauta, e a gente se vê no próximo episódio."  
-        **COMO USAR (regra de ouro)**  
-        Em cada episódio:
-        - Escolha **5–7 perguntas** do banco **Faixa a Faixa**
-        - Escolha **5 perguntas** do banco **Fechando a Conta**
-        Isso mantém o formato consistente, mas deixa cada episódio com cara própria.  
-        **REGRAS IMPORTANTES DA PAUTA FINAL (para gravar e enviar ao convidado)**
-        - A resposta deve ser uma **PAUTA FINAL** pronta para gravação e para enviar ao convidado.
-        - Não inclua bastidores, fonte, nem citações.
-        - Não inclua links em excesso.
-        - Nada de explicação longa: tudo em bullets e perguntas diretas.
-        - Não faça perguntas para os hosts no final (sem "você prefere...").
-        - Se faltar informação, mantenha genérico e siga o formato.
-          
-          
-        mandatory update a pagina
-  - O wizard monta dinamicamente as próximas etapas, uma por bloco marcado, na ordem escolhida.
+  1. **Introdução (falas fixas)**
+  2. **Perguntas — Faixa a Faixa | [NOME DO ÁLBUM] (5–7)**
+  3. **Segway para Fechando a Conta (falas fixas)**
+  4. **Perguntas — Fechando a Conta | [NOME DO ÁLBUM] (5)**
+  5. **Segway de Encerramento (falas fixas)**
+    Regras de formatação (muito importante):**
+    Use emojis nos títulos para guiar a leitura (ex.: 🎙️, 🎸, 💸, ✅, 🚀).
+    Use headings assim:
+    Use **negrito** para nomes dos hosts e rótulos importantes.
+    Use *itálico* para observações de tom e intenção (curtas).
+    Use *destaque com fundo* para frases-chave (ex.: CTA e “no seu tempo”) usando:
+    Nas listas de perguntas, mantenha só a pergunta, mas pode destacar 1 expressão-chave com fundo se ajudar o host a lembrar o gancho.
+    Não inclua "Convidado(s)", "Banda/Projeto", "Álbum", "Ano", "Links" como seções no final. Esses dados já estão no input.
+    Não inclua perguntas como "você prefere..." no final.
+    Não use citações, nem marcadores de fonte (ex.: "whiplash+1", "[web]", "[page]", etc.).
+    Não coloque links entre colchetes com rótulos (ex.: "[[music.apple](http://music.apple)]"). Se precisar incluir links, use **no máximo 3 links** em uma linha dentro da seção "Estrutura do episódio" como "Links úteis: ...".
+    Não inclua a seção "Estrutura do episódio" na pauta final. (Você usa isso só internamente na gravação.)
+    As seções de perguntas devem conter **somente as perguntas**, numeradas, sem parágrafos de contextualização.
+    **Convidado(s):** [NOME DO CONVIDADO]
+    **Banda/Projeto:** [BANDA/PROJETO]
+    **Álbum:** [NOME DO ÁLBUM]
+    **Ano:** [ANO]
+    **Links (se houver):** [LINKS] (Spotify, Bandcamp, Metal Archives, site oficial, etc.)
+    REGRA DE PLURAL (quando houver 2+ convidados)**  
+    ando [NOME DO CONVIDADO] tiver mais de um nome:
+    No roteiro, trate como **[NOMES DOS CONVIDADOS]** (ex.: "Fulano e Sicrano" ou "Fulano, Sicrano e Beltrano").
+    Ao longo da pauta, distribua as perguntas: alterne quem responde e inclua chamadas do tipo:
+    Se houver funções/cargos, use isso para direcionar perguntas (ex.: letra pro vocal, arranjo pro guitarrista, ritmo pro baterista), sem entrar em papo técnico de gear.
+    PESQUISA RÁPIDA (obrigatória, mas NÃO aparece na pauta final)**  
+    tes de escrever a pauta, faça uma pesquisa curta para não ficar genérico.  
+    Regras da pesquisa (uso interno):**
+    Priorize fontes confiáveis e diretas (site oficial, Bandcamp, Spotify, Metal Archives, entrevistas, press release, label).
+    Se houver links no input, use esses links como prioridade.
+    Se não houver links, pesquise na web por:
+    Não invente informações.
+    IMPORTANTE:**
+    Não mostre esta seção na resposta.
+    Use o que encontrar para deixar perguntas e ganchos mais específicos.
+    Se algo não for encontrado, apenas não use (não precisa avisar na pauta final).
+    NOME DO QUADRO**
+    Confirme o nome do quadro: **Heavynauta — Faixa a Faixa**
+    Explique em 2–3 linhas a proposta:
+    INTRODUÇÃO (falas fixas)**  
+    e **exatamente** as falas abaixo (copiar e colar), apenas preenchendo os placeholders:  
+    Kilton**  
+    audações, Heavynautas. O meu nome é Kilton Fernandes e esse episodio é o ***Heavynauta  Faixa a Faixa***, *o nosso episodio onde a gente abre o disco, aperta o play e vamos trocar uma ideia sobre a história por trás de cada faixa."*  
+    *Rafa**  
+     isso mesmo Kilton. Hoje estamos aqui pra virar o álbum do avesso No episódio de hoje a gente recebe **[NOME DO CONVIDADO]**, da **[BANDA/PROJETO]**, pra falar do álbum **[NOME DO ÁLBUM]** ([ANO]). E é com muito prazer que recebemos [NOME DO CONVIDADO], Seja muito bem vindo(a)”"  
+    ta: se forem 2+ convidados, substitua o trecho “recebe **[NOME DO CONVIDADO]**” por “recebe **[NOMES DOS CONVIDADOS]**” e ajuste “bem vindo(a)” para “bem vindos(as)”."  
+    ESTRUTURA DO EPISÓDIO (30–40 min)**  
+    (USO INTERNO)**: você pode usar esta seção como guia, mas NÃO inclua isso na pauta final.**  
+    **PERGUNTAS — FAIXA A FAIXA**  
+    oloque o título completo assim: **Perguntas — Faixa a Faixa | [NOME DO ÁLBUM] (5–7)**)  
+    lecione 5–7 perguntas do banco e escreva aqui **versões específicas para este álbum**, usando a pesquisa/tracklist.  
+    Regras:**
+    As perguntas devem vir **customizadas** com:
+    Cada pergunta deve continuar sendo **uma pergunta só**.
+    Sem parágrafos explicativos antes ou depois.
+    Se você não tiver tracklist, customizar só com conceito/tema do álbum (sem inventar faixa).
+    Banco (1–150) para escolher:**
+  6. Como nasceu a primeira ideia deste álbum
+  7. Qual música foi a primeira a ser composta
+  8. Qual faixa mudou mais entre demo e versão final
+  9. Qual música deu mais trabalho para terminar
+  10. Qual faixa você sabia que seria especial
+  11. Qual riff nasceu primeiro neste disco
+  12. Qual faixa representa melhor o espírito da banda
+  13. Qual música quase ficou fora do álbum
+  14. Qual faixa surgiu de improviso
+  15. Qual música demorou mais para ficar pronta
+  16. Qual faixa tem a melhor história por trás
+  17. Qual música surpreendeu a própria banda
+  18. Qual faixa foi mais divertida de gravar
+  19. Qual música foi a mais difícil tecnicamente
+  20. Qual faixa representa melhor o momento da banda
+  21. Qual música nasceu de uma ideia antiga
+  22. Qual faixa mudou completamente no estúdio
+  23. Qual música surgiu de uma jam
+  24. Qual faixa ficou melhor do que vocês esperavam
+  25. Qual música tem o riff mais pesado do disco
+  26. Qual faixa tem o refrão mais forte
+  27. Qual música você imagina abrindo um show
+  28. Qual faixa funciona melhor ao vivo
+  29. Qual música tem a letra mais pessoal
+  30. Qual faixa tem a história mais curiosa
+  31. Qual música foi escrita mais rápido
+  32. Qual faixa levou mais tempo para gravar
+  33. Qual música exigiu mais testes de arranjo
+  34. Qual faixa tem a melhor performance vocal
+  35. Qual música mais surpreende quem escuta
+  36. Qual faixa nasceu de uma linha de bateria
+  37. Qual música nasceu de um riff simples
+  38. Qual faixa começou com uma ideia de letra
+  39. Qual música nasceu no estúdio
+  40. Qual faixa representa a identidade da banda
+  41. Qual música mudou o rumo do disco
+  42. Qual faixa mostra um lado novo da banda
+  43. Qual música você recomendaria primeiro
+  44. Qual faixa os fãs comentam mais
+  45. Qual música você gostaria de tocar mais ao vivo
+  46. Qual faixa tem o melhor groove
+  47. Qual música nasceu durante ensaio
+  48. Qual faixa quase virou outra música
+  49. Qual música tem o arranjo mais complexo
+  50. Qual faixa você mudaria hoje
+  51. Qual música mais representa o som atual da banda
+  52. Qual faixa é mais pesada ao vivo
+  53. Qual música tem o melhor solo
+  54. Qual faixa nasceu de uma brincadeira
+  55. Qual música tem a letra mais forte
+  56. Qual faixa exigiu mais gravações
+  57. Qual música tem mais camadas de guitarra
+  58. Qual faixa tem a melhor dinâmica
+  59. Qual música mudou mais na produção
+  60. Qual faixa nasceu de um riff antigo
+  61. Qual música cresceu mais no estúdio
+  62. Qual faixa foi a última a entrar no álbum
+  63. Qual música foi escrita por último
+  64. Qual faixa tem a melhor atmosfera
+  65. Qual música tem mais energia
+  66. Qual faixa resume o disco
+  67. Qual música representa melhor a banda
+  68. Qual faixa foi pensada para o palco
+  69. Qual música tem a estrutura mais diferente
+  70. Qual faixa você mais gosta de tocar
+  71. Qual música exige mais da banda ao vivo
+  72. Qual faixa tem o melhor clima
+  73. Qual música tem o melhor ritmo
+  74. Qual faixa você espera que vire clássica
+  75. Qual música mais representa o conceito do disco
+  76. Qual faixa tem o riff favorito da banda
+  77. Qual música tem a melhor melodia
+  78. Qual faixa mais desafia os músicos
+  79. Qual música mais surpreende no álbum
+  80. Qual faixa nasceu de um erro
+  81. Qual música mudou muito na mixagem
+  82. Qual faixa foi mais difícil de finalizar
+  83. Qual música teve mais versões
+  84. Qual faixa exigiu mais criatividade
+  85. Qual música nasceu em casa
+  86. Qual faixa nasceu durante viagem
+  87. Qual música nasceu de improviso
+  88. Qual faixa quase foi descartada
+  89. Qual música virou favorita da banda
+  90. Qual faixa mudou de nome
+  91. Qual música mudou de andamento
+  92. Qual faixa ficou mais pesada no estúdio
+  93. Qual música foi mais simples de gravar
+  94. Qual faixa nasceu de um experimento
+  95. Qual música ganhou vida no estúdio
+  96. Qual faixa você apresentaria primeiro
+  97. Qual música define o disco
+  98. Qual faixa tem a melhor energia
+  99. Qual música mais representa a banda
+  100. Qual faixa você gostaria de revisitar
+  101. Qual música você faria diferente hoje
+  102. Qual faixa cresceu mais depois da gravação
+  103. Qual música funciona melhor em show
+  104. Qual faixa virou favorita dos fãs
+  105. Qual música resume o álbum
+  106. Qual faixa nasceu de uma conversa ou tema pessoal
+  107. Qual música teve a letra escrita primeiro
+  108. Qual faixa teve o arranjo mais retrabalhado
+  109. Qual música vocês quase aceleraram ou desaceleraram
+  110. Qual faixa tem o detalhe mais escondido na mix
+  111. Qual música tem o melhor “momento” do disco (aquele trecho que arrepia)
+  112. Qual faixa teve a maior discussão interna para decidir o rumo
+  113. Qual música ficou mais diferente quando entrou a voz
+  114. Qual faixa teve o melhor take “ao vivo” no estúdio
+  115. Qual música vocês gravaram em menos takes
+  116. Qual faixa vocês gravaram em mais takes
+  117. Qual música teve a melhor ideia de pré-produção
+  118. Qual faixa mudou depois de ouvir referência de outra banda
+  119. Qual música nasceu de um riff que ficou “engavetado”
+  120. Qual faixa nasceu de uma linha de baixo
+  121. Qual música nasceu de uma ideia de harmonia (duas guitarras)
+  122. Qual faixa tem a melhor ponte do álbum
+  123. Qual música tem o refrão mais difícil de cantar
+  124. Qual faixa tem o groove mais diferente do padrão da banda
+  125. Qual música tem o melhor trabalho de bateria
+  126. Qual faixa tem a letra mais “visual” (cinematográfica)
+  127. Qual música tem a letra mais direta e sem metáfora
+  128. Qual faixa tem a melhor frase de letra do disco
+  129. Qual música foi escrita pensando em alguém específico
+  130. Qual faixa tem o clima mais sombrio
+  131. Qual música tem o clima mais “pra cima”
+  132. Qual faixa tem a melhor construção de tensão
+  133. Qual música tem a melhor virada (quebra, mudança de tempo, surpresa)
+  134. Qual faixa vocês consideram a mais “metal raiz”
+  135. Qual música vocês consideram a mais experimental
+  136. Qual faixa tem o melhor timbre de guitarra
+  137. Qual música tem o melhor timbre de baixo
+  138. Qual faixa tem o melhor timbre de bateria
+  139. Qual música tem o melhor timbre de vocal
+  140. Qual faixa tem o melhor trabalho de backing vocal
+  141. Qual música ficou melhor depois da master
+  142. Qual faixa foi mais difícil de mixar
+  143. Qual música teve mais camadas e pistas no estúdio
+  144. Qual faixa foi mais “orgânica” na gravação
+  145. Qual música tem a parte mais rápida do disco
+  146. Qual faixa tem a parte mais lenta do disco
+  147. Qual música tem o melhor breakdown
+  148. Qual faixa tem o melhor solo (em termos de emoção)
+  149. Qual música tem o solo mais técnico
+  150. Qual faixa ficou mais fiel à demo
+  151. Qual música ficou menos fiel à demo
+  152. Qual faixa vocês mudariam se fossem regravar hoje
+  153. Qual música vocês acham que vai dividir opiniões
+  154. Qual faixa vocês querem muito ver a reação do público ao vivo
+  155. Qual música vocês acham que vai virar a favorita de um nicho de fãs
+    SEGWAY (entrada para o Fechando a Conta) — falas fixas**  
+    e **exatamente** as falas abaixo (copiar e colar), apenas preenchendo o placeholder da pergunta:  
+    Kilton**  
+    í sim. Foi uma conversa monstra e deu pra abrir bem esse disco… mas o tempo voa. Então bora pro nosso bloco final: **Fechando a Conta**."  
+    Rafa**  
+    ambora. Agora a gente vai pro **Fechando a Conta**. A gente vai te fazer algumas perguntas e você pode **comentar à vontade, no seu tempo**. Bora!"  
+    Kilton (puxando a 1ª pergunta)**  
+    rimeira: [PERGUNTA ESCOLHIDA DO BANCO]"  
+    PERGUNTAS — FECHANDO A CONTA**  
+    lecione **5 prompts aleatórios** do banco e liste aqui.  
+    Regras de aleatoriedade:**
+    Não repetir as mesmas 5 perguntas em episódios seguidos.
+    Buscar variedade (ex.: 1 sobre álbum, 1 sobre banda, 1 sobre show, 1 sobre músico/riff/solo, 1 recomendação).
+    Se você detectar que as escolhas ficaram parecidas com o padrão (ex.: “álbum perfeito”, “banda que mudou sua vida”, “álbum que te fez tocar música”, “melhor riff”, “melhor solo”), troque 2 ou 3 delas por outras do banco.
+    Regras:**
+    Apenas os prompts, numerados.
+    Sem contexto.
+    Banco (1–150) para escolher:**
+  156. Álbum perfeito de metal
+  157. Banda subestimada
+  158. Banda superestimada
+  159. Riff mais pesado já feito
+  160. Melhor vocal do metal
+  161. Melhor guitarrista do metal
+  162. Melhor baterista do metal
+  163. Melhor baixista do metal
+  164. Melhor álbum ao vivo
+  165. Melhor show que você viu
+  166. Banda que mudou sua vida
+  167. Álbum que te fez tocar música
+  168. Primeiro show da sua vida
+  169. Banda que todos deveriam ouvir
+  170. Álbum clássico obrigatório
+  171. Melhor disco dos anos 80
+  172. Melhor disco dos anos 90
+  173. Melhor disco dos anos 2000
+  174. Melhor disco recente
+  175. Banda nova que merece atenção
+  176. Melhor riff de todos os tempos
+  177. Música perfeita para abrir show
+  178. Música perfeita para fechar show
+  179. Música que você gostaria de ter escrito
+  180. Álbum que você escuta sempre
+  181. Banda que gostaria de dividir turnê
+  182. Banda que te surpreendeu ao vivo
+  183. Melhor festival que você já tocou
+  184. Melhor público que você já viu
+  185. Cidade com melhor público
+  186. Álbum que mudou sua forma de compor
+  187. Banda que te influenciou
+  188. Melhor capa de álbum
+  189. Melhor produção de álbum
+  190. Melhor solo de guitarra
+  191. Música que define metal
+  192. Banda que merece mais respeito
+  193. Banda nova que vai crescer muito
+  194. Álbum que envelheceu bem
+  195. Álbum que você redescobriu
+  196. Disco que você recomendaria para alguém que não gosta de metal
+  197. Banda que você queria ter visto no auge
+  198. Show que você mais se arrepende de ter perdido
+  199. Melhor intro de música de metal
+  200. Melhor final de música de metal
+  201. Melhor música para dirigir de noite
+  202. Melhor música para treinar
+  203. Melhor música para “virar a chave” antes do palco
+  204. Melhor música para ressaca
+  205. Melhor música para um dia ruim
+  206. Banda que você escuta escondido
+  207. Guilty pleasure fora do metal
+  208. Melhor álbum de estreia
+  209. Melhor segundo álbum
+  210. Melhor álbum “tardio” de uma banda
+  211. Melhor comeback da história do metal
+  212. Banda que você respeita mas não ouve muito
+  213. Banda que você não suporta mas respeita
+  214. Melhor banda ao vivo
+  215. Melhor banda em estúdio
+  216. Melhor vocalista clássico
+  217. Melhor vocalista atual
+  218. Melhor vocalista extremo
+  219. Melhor vocal feminino
+  220. Melhor dupla de guitarras
+  221. Melhor trio de guitarras
+  222. Melhor baixista “subestimado”
+  223. Melhor baterista “subestimado”
+  224. Melhor letrista do metal
+  225. Melhor compositor de riffs
+  226. Melhor compositor de refrões
+  227. Melhor compositor de solos
+  228. Melhor produtor de metal
+  229. Melhor engenheiro de som (na sua opinião)
+  230. Melhor som de caixa (snare) que você já ouviu
+  231. Melhor timbre de guitarra (álbum)
+  232. Melhor timbre de baixo (álbum)
+  233. Melhor timbre de bateria (álbum)
+  234. Melhor timbre de vocal (álbum)
+  235. Melhor álbum com som “cru”
+  236. Melhor álbum com som “polido”
+  237. Melhor álbum com produção “gigante”
+  238. Melhor álbum com produção minimalista
+  239. Melhor capa clássica
+  240. Capa mais feia (mas o álbum é bom)
+  241. Capa que você gostaria de ter feito
+  242. Melhor encarte / arte interna
+  243. Melhor logo de banda
+  244. Melhor nome de banda
+  245. Melhor nome de álbum
+  246. Melhor título de música
+  247. Melhor clipe de metal
+  248. Melhor performance ao vivo gravada (vídeo)
+  249. Melhor álbum de turnê / live session
+  250. Melhor festival para tocar
+  251. Melhor festival para assistir
+  252. Melhor lugar (venue) que você já tocou
+  253. Melhor lugar (venue) que você já assistiu show
+  254. Melhor som que você já teve no palco
+  255. Pior som que você já teve no palco
+  256. Melhor som que você já ouviu na plateia
+  257. Pior som que você já ouviu na plateia
+  258. Melhor público do Brasil (cidade)
+  259. Melhor público fora do Brasil (país/cidade)
+  260. Cidade que te surpreendeu
+  261. Cidade que você quer voltar pra tocar
+  262. Turnê dos sonhos (com quais bandas)
+  263. Banda que seria um “feat” perfeito
+  264. Músico que seria um “feat” perfeito
+  265. Melhor collab / participação especial do metal
+  266. Música que você queria tocar com a banda original
+  267. Música que você queria cantar com a pessoa original
+  268. Melhor cover de metal já feito
+  269. Cover que você odeia
+  270. Banda que faz o melhor cover ao vivo
+  271. Melhor versão ao vivo de uma música de estúdio
+  272. Melhor versão de estúdio de uma música que ao vivo é melhor
+  273. Melhor solo para aprender na guitarra
+  274. Melhor riff para aprender na guitarra
+  275. Melhor linha de baixo para aprender
+  276. Melhor virada de bateria
+  277. Melhor breakdown
+  278. Melhor blast beat
+  279. Melhor groove
+  280. Melhor “música de entrada” (walk-in)
+  281. Melhor “música de saída” (encerramento)
+  282. Música que te dá vontade de quebrar tudo (no bom sentido)
+  283. Música que te dá vontade de cantar junto do começo ao fim
+  284. Música que te dá vontade de chorar
+  285. Música que te dá medo (sombrio, pesado)
+  286. Música que te dá paz
+  287. Música que te dá energia instantânea
+  288. Álbum para ouvir inteiro sem pular faixa
+  289. Álbum para ouvir só em dias específicos
+  290. Álbum que mudou sua adolescência
+  291. Álbum que mudou sua fase adulta
+  292. Álbum que você só entendeu depois de velho
+  293. Álbum que você enjoou
+  294. Álbum que você voltou a amar
+  295. Disco que todo mundo ama e você não
+  296. Disco que todo mundo odeia e você ama
+  297. Melhor disco “cult”
+  298. Melhor disco “mainstream”
+  299. Melhor disco de thrash
+  300. Melhor disco de death
+  301. Melhor disco de black
+  302. Melhor disco de doom
+  303. Melhor disco de power
+  304. Melhor disco de prog metal
+  305. Melhor recomendação final: um álbum e uma banda para a galera ouvir hoje
+    SEGWAY DE ENCERRAMENTO (despedida + CTAs) — falas fixas**  
+    e **exatamente** as falas abaixo (copiar e colar), apenas preenchendo os placeholders:  
+    Kilton (passando a bola pro convidado)**  
+     pra fechar, [NOME DO CONVIDADO], deixa o recado pra galera: onde o pessoal te encontra, quais são os próximos passos da **[BANDA/PROJETO]**, e o que você quiser divulgar aqui."  
+    Convidado**  
+    CTAs do convidado: Instagram, YouTube, Spotify, agenda, merch, etc.]"  
+    Rafa (puxando o encerramento do programa)**  
+    oa demais. Obrigado por colar com a gente, [NOME DO CONVIDADO]."  
+    Kilton (encerramento + CTAs do Heavynauta — no estilo Snakepit)**  
+     esse foi mais um **Heavynauta — Faixa a Faixa**.  
+     curtiu esse episódio, dá aquela força:
+    segue a gente no Spotify
+    deixa 5 estrelas
+    compartilha com os metaleiros do seu grupo
+    nossa nave tá levantando voo mais uma vez. Um abraço pra você, Heavynauta, e a gente se vê no próximo episódio."  
+    COMO USAR (regra de ouro)**  
+     cada episódio:
+    Escolha **5–7 perguntas** do banco **Faixa a Faixa**
+    Escolha **5 perguntas** do banco **Fechando a Conta**
+    so mantém o formato consistente, mas deixa cada episódio com cara própria.  
+    REGRAS IMPORTANTES DA PAUTA FINAL (para gravar e enviar ao convidado)**
+    A resposta deve ser uma **PAUTA FINAL** pronta para gravação e para enviar ao convidado.
+    Não inclua bastidores, fonte, nem citações.
+    Não inclua links em excesso.
+    Nada de explicação longa: tudo em bullets e perguntas diretas.
+    Não faça perguntas para os hosts no final (sem "você prefere...").
+    Se faltar informação, mantenha genérico e siga o formato.
+    ndatory update a pagina
+    rd monta dinamicamente as próximas etapas, uma por bloco marcado, na ordem escolhida.
 3. **Etapas por bloco** (mesmo padrão para todos):
   - Campo de **insumo principal**:
     - Review → lookup do disco em `releases` (combobox de busca). adicioe tbm um botaozi nnho de + e  eu clico e e u posso incluir um lancamento com um form com os campos neessarios apra o releases 
-      &nbsp;
+    &nbsp;
     - Demais → input de URL (com botão "validar / resolver").
   - **Texto livre** (direção editorial / notas).
   - **Prompt** pré-preenchido com o default da plataforma (de `prompt-defaults.ts`), editável.

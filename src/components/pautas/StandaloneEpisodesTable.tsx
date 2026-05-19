@@ -10,6 +10,7 @@ import { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pencil, Trash2, Search, Calendar as CalendarIcon, ExternalLink, Eye } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ interface EditingState {
 
 export function StandaloneEpisodesTable({ onCreateNew }: { onCreateNew: () => void }) {
   const { pautas, materials, deletePauta, updatePauta, updateMaterial } = useApp();
+  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | StandaloneTopicType>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -174,6 +176,20 @@ export function StandaloneEpisodesTable({ onCreateNew }: { onCreateNew: () => vo
                       </div>
                     </TableCell>
                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          if (!mat) {
+                            toast.info('Material ainda não disponível. Recarregue a página.');
+                            return;
+                          }
+                          navigate(`/calendar?material=${mat.id}`);
+                        }}
+                        title="Visualizar (Pacote do episódio)"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
                       <Button size="icon" variant="ghost" onClick={() => setEditing({ pauta: p, material: mat })} title="Editar">
                         <Pencil className="h-3.5 w-3.5" />
                       </Button>
