@@ -358,6 +358,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     enqueueUpdate('episode_materials', id, m as any);
   }, []);
 
+  const addMaterial = useCallback((material: EpisodeMaterial) => {
+    setMaterials(prev => [...prev, material]);
+    supabase.from('episode_materials' as any).insert(material as any).then();
+  }, []);
+
   const getMaterialsForWeek = useCallback((weekId: string) => materials.filter(m => m.week_id === weekId), [materials]);
 
   const loadMaterialCover = useCallback(async (id: string): Promise<string | null> => {
@@ -445,7 +450,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addRelease, updateRelease, deleteRelease,
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
       addPauta, updatePauta, deletePauta, getPautasForWeek,
-      updateMaterial, getMaterialsForWeek, loadMaterialCover,
+      addMaterial, updateMaterial, getMaterialsForWeek, loadMaterialCover,
       updateSettings, logActivity, importReleases, loadReleases,
       savePromptSession,
     }}>
