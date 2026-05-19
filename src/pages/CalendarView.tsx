@@ -139,6 +139,24 @@ export default function CalendarView() {
     });
   }, [materials, dataReady]);
 
+  // Auto-open material modal when arriving with ?material=<id>
+  useEffect(() => {
+    if (!dataReady) return;
+    const matId = searchParams.get('material');
+    if (!matId) return;
+    const mat = materials.find(m => m.id === matId);
+    if (mat) {
+      setSelectedMaterial(mat);
+      setSpotifyInput(mat.spotify_link || '');
+      setMentionedInput(mat.mentioned_in_episode || '');
+      setModalOpen(true);
+      // Clear param so refresh/close doesn't re-open
+      const next = new URLSearchParams(searchParams);
+      next.delete('material');
+      setSearchParams(next, { replace: true });
+    }
+  }, [dataReady, materials, searchParams, setSearchParams]);
+
   const prev = () => {
     if (viewMode === 'month') setDate(new Date(year, month - 1, 1));
     else if (viewMode === 'week') {
