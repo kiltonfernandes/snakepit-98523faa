@@ -41,7 +41,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useApp } from '@/contexts/AppContext';
 import { EpisodeMaterial, Release, Pauta } from '@/lib/types';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { getSectionsForDay } from '@/lib/constants';
 import { resolveAllLinks } from '@/lib/dynamic-links';
@@ -50,6 +50,8 @@ import { GenerationProgressModal, GenerationItem } from '@/components/Generation
 import { supabase } from '@/integrations/supabase/client';
 import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inject-mentioned';
 import { getEffectivePautaStatus } from '@/lib/episode-status';
+import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
+import type { StandaloneTopic } from '@/lib/types';
 import JSZip from 'jszip';
 
 // Week starts on Monday
@@ -89,6 +91,7 @@ function dayOfWeekLabel(d: Date): string {
 export default function CalendarView() {
   const { materials, pautas, releases, updateMaterial, updateRelease, loadMaterialCover, dataReady, weeks } = useApp();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [date, setDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [selectedMaterial, setSelectedMaterial] = useState<EpisodeMaterial | null>(null);
