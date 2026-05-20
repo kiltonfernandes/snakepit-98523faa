@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Plus, Copy, Check, Trash2, ChevronLeft, ChevronRight, Loader2,
-  Calendar as CalendarIcon, X, Search, Download,
+  Calendar as CalendarIcon, X, Search, Download, RefreshCw, ExternalLink,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -168,6 +168,51 @@ function descriptionHtmlFromResponse(raw: string): string {
   if (/<\w+/.test(trimmed)) return trimmed; // already HTML
   // Convert paragraphs/bullets minimally.
   return trimmed.split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('');
+}
+
+// Build a granular Google query per topic type, using release + notes + URL.
+function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | undefined): string {
+  const notes = (topic.notes || '').trim();
+  const url = (topic.url || '').trim();
+  let host = '';
+  try { if (url) host = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+  const slug = url ? url.split('/').filter(Boolean).slice(-1)[0]?.replace(/[-_]+/g, ' ').replace(/\.\w+$/, '') : '';
+
+  if (release) {
+    const base = `"${release.artist}" "${release.album}"`;
+    const year = release.release_date?.slice(0, 4);
+    if (topic.type === 'review') {
+      return `${base} review ${year ?? ''} site:metal-archives.com OR site:loudwire.com OR site:angrymetalguy.com`.trim();
+    }
+    if (topic.type === 'anniversary') {
+      return `${base} anniversary OR aniversário ${year ?? ''} history making of`.trim();
+    }
+    if (topic.type === 'interview') {
+      return `${base} interview track by track ${year ?? ''}`.trim();
+    }
+    return `${base} ${notes}`.trim();
+  }
+
+  switch (topic.type) {
+    case 'news': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      if (!q && !host) return '';
+      return `${q} ${host ? `-site:${host}` : ''} metal news`.trim();
+    }
+    case 'anniversary': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      return q ? `${q} album anniversary history` : '';
+    }
+    case 'interview': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      return q ? `${q} interview track by track` : '';
+    }
+    case 'review': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      return q ? `${q} album review` : '';
+    }
+  }
+  return '';
 }
 
 // ─── Inline Add Release form ────────────────────────────────────────────────
@@ -468,6 +513,28 @@ function TopicStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputLabel, topic.notes, topic.type, selectedRelease?.id, settings.banned_terms_text, settings.brand_tone_temperature]);
 
+  const regeneratePrompt = () => {
+    const fresh = getStandaloneTopicPrompt(topic.type, {
+      input: inputLabel,
+      notes: topic.notes,
+      release: selectedRelease,
+      platform: settings,
+    });
+    setLastAuto(fresh);
+    dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
+    toast.success('Prompt atualizado com os inputs atuais');
+  };
+
+  const googleQuery = buildGoogleQuery(topic, selectedRelease);
+  const openGoogle = () => {
+    if (!googleQuery) {
+      toast.error('Preencha o input para gerar a query');
+      return;
+    }
+    const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
   const onPaste = (val: string) => {
     dispatch({
       kind: 'patchTopic',
@@ -513,13 +580,39 @@ function TopicStep({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt (editável)</Label>
-          <CopyExportRow
-            text={topic.prompt_text}
-            filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
-            label="Copiar prompt"
-            exportLabel="Exportar prompt"
-          />
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={regeneratePrompt}
+              title="Reinjeta os inputs (release, notas, regras da plataforma) no prompt"
+            >
+              <RefreshCw className="mr-1 h-3.5 w-3.5" />
+              Atualizar prompt
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={openGoogle}
+              disabled={!googleQuery}
+              title={googleQuery || 'Preencha o input para gerar a query'}
+            >
+              <ExternalLink className="mr-1 h-3.5 w-3.5" />
+              Pesquisar no Google
+            </Button>
+            <CopyExportRow
+              text={topic.prompt_text}
+              filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
+              label="Copiar prompt"
+              exportLabel="Exportar prompt"
+            />
+          </div>
         </div>
+        {googleQuery && (
+          <p className="truncate text-[11px] text-muted-foreground" title={googleQuery}>
+            <span className="font-semibold">Query Google:</span> {googleQuery}
+          </p>
+        )}
         <Textarea
           rows={10}
           value={topic.prompt_text}
