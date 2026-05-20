@@ -759,6 +759,25 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const { releases, settings } = useApp();
   const content = aggregatedContent(state.topics, releases);
   const prompt = getStandaloneCoverPrompt(content, settings);
+  const imageQuery = useMemo(() => {
+    const parts: string[] = [];
+    for (const t of state.topics) {
+      const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
+      if (rel) {
+        parts.push(`"${rel.artist}" "${rel.album}"`);
+      } else if (t.type === 'anniversary' && t.title) {
+        parts.push(`"${t.title}"`);
+      } else if (t.title) {
+        parts.push(t.title);
+      }
+    }
+    const base = parts.slice(0, 3).join(' OR ');
+    return (base ? `${base} ` : '') + 'album cover high resolution';
+  }, [state.topics, releases]);
+  const openGoogleImages = () => {
+    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(imageQuery)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">🎨 Capa</h3>
@@ -768,6 +787,25 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
           <CopyExportRow text={prompt} filename="prompt_capa.txt" label="Copiar prompt" exportLabel="Exportar prompt" />
         </div>
         <Textarea rows={5} readOnly value={prompt} className="font-mono text-xs" />
+      </div>
+      <div className="space-y-2">
+        <Label>Buscar imagem no Google</Label>
+        <div className="flex gap-2">
+          <Input readOnly value={imageQuery} className="font-mono text-xs" />
+          <Button type="button" variant="outline" onClick={openGoogleImages}>
+            <Search className="h-4 w-4" /> Google Imagens
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => { navigator.clipboard.writeText(imageQuery); toast.success('Query copiada'); }}
+          >
+            <Copy className="h-4 w-4" />
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Query montada a partir dos tópicos (artista + álbum quando há release). Abre o Google Imagens em nova aba.
+        </p>
       </div>
       <div className="space-y-2">
         <Label>URL da capa</Label>
