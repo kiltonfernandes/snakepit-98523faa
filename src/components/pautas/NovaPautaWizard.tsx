@@ -765,10 +765,11 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
       const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
       if (rel) {
         parts.push(`"${rel.artist}" "${rel.album}"`);
-      } else if (t.type === 'anniversary' && t.title) {
-        parts.push(`"${t.title}"`);
-      } else if (t.title) {
-        parts.push(t.title);
+      } else if (t.notes) {
+        const first = t.notes.split('\n')[0].slice(0, 80).trim();
+        if (first) parts.push(t.type === 'anniversary' ? `"${first}"` : first);
+      } else if (t.url) {
+        try { parts.push(new URL(t.url).hostname.replace(/^www\./, '')); } catch { /* ignore */ }
       }
     }
     const base = parts.slice(0, 3).join(' OR ');
