@@ -170,6 +170,51 @@ function descriptionHtmlFromResponse(raw: string): string {
   return trimmed.split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('');
 }
 
+// Build a granular Google query per topic type, using release + notes + URL.
+function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | undefined): string {
+  const notes = (topic.notes || '').trim();
+  const url = (topic.url || '').trim();
+  let host = '';
+  try { if (url) host = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+  const slug = url ? url.split('/').filter(Boolean).slice(-1)[0]?.replace(/[-_]+/g, ' ').replace(/\.\w+$/, '') : '';
+
+  if (release) {
+    const base = `"${release.artist}" "${release.album}"`;
+    const year = release.release_date?.slice(0, 4);
+    if (topic.type === 'review') {
+      return `${base} review ${year ?? ''} site:metal-archives.com OR site:loudwire.com OR site:angrymetalguy.com`.trim();
+    }
+    if (topic.type === 'anniversary') {
+      return `${base} anniversary OR aniversário ${year ?? ''} history making of`.trim();
+    }
+    if (topic.type === 'interview') {
+      return `${base} interview track by track ${year ?? ''}`.trim();
+    }
+    return `${base} ${notes}`.trim();
+  }
+
+  switch (topic.type) {
+    case 'news': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      if (!q && !host) return '';
+      return `${q} ${host ? `-site:${host}` : ''} metal news`.trim();
+    }
+    case 'anniversary': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      return q ? `${q} album anniversary history` : '';
+    }
+    case 'interview': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      return q ? `${q} interview track by track` : '';
+    }
+    case 'review': {
+      const q = [slug, notes].filter(Boolean).join(' ').trim();
+      return q ? `${q} album review` : '';
+    }
+  }
+  return '';
+}
+
 // ─── Inline Add Release form ────────────────────────────────────────────────
 
 function AddReleaseInline({ onCreated, onCancel }: { onCreated: (r: Release) => void; onCancel: () => void }) {
