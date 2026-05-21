@@ -130,17 +130,177 @@ DIREÇÃO EDITORIAL:
 
 const PROMPT_REVIEW = `${SHARED_VOICE_RULES}
 
-TAREFA: Escreva uma review aprofundada do álbum abaixo.
-- Identifique gênero, posição na discografia, créditos.
-- Comente produção, composição, temas, faixas-chave.
-- Posicione o disco no cenário atual do gênero.
-- ~500 palavras em prosa contínua.
-- Inclua links de catálogo (YouTube/Spotify/Metal Archives) quando houver.
+TAREFA: Monte a PAUTA completa de um episódio AVULSO de review de álbum no formato Heavynauta abaixo.
+Siga EXATAMENTE a estrutura, ordem, emojis, bullets, indentação e blocos fixos. Não troque rótulos.
+Preencha todos os campos entre colchetes com base nos DADOS DO RELEASE e na pesquisa.
+SEGWAY1 e SEGWAY2 são falas FIXAS — copie literalmente como estão no template, sem reescrever.
+
+ESTRUTURA OBRIGATÓRIA (preencha mantendo a forma):
+
+[Título:[Banda] - [album]: subtítulo criativo]
+
+🔗 Link
+
+-[Metal Archives]:[link obrigatório]
+
+SEGWAY1 [Você está ouvindo  Heavynauta, o podcast que te leva para explorar o universo do Heavy Metal, todos os dias de segunda a sexta, às 6 da manhã um metal novo na sua timeline . E todo sábado, às 18 horas, tem o Sonar Heavynauta, nosso episódio semanal com um panorama dos lançamentos da próxima semana, para você marcar na agenda e não perder nadinha!
+
+Se está curtindo o que ouviu até agora, que tal dar aquela força para a gente? Segue a gente no Spotify, deixe aquelas cinco estrelas cheias de brilho, escreva um comentário e compartilhe com seus amigos metaleiros nos seus grupos de WhatsApp . Sua participação ajuda o Heavynauta a chegar a mais fãs de metal como você!]
+
+🤘 Que Metal é Esse?
+
+-[Gênero]
+
+ -[Características:+/-20 palavras]
+
+-Bandas Pioneiras(3):
+
+ -[B1]:[+/-20 palavras]
+
+  -[ponto1:+/-20]
+
+  -[ponto2:+/-20]
+
+  -[ponto3:+/-20]
+
+ -[B2]:[+/-20 palavras]
+
+  -[ponto1:+/-20]
+
+  -[ponto2:+/-20]
+
+  -[ponto3:+/-20]
+
+ -[B3]:[+/-20 palavras]
+
+  -[ponto1:+/-20]
+
+  -[ponto2:+/-20]
+
+  -[ponto3:+/-20]
+
+-Bandas Similares(3):
+
+ -[BS1]:[+/-20 palavras]
+
+  -[ponto1:+/-20]
+
+  -[ponto2:+/-20]
+
+  -[ponto3:+/-20]
+
+ -[BS2]:[+/-20 palavras]
+
+  -[ponto1:+/-20]
+
+  -[ponto2:+/-20]
+
+  -[ponto3:+/-20]
+
+ -[BS3]:[+/-20 palavras]
+
+  -[ponto1:+/-20]
+
+  -[ponto2:+/-20]
+
+  -[ponto3:+/-20]
+
+🔍 Curiosidades
+
+-[Item1]:[+/-20]
+
+ -[Sub1]:[+/-20]
+
+  -[SubSub1:+/-20]
+
+  -[SubSub2:+/-20]
+
+  -[SubSub3:+/-20]
+
+ -[Sub2]:[+/-20]
+
+  -[SubSub1:+/-20]
+
+  -[SubSub2:+/-20]
+
+  -[SubSub3:+/-20]
+
+ -[Sub3]:[+/-20]
+
+  -[SubSub1:+/-20]
+
+  -[SubSub2:+/-20]
+
+  -[SubSub3:+/-20]
+
+🎭 Tema do Disco
+
+-[Item1]:[+/-20]
+
+ -[Sub1]:[+/-20]
+
+  -[SubSub1:+/-20]
+
+  -[SubSub2:+/-20]
+
+  -[SubSub3:+/-20]
+
+ -[Sub2]:[+/-20]
+
+  -[SubSub1:+/-20]
+
+  -[SubSub2:+/-20]
+
+  -[SubSub3:+/-20]
+
+ -[Sub3]:[+/-20]
+
+  -[SubSub1:+/-20]
+
+  -[SubSub2:+/-20]
+
+  -[SubSub3:+/-20]
+
+-[Item2]a[Item4]:igual acima
+
+🎙️ Encerramento
+
+-Resumo:[+/-50 palavras]
+
+-Se gostou do [disco]da[banda],Heavynauta recomenda:
+
+ -[banda]-[album]-[ano]-[semelhança]
+
+ -[banda]-[album]-[ano]-[semelhança]
+
+ -[banda]-[album]-[ano]-[semelhança]
+
+SEGWAY2 [E esse foi o  Heavynauta, o podcast que te leva para explorar o universo do Heavy Metal, todos os dias de segunda a sexta, às 6 da manhã um metal novo na sua timeline . E todo sábado, às 18 horas, tem o Sonar Heavynauta, nosso episódio semanal com um panorama dos lançamentos da próxima semana, para você marcar na agenda e não perder nadinha!
+
+Se curtiu o que ouviu até agora, que tal nos dar aquela força? Siga a gente no Spotify, deixe aquelas cinco estrelas que nos precisamos, escreva um comentário bacana e compartilhe com seus amigos metaleiros nos seus grupos de WhatsApp . Sua participação ajuda o Heavynauta a chegar a mais fãs de metal como você!
+
+A nossa nave esta levantando voo mais uma vez, um abraço para você, Heavynauta, e nos vemos no próximo episódio!]
+
+#Restrições
+
+-Não inventar dados;fontes confiáveis
+
+-Metal Archives antes de tudo
+
+-15 reviews antes Tema do Disco
+
+-Entrevistas para quotes Curiosidades
+
+-Tema:6 itens,3 sub,3 subsub
+
+-Cada bloco:50 palavras mínimo
+
+-Emojis e bullets
 
 DISCO ALVO:
 {{input}}
 
-DADOS COMPLETOS DO RELEASE (banco da plataforma):
+DADOS COMPLETOS DO RELEASE (banco da plataforma — fonte de verdade):
 {{release_block}}
 
 REGRAS EDITORIAIS DA PLATAFORMA:
