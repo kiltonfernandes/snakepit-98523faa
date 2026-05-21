@@ -1014,7 +1014,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         selected_title_index: state.selectedTitleIndex,
         description_html: state.descriptionHtml || null,
         cover_url: state.coverUrl || null,
-        cover_source_url: state.coverUrl || null,
+        cover_source_url: state.coverSourceUrl || state.coverUrl || null,
         spotify_link: null,
         repository_url: null,
         repository_file_id: null,
