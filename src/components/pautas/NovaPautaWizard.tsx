@@ -46,6 +46,8 @@ import {
   getStandaloneCoverPrompt,
   buildReleaseBlock,
 } from '@/lib/standalone-prompts';
+import { generateCoverImage } from '@/lib/cover-generator';
+import { Sparkles } from 'lucide-react';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
 const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
@@ -63,6 +65,7 @@ interface WizardState {
   descriptionResponse: string;
   descriptionHtml: string;
   coverUrl: string;
+  coverSourceUrl: string;
 }
 
 const initialState = (): WizardState => ({
@@ -76,6 +79,7 @@ const initialState = (): WizardState => ({
   descriptionResponse: '',
   descriptionHtml: '',
   coverUrl: '',
+  coverSourceUrl: '',
 });
 
 type Action =
@@ -759,6 +763,31 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const { releases, settings } = useApp();
   const content = aggregatedContent(state.topics, releases);
   const prompt = getStandaloneCoverPrompt(content, settings);
+  const episodeTitle = state.selectedTitleIndex != null
+    ? state.titleOptions[state.selectedTitleIndex]?.text || ''
+    : '';
+  const [generating, setGenerating] = useState(false);
+  const sourceUrl = state.coverSourceUrl || state.coverUrl;
+  const isGenerated = state.coverUrl.startsWith('data:');
+  const handleGenerateTemplate = () => {
+    if (!sourceUrl) { toast.error('Informe uma URL de imagem primeiro.'); return; }
+    if (!episodeTitle) { toast.error('Defina o título do episódio antes de gerar a capa.'); return; }
+    setGenerating(true);
+    generateCoverImage({
+      imageUrl: sourceUrl,
+      title: episodeTitle,
+      onComplete: (dataUrl) => {
+        dispatch({ kind: 'setField', field: 'coverSourceUrl', value: sourceUrl });
+        dispatch({ kind: 'setField', field: 'coverUrl', value: dataUrl });
+        setGenerating(false);
+        toast.success('Capa gerada com o template Heavynauta');
+      },
+      onError: (err) => {
+        setGenerating(false);
+        toast.error(err);
+      },
+    });
+  };
   const imageQuery = useMemo(() => {
     const parts: string[] = [];
     for (const t of state.topics) {
@@ -809,17 +838,41 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
         </p>
       </div>
       <div className="space-y-2">
-        <Label>URL da capa</Label>
+        <Label>URL da capa (imagem original)</Label>
         <Input
           placeholder="https://...jpg"
-          value={state.coverUrl}
-          onChange={(e) => dispatch({ kind: 'setField', field: 'coverUrl', value: e.target.value })}
+          value={isGenerated ? state.coverSourceUrl : state.coverUrl}
+          onChange={(e) => {
+            dispatch({ kind: 'setField', field: 'coverSourceUrl', value: e.target.value });
+            // limpa capa gerada se mudar a URL fonte
+            if (isGenerated) dispatch({ kind: 'setField', field: 'coverUrl', value: e.target.value });
+            else dispatch({ kind: 'setField', field: 'coverUrl', value: e.target.value });
+          }}
         />
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="default"
+            disabled={generating || !sourceUrl || !episodeTitle}
+            onClick={handleGenerateTemplate}
+          >
+            {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            {isGenerated ? 'Regerar capa com template' : 'Gerar capa com template Heavynauta'}
+          </Button>
+          {!episodeTitle && (
+            <span className="text-xs text-muted-foreground">defina o título antes</span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground">
-          Você pode editar a capa depois pela aba Episódios Avulsos usando o Cover Generator da plataforma.
+          O template aplica o overlay roxo do podcast, título do episódio e logo Heavynauta (3000×3000).
         </p>
         {state.coverUrl && (
-          <img src={state.coverUrl} alt="Preview" className="mt-2 h-40 w-40 rounded border border-border object-cover" />
+          <div className="mt-2 space-y-1">
+            <img src={state.coverUrl} alt="Preview" className="h-40 w-40 rounded border border-border object-cover" />
+            <p className="text-[11px] text-muted-foreground">
+              {isGenerated ? '✓ Capa com template pronta' : 'Imagem bruta — clique em "Gerar capa com template"'}
+            </p>
+          </div>
         )}
       </div>
     </div>
@@ -961,7 +1014,7 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         selected_title_index: state.selectedTitleIndex,
         description_html: state.descriptionHtml || null,
         cover_url: state.coverUrl || null,
-        cover_source_url: state.coverUrl || null,
+        cover_source_url: state.coverSourceUrl || state.coverUrl || null,
         spotify_link: null,
         repository_url: null,
         repository_file_id: null,
