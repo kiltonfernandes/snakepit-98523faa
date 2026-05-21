@@ -46,6 +46,8 @@ import {
   getStandaloneCoverPrompt,
   buildReleaseBlock,
 } from '@/lib/standalone-prompts';
+import { generateCoverImage } from '@/lib/cover-generator';
+import { Sparkles } from 'lucide-react';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
 const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
@@ -63,6 +65,7 @@ interface WizardState {
   descriptionResponse: string;
   descriptionHtml: string;
   coverUrl: string;
+  coverSourceUrl: string;
 }
 
 const initialState = (): WizardState => ({
@@ -76,6 +79,7 @@ const initialState = (): WizardState => ({
   descriptionResponse: '',
   descriptionHtml: '',
   coverUrl: '',
+  coverSourceUrl: '',
 });
 
 type Action =
