@@ -763,6 +763,31 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const { releases, settings } = useApp();
   const content = aggregatedContent(state.topics, releases);
   const prompt = getStandaloneCoverPrompt(content, settings);
+  const episodeTitle = state.selectedTitleIndex != null
+    ? state.titleOptions[state.selectedTitleIndex]?.text || ''
+    : '';
+  const [generating, setGenerating] = useState(false);
+  const sourceUrl = state.coverSourceUrl || state.coverUrl;
+  const isGenerated = state.coverUrl.startsWith('data:');
+  const handleGenerateTemplate = () => {
+    if (!sourceUrl) { toast.error('Informe uma URL de imagem primeiro.'); return; }
+    if (!episodeTitle) { toast.error('Defina o título do episódio antes de gerar a capa.'); return; }
+    setGenerating(true);
+    generateCoverImage({
+      imageUrl: sourceUrl,
+      title: episodeTitle,
+      onComplete: (dataUrl) => {
+        dispatch({ kind: 'setField', field: 'coverSourceUrl', value: sourceUrl });
+        dispatch({ kind: 'setField', field: 'coverUrl', value: dataUrl });
+        setGenerating(false);
+        toast.success('Capa gerada com o template Heavynauta');
+      },
+      onError: (err) => {
+        setGenerating(false);
+        toast.error(err);
+      },
+    });
+  };
   const imageQuery = useMemo(() => {
     const parts: string[] = [];
     for (const t of state.topics) {
