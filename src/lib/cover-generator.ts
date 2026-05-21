@@ -1,5 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
-import heavynautaLogo from '@/assets/heavynauta-badge.svg';
+import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 
 export function drawWrappedText(
   ctx: CanvasRenderingContext2D,
@@ -77,7 +77,8 @@ export async function generateCoverImage({ imageUrl, title, onComplete, onError 
   const ctx = canvas.getContext('2d');
   if (!ctx) { onError('Canvas não disponível'); return; }
 
-  ctx.fillStyle = '#1a0e2e';
+  // Deep purple base matching the Heavynauta logo background
+  ctx.fillStyle = '#3b1f5e';
   ctx.fillRect(0, 0, SIZE, SIZE);
 
   const exportCover = () => {
@@ -95,7 +96,7 @@ export async function generateCoverImage({ imageUrl, title, onComplete, onError 
     const imageAreaW = SIZE - frameMargin * 2;
     const imageAreaH = Math.round(SIZE * 0.62);
 
-    ctx.strokeStyle = 'rgba(200, 200, 200, 0.15)';
+    ctx.strokeStyle = 'rgba(255, 138, 122, 0.25)';
     ctx.lineWidth = 3;
     const clipInset = 30;
     const cornerCut = 60;
@@ -144,43 +145,70 @@ export async function generateCoverImage({ imageUrl, title, onComplete, onError 
     const imageAreaH = Math.round(SIZE * 0.62);
     const panelTop = imageAreaH + 80;
 
+    // Soft fade from image into the purple panel
     const grad = ctx.createLinearGradient(0, panelTop - 200, 0, panelTop + 100);
-    grad.addColorStop(0, 'rgba(26, 14, 46, 0)');
-    grad.addColorStop(1, 'rgba(26, 14, 46, 0.98)');
+    grad.addColorStop(0, 'rgba(59, 31, 94, 0)');
+    grad.addColorStop(1, 'rgba(59, 31, 94, 0.98)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, panelTop - 200, SIZE, 400);
 
-    ctx.fillStyle = 'rgba(220, 210, 230, 0.95)';
+    // Cream / off-white panel matching the helmet highlights
+    ctx.fillStyle = 'rgba(245, 238, 231, 0.97)';
     ctx.fillRect(0, panelTop + 100, SIZE, SIZE - panelTop - 100);
 
-    ctx.fillStyle = '#8a8a8a';
+    // Coral divider stripe (flame accent)
+    ctx.fillStyle = '#fa5fa5';
     ctx.fillRect(0, panelTop + 100, SIZE, 20);
 
+    // Brand chip
     const labelY = panelTop + 200;
-    ctx.fillStyle = '#C8A2C8';
+    ctx.fillStyle = '#3b1f5e';
     ctx.fillRect(100, labelY - 60, 620, 90);
-    ctx.fillStyle = '#1a0e2e';
+    ctx.fillStyle = '#f5eee7';
     ctx.font = 'bold 72px sans-serif';
-    ctx.fillText('Heavynauta', 120, labelY + 8);
+    ctx.fillText('HEAVYNAUTA', 120, labelY + 8);
 
-    ctx.fillStyle = '#4a1a7a';
+    // Title in deep purple
+    ctx.fillStyle = '#3b1f5e';
     ctx.font = 'bold 100px sans-serif';
     drawWrappedText(ctx, title, 100, panelTop + 420, 2100, 120, 3);
 
-    ctx.fillStyle = '#4a1a4a';
+    // Blue underline accent (flame cool tone)
+    ctx.fillStyle = '#61d4ff';
     ctx.fillRect(100, panelTop + 780, 1200, 12);
 
-    ctx.fillStyle = '#3a2a4a';
+    // Tagline
+    ctx.fillStyle = '#4e2d74';
     ctx.font = 'italic 58px sans-serif';
     ctx.fillText('Papo Sério Sobre Música Pesada', 100 + 800, panelTop + 870);
 
-    ctx.fillStyle = '#4a1a5e';
+    // Left edge ribbon — coral
+    ctx.fillStyle = '#ff8a7a';
     ctx.fillRect(0, panelTop + 100, 16, SIZE - panelTop - 100);
 
     const logo = new window.Image();
+    logo.crossOrigin = 'anonymous';
     logo.onload = () => {
-      const logoSize = 580;
-      ctx.drawImage(logo, SIZE - logoSize - 80, SIZE - logoSize - 60, logoSize, logoSize);
+      const logoSize = 620;
+      const lx = SIZE - logoSize - 80;
+      const ly = SIZE - logoSize - 60;
+      // Soft halo behind the logo
+      const halo = ctx.createRadialGradient(
+        lx + logoSize / 2, ly + logoSize / 2, logoSize * 0.15,
+        lx + logoSize / 2, ly + logoSize / 2, logoSize * 0.6,
+      );
+      halo.addColorStop(0, 'rgba(250, 95, 165, 0.35)');
+      halo.addColorStop(1, 'rgba(250, 95, 165, 0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(lx - 40, ly - 40, logoSize + 80, logoSize + 80);
+      // Round-mask the logo
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(lx + logoSize / 2, ly + logoSize / 2, logoSize / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      ctx.drawImage(logo, lx, ly, logoSize, logoSize);
+      ctx.restore();
       exportCover();
     };
     logo.onerror = () => exportCover();
