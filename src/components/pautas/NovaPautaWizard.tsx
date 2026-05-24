@@ -494,12 +494,11 @@ function TopicStep({
   const meta = STANDALONE_TOPIC_META[topic.type];
   const { releases, settings } = useApp();
   const selectedRelease = topic.release_id ? releases.find(r => r.id === topic.release_id) : null;
-  const { templates, refresh } = usePromptTemplates(topic.type);
-  // Also include 'custom' (Outro) templates as available choices.
-  const { templates: customTemplates } = usePromptTemplates('custom');
+  const { allTemplates, refresh } = usePromptTemplates();
+  // Show templates for this topic type + generic 'custom' ones.
   const allChoices: PromptTemplate[] = useMemo(
-    () => [...templates, ...customTemplates],
-    [templates, customTemplates],
+    () => allTemplates.filter(t => t.topic_type === topic.type || t.topic_type === 'custom'),
+    [allTemplates, topic.type],
   );
   const [managerOpen, setManagerOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
