@@ -496,6 +496,7 @@ export interface StandaloneTopicPromptCtx {
 export function getStandaloneTopicPrompt(
   type: StandaloneTopicType,
   vars: StandaloneTopicPromptCtx,
+  overrideTemplate?: string | null,
 ): string {
   const filled = {
     input: vars.input,
@@ -503,11 +504,24 @@ export function getStandaloneTopicPrompt(
     release_block: buildReleaseBlock(vars.release),
     platform_block: buildPlatformBlock(vars.platform),
   };
+  if (overrideTemplate && overrideTemplate.trim() && overrideTemplate.trim() !== '__BUILTIN__') {
+    return fill(overrideTemplate, filled);
+  }
   switch (type) {
     case 'anniversary': return fill(PROMPT_ANNIVERSARY, filled);
     case 'review':      return fill(PROMPT_REVIEW, filled);
     case 'news':        return fill(PROMPT_NEWS, filled);
     case 'interview':   return fill(PROMPT_INTERVIEW, filled);
+  }
+}
+
+/** Returns the raw built-in template text for a given topic type (for cloning into custom templates). */
+export function getBuiltinTemplateText(type: StandaloneTopicType): string {
+  switch (type) {
+    case 'anniversary': return PROMPT_ANNIVERSARY;
+    case 'review':      return PROMPT_REVIEW;
+    case 'news':        return PROMPT_NEWS;
+    case 'interview':   return PROMPT_INTERVIEW;
   }
 }
 
