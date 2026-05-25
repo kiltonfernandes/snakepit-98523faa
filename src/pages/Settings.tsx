@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
+import { PromptTemplatesManager } from '@/components/pautas/PromptTemplatesManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
@@ -38,6 +39,7 @@ export default function Settings() {
   const [logSearch, setLogSearch] = useState('');
   const [logFilter, setLogFilter] = useState<string>('all');
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
+  const [standalonePromptsOpen, setStandalonePromptsOpen] = useState(false);
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -270,6 +272,28 @@ export default function Settings() {
                       )}
                     </div>
                     <Button size="sm" className="gap-2" onClick={() => setPromptManagerOpen(true)}>
+                      <FileCode className="h-3.5 w-3.5" /> Gerenciar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Standalone Episode Prompts */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileCode className="h-4 w-4" /> Prompts de Episódios Avulsos
+                  </CardTitle>
+                  <CardDescription>
+                    Resenha, notícia, aniversário, entrevista e outros — usados nas pautas avulsas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      Crie e edite templates por tipo de bloco
+                    </span>
+                    <Button size="sm" className="gap-2" onClick={() => setStandalonePromptsOpen(true)}>
                       <FileCode className="h-3.5 w-3.5" /> Gerenciar
                     </Button>
                   </div>
@@ -718,6 +742,11 @@ export default function Settings() {
           updateSettings({ prompt_overrides_json: overrides });
           setPromptManagerOpen(false);
         }}
+      />
+
+      <PromptTemplatesManager
+        open={standalonePromptsOpen}
+        onOpenChange={setStandalonePromptsOpen}
       />
 
       <Dialog open={descTemplateOpen} onOpenChange={setDescTemplateOpen}>
