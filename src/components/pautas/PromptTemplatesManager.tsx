@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Plus, Trash2, Save, X, Lock } from 'lucide-react';
+import { Plus, Trash2, Save, X, Lock, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   PromptTemplate,
@@ -143,6 +143,33 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
     }
   };
 
+  const move = async (templateId: string, direction: -1 | 1) => {
+    const target = templates.find(t => t.id === templateId);
+    if (!target) return;
+    const siblings = templates
+      .filter(t => t.topic_type === target.topic_type)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name));
+    const idx = siblings.findIndex(t => t.id === templateId);
+    const swapIdx = idx + direction;
+    if (swapIdx < 0 || swapIdx >= siblings.length) return;
+    const other = siblings[swapIdx];
+    // Swap sort_order values, ensuring distinct values if equal.
+    const a = target.sort_order ?? 0;
+    const b = other.sort_order ?? 0;
+    const newA = a === b ? b + direction : b;
+    const newB = a === b ? a : a;
+    try {
+      await Promise.all([
+        updatePromptTemplate(target.id, { sort_order: newA }),
+        updatePromptTemplate(other.id, { sort_order: newB }),
+      ]);
+      await refresh();
+      onChanged?.();
+    } catch (e: any) {
+      toast.error('Erro ao reordenar: ' + (e?.message || e));
+    }
+  };
+
   const grouped = TOPIC_TYPE_OPTIONS.map(opt => ({
     ...opt,
     items: templates.filter(t => t.topic_type === opt.value),
@@ -177,24 +204,48 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
                       {g.items.length === 0 && (
                         <div className="px-2 py-1 text-[11px] italic text-muted-foreground">— vazio —</div>
                       )}
-                      {g.items.map(t => (
-                        <button
+                      {g.items.map((t, i) => (
+                        <div
                           key={t.id}
-                          type="button"
-                          onClick={() => startEdit(t)}
-                          className={`flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${selectedId === t.id ? 'bg-primary/10' : 'hover:bg-muted'}`}
+                          className={`group flex items-start gap-1 rounded-md px-1 py-1 text-sm transition-colors ${selectedId === t.id ? 'bg-primary/10' : 'hover:bg-muted'}`}
                         >
-                          <div className="flex-1">
-                            <div className="flex items-center gap-1.5">
-                              <span className="truncate font-medium">{t.name}</span>
-                              {t.is_builtin && <Lock className="h-3 w-3 text-muted-foreground" />}
-                              {t.is_default && <Badge variant="secondary" className="text-[9px] uppercase">padrão</Badge>}
-                            </div>
-                            {t.description && (
-                              <div className="truncate text-[11px] text-muted-foreground">{t.description}</div>
-                            )}
+                          <div className="flex flex-col opacity-0 transition-opacity group-hover:opacity-100">
+                            <button
+                              type="button"
+                              disabled={i === 0}
+                              onClick={(e) => { e.stopPropagation(); move(t.id, -1); }}
+                              className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30"
+                              title="Mover para cima"
+                            >
+                              <ArrowUp className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={i === g.items.length - 1}
+                              onClick={(e) => { e.stopPropagation(); move(t.id, 1); }}
+                              className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground disabled:opacity-30"
+                              title="Mover para baixo"
+                            >
+                              <ArrowDown className="h-3 w-3" />
+                            </button>
                           </div>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(t)}
+                            className="flex flex-1 items-start gap-2 text-left"
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate font-medium">{t.name}</span>
+                                {t.is_builtin && <Lock className="h-3 w-3 text-muted-foreground" />}
+                                {t.is_default && <Badge variant="secondary" className="text-[9px] uppercase">padrão</Badge>}
+                              </div>
+                              {t.description && (
+                                <div className="truncate text-[11px] text-muted-foreground">{t.description}</div>
+                              )}
+                            </div>
+                          </button>
+                        </div>
                       ))}
                     </div>
                   ))}
