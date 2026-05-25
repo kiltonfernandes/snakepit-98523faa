@@ -45,6 +45,7 @@ import {
   getStandaloneTitlePrompt,
   getStandaloneDescriptionPrompt,
   getStandaloneCoverPrompt,
+  renderStandaloneStagePrompt,
   buildReleaseBlock,
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
@@ -748,8 +749,12 @@ function TopicStep({
 
 function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
+  const { allTemplates } = usePromptTemplates();
   const content = aggregatedContent(state.topics, releases);
-  const prompt = getStandaloneTitlePrompt(content, settings);
+  const dominantType = (state.topics[0]?.type || 'review') as StandaloneTopicType;
+  const tpl = allTemplates.find(t => t.stage === 'title' && t.topic_type === dominantType && t.is_default)
+    || allTemplates.find(t => t.stage === 'title' && t.topic_type === dominantType);
+  const prompt = renderStandaloneStagePrompt('title', dominantType, { content, platform: settings }, tpl?.template_text);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">🏷️ Título do episódio</h3>
@@ -815,9 +820,13 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
 
 function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
+  const { allTemplates } = usePromptTemplates();
   const title = state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text || '' : '';
   const content = aggregatedContent(state.topics, releases);
-  const prompt = getStandaloneDescriptionPrompt(title, content, settings);
+  const dominantType = (state.topics[0]?.type || 'review') as StandaloneTopicType;
+  const tpl = allTemplates.find(t => t.stage === 'description' && t.topic_type === dominantType && t.is_default)
+    || allTemplates.find(t => t.stage === 'description' && t.topic_type === dominantType);
+  const prompt = renderStandaloneStagePrompt('description', dominantType, { content, title, platform: settings }, tpl?.template_text);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">📝 Descrição do episódio</h3>
@@ -855,7 +864,10 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const { releases, settings } = useApp();
   const { allTemplates } = usePromptTemplates();
   const content = aggregatedContent(state.topics, releases);
-  const prompt = getStandaloneCoverPrompt(content, settings);
+  const dominantType = (state.topics[0]?.type || 'review') as StandaloneTopicType;
+  const coverTpl = allTemplates.find(t => t.stage === 'cover' && t.topic_type === dominantType && t.is_default)
+    || allTemplates.find(t => t.stage === 'cover' && t.topic_type === dominantType);
+  const prompt = renderStandaloneStagePrompt('cover', dominantType, { content, platform: settings }, coverTpl?.template_text);
   const episodeTitle = state.selectedTitleIndex != null
     ? state.titleOptions[state.selectedTitleIndex]?.text || ''
     : '';

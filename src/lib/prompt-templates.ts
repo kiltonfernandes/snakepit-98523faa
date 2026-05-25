@@ -13,6 +13,7 @@ export interface PromptTemplate {
   id: string;
   name: string;
   topic_type: string; // StandaloneTopicType or 'custom'
+  stage: 'content' | 'title' | 'description' | 'cover';
   template_text: string;
   description: string;
   google_query: string | null;
@@ -32,9 +33,17 @@ export const TOPIC_TYPE_OPTIONS: { value: string; label: string }[] = [
   { value: 'custom', label: '✨ Outro' },
 ];
 
-export async function listPromptTemplates(topicType?: string): Promise<PromptTemplate[]> {
+export const STAGE_OPTIONS: { value: 'content' | 'title' | 'description' | 'cover'; label: string; icon: string; hint: string }[] = [
+  { value: 'content', label: 'Conteúdo', icon: '📝', hint: 'Prompt principal que gera o corpo do bloco editorial.' },
+  { value: 'title', label: 'Título', icon: '🏷️', hint: 'Gera 3 opções de título a partir do conteúdo.' },
+  { value: 'description', label: 'Descrição', icon: '📰', hint: 'Gera o HTML da descrição do episódio.' },
+  { value: 'cover', label: 'Capa', icon: '🎨', hint: 'Direção visual da capa 3000×3000.' },
+];
+
+export async function listPromptTemplates(topicType?: string, stage?: string): Promise<PromptTemplate[]> {
   let q = supabase.from('prompt_templates').select('*').order('sort_order', { ascending: true }).order('name');
   if (topicType) q = q.eq('topic_type', topicType);
+  if (stage) q = q.eq('stage', stage);
   const { data, error } = await q;
   if (error) throw error;
   return (data || []) as PromptTemplate[];
@@ -43,6 +52,7 @@ export async function listPromptTemplates(topicType?: string): Promise<PromptTem
 export async function createPromptTemplate(input: {
   name: string;
   topic_type: string;
+  stage?: 'content' | 'title' | 'description' | 'cover';
   template_text: string;
   description?: string;
   google_query?: string;
@@ -55,6 +65,7 @@ export async function createPromptTemplate(input: {
       id,
       name: input.name,
       topic_type: input.topic_type,
+      stage: input.stage || 'content',
       template_text: input.template_text,
       description: input.description || '',
       google_query: input.google_query || '',

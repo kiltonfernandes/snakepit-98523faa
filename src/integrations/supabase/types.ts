@@ -440,6 +440,7 @@ export type Database = {
           is_default: boolean
           name: string
           sort_order: number
+          stage: string
           template_text: string
           topic_type: string
           updated_at: string
@@ -454,6 +455,7 @@ export type Database = {
           is_default?: boolean
           name: string
           sort_order?: number
+          stage?: string
           template_text: string
           topic_type: string
           updated_at?: string
@@ -468,6 +470,7 @@ export type Database = {
           is_default?: boolean
           name?: string
           sort_order?: number
+          stage?: string
           template_text?: string
           topic_type?: string
           updated_at?: string
