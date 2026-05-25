@@ -571,7 +571,7 @@ export default function CalendarView() {
       >
         <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
         <div className="mt-2 space-y-1.5">
-          {items.map((item, i) => {
+          {items.map((item) => {
             const relatedMat = item.material;
             const readyToSchedule = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id) && !relatedMat.spotify_link;
             return (
@@ -730,7 +730,10 @@ export default function CalendarView() {
       </div>
 
       {/* Episode package modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={modalOpen} onOpenChange={(open) => {
+        setModalOpen(open);
+        if (!open) setSelectedPauta(null);
+      }}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pacote do episódio</DialogTitle>
@@ -949,7 +952,7 @@ export default function CalendarView() {
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold">Ações rápidas</h3>
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {
-                    const pauta = getPautaForMaterial(selectedMaterial);
+                    const pauta = selectedPauta || getPautaForMaterial(selectedMaterial);
                     if (pauta) setPreviewPauta(pauta);
                     else toast.info('Nenhuma pauta para este episódio');
                   }}>
