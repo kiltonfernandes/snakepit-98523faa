@@ -128,7 +128,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadSettings = useCallback(async () => {
     const { data } = await supabase.from('app_settings' as any).select('*').eq('singleton_id', 1).single();
-    if (data) setSettings(data as any);
+    if (data) {
+      setSettings(data as any);
+      setQueryTemplateOverrides((data as any).google_query_templates_json || {});
+    }
   }, []);
 
   const loadActivityLog = useCallback(async () => {
