@@ -521,7 +521,8 @@ export default function CalendarView() {
         <div className="mt-2 space-y-1.5">
           {items.map((item, i) => {
             const relatedMat = item.type === 'pauta'
-              ? materials.find(m => m.episode_date === item.data.publication_date)
+              ? (materials.find(m => m.source_pauta_id === item.data.id)
+                  || materials.find(m => m.episode_date === item.data.publication_date && !m.source_pauta_id))
               : item.type === 'material'
                 ? item.data
                 : null;
@@ -538,8 +539,7 @@ export default function CalendarView() {
               } ${readyToSchedule ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]' : ''}`}
               onClick={() => {
                 if (item.type === 'pauta') {
-                  const mat = materials.find(m => m.episode_date === item.data.publication_date);
-                  if (mat) openMaterialModal(mat);
+                  if (relatedMat) openMaterialModal(relatedMat);
                   else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
                 }
                 else if (item.type === 'material') openMaterialModal(item.data);
@@ -549,7 +549,7 @@ export default function CalendarView() {
               {item.type === 'pauta' ? (
                 <div className="space-y-1">
                   {(() => {
-                    const mat = materials.find(m => m.episode_date === item.data.publication_date);
+                    const mat = relatedMat;
                     const title = mat ? getSelectedTitle(mat) : '';
                     const thumbUrl = mat ? coverThumbnails[mat.id] : undefined;
                     const effStatus = getEffectivePautaStatus(item.data, mat);
