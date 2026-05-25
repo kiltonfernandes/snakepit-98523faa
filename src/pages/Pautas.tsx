@@ -1453,24 +1453,7 @@ export default function Pautas() {
         );
       })()}
 
-      <NovaPautaWizard open={novaPautaOpen} onClose={() => setNovaPautaOpen(false)} onCreated={() => setActiveTab('standalone')} />
-
-      {activeTab === 'standalone' ? (
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
-          <div className="flex items-center justify-between">
-            <TabsList>
-              <TabsTrigger value="content">Conteúdo</TabsTrigger>
-              <TabsTrigger value="inputs">Insumos</TabsTrigger>
-              <TabsTrigger value="flow">Flow</TabsTrigger>
-              <TabsTrigger value="management">Management</TabsTrigger>
-              <TabsTrigger value="standalone">Episódios Avulsos</TabsTrigger>
-            </TabsList>
-          </div>
-          <TabsContent value="standalone">
-            <StandaloneEpisodesTable onCreateNew={() => setNovaPautaOpen(true)} />
-          </TabsContent>
-        </Tabs>
-      ) : selectedWeek ? (
+      {selectedWeek ? (
         <>
           <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); if (v === 'flow') setFlowStep(0); }}>
             <div className="flex items-center justify-between">
@@ -1479,7 +1462,6 @@ export default function Pautas() {
                 <TabsTrigger value="inputs">Insumos</TabsTrigger>
                 <TabsTrigger value="flow">Flow</TabsTrigger>
                 <TabsTrigger value="management">Management</TabsTrigger>
-                <TabsTrigger value="standalone">Episódios Avulsos</TabsTrigger>
               </TabsList>
               <div className="flex items-center gap-2">
                 <AutosaveBadge className="mr-2" />
