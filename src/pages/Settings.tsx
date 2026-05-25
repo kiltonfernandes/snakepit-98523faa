@@ -744,6 +744,11 @@ export default function Settings() {
         }}
       />
 
+      <PromptTemplatesManager
+        open={standalonePromptsOpen}
+        onOpenChange={setStandalonePromptsOpen}
+      />
+
       <Dialog open={descTemplateOpen} onOpenChange={setDescTemplateOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
