@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
 import { PromptTemplatesManager } from '@/components/pautas/PromptTemplatesManager';
+import { GoogleQueryTemplatesManager } from '@/components/GoogleQueryTemplatesManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
@@ -40,6 +41,7 @@ export default function Settings() {
   const [logFilter, setLogFilter] = useState<string>('all');
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
   const [standalonePromptsOpen, setStandalonePromptsOpen] = useState(false);
+  const [googleQueriesOpen, setGoogleQueriesOpen] = useState(false);
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
@@ -295,6 +297,28 @@ export default function Settings() {
                     </span>
                     <Button size="sm" className="gap-2" onClick={() => setStandalonePromptsOpen(true)}>
                       <FileCode className="h-3.5 w-3.5" /> Gerenciar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Google Search Query Templates */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Search className="h-4 w-4" /> Queries de Pesquisa Google
+                  </CardTitle>
+                  <CardDescription>
+                    Templates do botão "Pesquisar no Google" para cada tipo de pauta (semanal e avulsa).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      {Object.keys(settings.google_query_templates_json || {}).length} template(s) customizado(s)
+                    </span>
+                    <Button size="sm" className="gap-2" onClick={() => setGoogleQueriesOpen(true)}>
+                      <Search className="h-3.5 w-3.5" /> Gerenciar
                     </Button>
                   </div>
                 </CardContent>
