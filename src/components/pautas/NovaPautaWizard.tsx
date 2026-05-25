@@ -36,7 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { renderQueryTemplate } from '@/lib/google-query-templates';
+import { renderQueryTemplate, getQueryTemplate } from '@/lib/google-query-templates';
 import { useApp } from '@/contexts/AppContext';
 import { Release, Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType, TitleOption, DaySlot } from '@/lib/types';
 import {
@@ -178,7 +178,7 @@ function descriptionHtmlFromResponse(raw: string): string {
 }
 
 // Build a granular Google query per topic type, using release + notes + URL.
-function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | undefined): string {
+function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | undefined, customQuery?: string | null): string {
   const notes = (topic.notes || '').trim();
   const url = (topic.url || '').trim();
   let host = '';
@@ -186,23 +186,28 @@ function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | unde
   const slug = url ? url.split('/').filter(Boolean).slice(-1)[0]?.replace(/[-_]+/g, ' ').replace(/\.\w+$/, '') : '';
   const type = topic.type;
 
+  const renderWith = (tpl: string, vars: Record<string, string>) => {
+    const out = tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, n) => (vars[n] ?? ''));
+    return out.replace(/\s+/g, ' ').trim();
+  };
+
   if (release) {
     const year = release.release_date?.slice(0, 4) || '';
-    return renderQueryTemplate(`standalone.${type}.with_release`, {
+    const vars = {
       artist: release.artist,
       album: release.album,
       year,
       notes,
-    });
+    } as Record<string, string>;
+    if (customQuery && customQuery.trim()) return renderWith(customQuery, vars);
+    return renderQueryTemplate(`standalone.${type}.with_release`, vars);
   }
 
   // No release: require some context (slug or notes for most types).
   if (!slug && !notes && !host) return '';
-  return renderQueryTemplate(`standalone.${type}.url`, {
-    slug: slug || '',
-    notes,
-    host,
-  });
+  const vars = { slug: slug || '', notes, host } as Record<string, string>;
+  if (customQuery && customQuery.trim()) return renderWith(customQuery, vars);
+  return renderQueryTemplate(`standalone.${type}.url`, vars);
 }
 
 // ─── Inline Add Release form ────────────────────────────────────────────────
@@ -540,7 +545,7 @@ function TopicStep({
     toast.success('Notas anexadas ao final do prompt');
   };
 
-  const googleQuery = buildGoogleQuery(topic, selectedRelease);
+  const googleQuery = buildGoogleQuery(topic, selectedRelease, selectedTemplate?.google_query);
   const openGoogle = () => {
     if (!googleQuery) {
       toast.error('Preencha o input para gerar a query');
