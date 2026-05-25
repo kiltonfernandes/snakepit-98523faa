@@ -99,6 +99,7 @@ export default function CalendarView() {
   const [date, setDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [selectedMaterial, setSelectedMaterial] = useState<EpisodeMaterial | null>(null);
+  const [selectedPauta, setSelectedPauta] = useState<Pauta | null>(null);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
@@ -152,6 +153,7 @@ export default function CalendarView() {
     const mat = materials.find(m => m.id === matId);
     if (mat) {
       setSelectedMaterial(mat);
+      setSelectedPauta(getPautaForMaterial(mat));
       setSpotifyInput(mat.spotify_link || '');
       setMentionedInput(mat.mentioned_in_episode || '');
       setModalOpen(true);
@@ -213,26 +215,55 @@ export default function CalendarView() {
   };
 
   const getItemsForDate = (dateStr: string) => {
-    const items: { type: 'pauta' | 'material' | 'release'; data: any }[] = [];
+    const items: {
+      key: string;
+      type: 'pauta' | 'material' | 'release';
+      data: any;
+      pauta: Pauta | null;
+      material: EpisodeMaterial | null;
+    }[] = [];
 
     if (showPautas) {
       const dayPautas = getPautasForDate(dateStr);
       const dayPautaIds = new Set(dayPautas.map((p) => p.id));
-      dayPautas.forEach((p) => items.push({ type: 'pauta', data: p }));
+      dayPautas.forEach((p) => {
+        items.push({
+          key: `pauta-${p.id}`,
+          type: 'pauta',
+          data: p,
+          pauta: p,
+          material: getMaterialForPauta(p),
+        });
+      });
       materials
         .filter((m) => m.episode_date === dateStr && (!m.source_pauta_id || !dayPautaIds.has(m.source_pauta_id)))
-        .forEach((m) => items.push({ type: 'material', data: m }));
+        .forEach((m) => {
+          items.push({
+            key: `material-${m.id}`,
+            type: 'material',
+            data: m,
+            pauta: getPautaForMaterial(m),
+            material: m,
+          });
+        });
     }
 
     if (showReleases) {
-      releases.filter((r) => r.release_date === dateStr).forEach((r) => items.push({ type: 'release', data: r }));
+      releases.filter((r) => r.release_date === dateStr).forEach((r) => items.push({
+        key: `release-${r.id}`,
+        type: 'release',
+        data: r,
+        pauta: null,
+        material: null,
+      }));
     }
 
     return items;
   };
 
-  const openMaterialModal = (mat: EpisodeMaterial) => {
+  const openMaterialModal = (mat: EpisodeMaterial, pauta: Pauta | null = null) => {
     setSelectedMaterial(mat);
+    setSelectedPauta(pauta);
     setSpotifyInput(mat.spotify_link || '');
     setMentionedInput(mat.mentioned_in_episode || '');
     setModalOpen(true);
@@ -540,16 +571,12 @@ export default function CalendarView() {
       >
         <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
         <div className="mt-2 space-y-1.5">
-          {items.map((item, i) => {
-            const relatedMat = item.type === 'pauta'
-              ? getMaterialForPauta(item.data)
-              : item.type === 'material'
-                ? item.data
-                : null;
+          {items.map((item) => {
+            const relatedMat = item.material;
             const readyToSchedule = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id) && !relatedMat.spotify_link;
             return (
             <button
-              key={`${item.type}-${i}`}
+              key={item.key}
               className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
                 item.type === 'pauta'
                   ? 'border-border bg-muted/60 hover:border-primary/40 hover:bg-muted'
@@ -559,10 +586,10 @@ export default function CalendarView() {
               } ${readyToSchedule ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]' : ''}`}
               onClick={() => {
                 if (item.type === 'pauta') {
-                  if (relatedMat) openMaterialModal(relatedMat);
+                  if (relatedMat) openMaterialModal(relatedMat, item.pauta);
                   else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
                 }
-                else if (item.type === 'material') openMaterialModal(item.data);
+                else if (item.type === 'material') openMaterialModal(item.data, item.pauta);
                 else openReleaseModal(item.data);
               }}
             >
@@ -703,7 +730,10 @@ export default function CalendarView() {
       </div>
 
       {/* Episode package modal */}
-      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      <Dialog open={modalOpen} onOpenChange={(open) => {
+        setModalOpen(open);
+        if (!open) setSelectedPauta(null);
+      }}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pacote do episódio</DialogTitle>
@@ -922,7 +952,7 @@ export default function CalendarView() {
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold">Ações rápidas</h3>
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {
-                    const pauta = getPautaForMaterial(selectedMaterial);
+                    const pauta = selectedPauta || getPautaForMaterial(selectedMaterial);
                     if (pauta) setPreviewPauta(pauta);
                     else toast.info('Nenhuma pauta para este episódio');
                   }}>
