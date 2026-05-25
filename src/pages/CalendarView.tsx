@@ -572,15 +572,11 @@ export default function CalendarView() {
         <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
         <div className="mt-2 space-y-1.5">
           {items.map((item, i) => {
-            const relatedMat = item.type === 'pauta'
-              ? getMaterialForPauta(item.data)
-              : item.type === 'material'
-                ? item.data
-                : null;
+            const relatedMat = item.material;
             const readyToSchedule = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id) && !relatedMat.spotify_link;
             return (
             <button
-              key={`${item.type}-${i}`}
+              key={item.key}
               className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
                 item.type === 'pauta'
                   ? 'border-border bg-muted/60 hover:border-primary/40 hover:bg-muted'
@@ -590,10 +586,10 @@ export default function CalendarView() {
               } ${readyToSchedule ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]' : ''}`}
               onClick={() => {
                 if (item.type === 'pauta') {
-                  if (relatedMat) openMaterialModal(relatedMat);
+                  if (relatedMat) openMaterialModal(relatedMat, item.pauta);
                   else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
                 }
-                else if (item.type === 'material') openMaterialModal(item.data);
+                else if (item.type === 'material') openMaterialModal(item.data, item.pauta);
                 else openReleaseModal(item.data);
               }}
             >
