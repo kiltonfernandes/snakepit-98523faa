@@ -16,6 +16,7 @@ export interface PromptTemplate {
   template_text: string;
   description: string;
   google_query: string | null;
+  google_images_query: string | null;
   is_default: boolean;
   is_builtin: boolean;
   created_at: string;
@@ -44,6 +45,7 @@ export async function createPromptTemplate(input: {
   template_text: string;
   description?: string;
   google_query?: string;
+  google_images_query?: string;
 }): Promise<PromptTemplate> {
   const id = `tpl-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const { data, error } = await supabase
@@ -55,6 +57,7 @@ export async function createPromptTemplate(input: {
       template_text: input.template_text,
       description: input.description || '',
       google_query: input.google_query || '',
+      google_images_query: input.google_images_query || '',
       is_default: false,
       is_builtin: false,
     })
