@@ -3,6 +3,7 @@ import { Release, EditorialWeek, Pauta, EpisodeMaterial, AppSettings, DaySlot, P
 import { DAY_SLOTS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { enqueueUpdate, recoverAutosaveSnapshots } from '@/lib/autosave-queue';
+import { setQueryTemplateOverrides } from '@/lib/google-query-templates';
 
 interface ActivityEntry {
   id: string;
@@ -54,6 +55,7 @@ const defaultSettings: AppSettings = {
   prompt_overrides_json: {},
   description_template_html: '',
   ai_model: 'google/gemini-2.5-flash',
+  google_query_templates_json: {},
 };
 
 const emptySections: PautaSections = {
@@ -126,7 +128,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const loadSettings = useCallback(async () => {
     const { data } = await supabase.from('app_settings' as any).select('*').eq('singleton_id', 1).single();
-    if (data) setSettings(data as any);
+    if (data) {
+      setSettings(data as any);
+      setQueryTemplateOverrides((data as any).google_query_templates_json || {});
+    }
   }, []);
 
   const loadActivityLog = useCallback(async () => {
@@ -384,6 +389,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = useCallback((s: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...s }));
+    if (s.google_query_templates_json) {
+      setQueryTemplateOverrides(s.google_query_templates_json);
+    }
     supabase.from('app_settings' as any).update(s as any).eq('singleton_id', 1).then();
     logActivity('Configurações atualizadas', JSON.stringify(s));
   }, [logActivity]);

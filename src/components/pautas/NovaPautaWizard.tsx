@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { renderQueryTemplate } from '@/lib/google-query-templates';
 import { useApp } from '@/contexts/AppContext';
 import { Release, Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType, TitleOption, DaySlot } from '@/lib/types';
 import {
@@ -183,42 +184,25 @@ function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | unde
   let host = '';
   try { if (url) host = new URL(url).hostname.replace(/^www\./, ''); } catch {}
   const slug = url ? url.split('/').filter(Boolean).slice(-1)[0]?.replace(/[-_]+/g, ' ').replace(/\.\w+$/, '') : '';
+  const type = topic.type;
 
   if (release) {
-    const base = `"${release.artist}" "${release.album}"`;
-    const year = release.release_date?.slice(0, 4);
-    if (topic.type === 'review') {
-      return `${base} review ${year ?? ''} site:metal-archives.com OR site:loudwire.com OR site:angrymetalguy.com`.trim();
-    }
-    if (topic.type === 'anniversary') {
-      return `${base} anniversary OR aniversário ${year ?? ''} history making of`.trim();
-    }
-    if (topic.type === 'interview') {
-      return `${base} interview track by track ${year ?? ''}`.trim();
-    }
-    return `${base} ${notes}`.trim();
+    const year = release.release_date?.slice(0, 4) || '';
+    return renderQueryTemplate(`standalone.${type}.with_release`, {
+      artist: release.artist,
+      album: release.album,
+      year,
+      notes,
+    });
   }
 
-  switch (topic.type) {
-    case 'news': {
-      const q = [slug, notes].filter(Boolean).join(' ').trim();
-      if (!q && !host) return '';
-      return `${q} ${host ? `-site:${host}` : ''} metal news`.trim();
-    }
-    case 'anniversary': {
-      const q = [slug, notes].filter(Boolean).join(' ').trim();
-      return q ? `${q} album anniversary history` : '';
-    }
-    case 'interview': {
-      const q = [slug, notes].filter(Boolean).join(' ').trim();
-      return q ? `${q} interview track by track` : '';
-    }
-    case 'review': {
-      const q = [slug, notes].filter(Boolean).join(' ').trim();
-      return q ? `${q} album review` : '';
-    }
-  }
-  return '';
+  // No release: require some context (slug or notes for most types).
+  if (!slug && !notes && !host) return '';
+  return renderQueryTemplate(`standalone.${type}.url`, {
+    slug: slug || '',
+    notes,
+    host,
+  });
 }
 
 // ─── Inline Add Release form ────────────────────────────────────────────────

@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Compass, Check, Trash2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { renderQueryTemplate } from "@/lib/google-query-templates";
 
 /**
  * Build a contextual Google search query for a given section, based on the
@@ -40,31 +41,25 @@ export function buildSectionSearchQuery(
   },
 ): string {
   const clean = (s?: string) => (s || "").trim();
-  switch (sectionKey) {
-    case "anniversary": {
-      const txt = clean(ctx.anniversary);
-      if (!txt) return "";
-      return `história detalhes curiosidades recepção entrevistas ${txt}`;
-    }
-    case "news": {
-      const link = clean(ctx.newsLink);
-      if (!link) return "";
-      return `o que aconteceu ${link}`;
-    }
-    case "review_rafa":
-    case "review_kilton": {
-      const artist = clean(ctx.releaseArtist);
-      const album = clean(ctx.releaseAlbum);
-      if (!artist && !album) return "";
-      return `review do disco e entrevistas ${album} ${artist}`.trim();
-    }
-    case "next_week_releases": {
-      const date = clean(ctx.publicationDate);
-      return `lançamentos heavy metal ${date ? `semana de ${date}` : "novos álbuns"} review`;
-    }
-    default:
-      return "";
-  }
+  const anniversary = clean(ctx.anniversary);
+  const newsLink = clean(ctx.newsLink);
+  const artist = clean(ctx.releaseArtist);
+  const album = clean(ctx.releaseAlbum);
+  const publicationDate = clean(ctx.publicationDate);
+
+  // Skip when not enough context.
+  if (sectionKey === "anniversary" && !anniversary) return "";
+  if (sectionKey === "news" && !newsLink) return "";
+  if ((sectionKey === "review_rafa" || sectionKey === "review_kilton") && !artist && !album) return "";
+
+  const key = `weekday.${sectionKey}`;
+  return renderQueryTemplate(key, {
+    anniversary,
+    newsLink,
+    artist,
+    album,
+    publicationDate,
+  });
 }
 
 interface DirectionEditorProps {
