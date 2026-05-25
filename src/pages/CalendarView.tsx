@@ -21,6 +21,8 @@ import {
   Sparkles,
   Trash2,
   Wand2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -105,6 +107,7 @@ export default function CalendarView() {
   const [showPautas, setShowPautas] = useState(true);
   const [editForm, setEditForm] = useState({ artist: '', album: '', release_date: '', comments: '' });
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  const [previewFontSize, setPreviewFontSize] = useState(16);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
 
   // Cover generation inline state
@@ -931,11 +934,26 @@ export default function CalendarView() {
 
       {/* Pauta preview dialog */}
       <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-black border-border/30">
+        <DialogContent className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-black border-border/30 flex flex-col gap-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Visualização da Pauta</DialogTitle>
             <DialogDescription>Preview da pauta</DialogDescription>
           </DialogHeader>
+          <div className="flex items-center justify-between gap-2 border-b border-white/10 px-4 py-2 bg-black/80 backdrop-blur sticky top-0 z-10">
+            <span className="text-xs text-white/50">Visualização da Pauta · {previewFontSize}px</span>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-white" onClick={() => setPreviewFontSize(s => Math.max(10, s - 2))} title="Diminuir fonte">
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 text-white text-xs" onClick={() => setPreviewFontSize(16)}>Reset</Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8 text-white" onClick={() => setPreviewFontSize(s => Math.min(48, s + 2))} title="Aumentar fonte">
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="ml-2" onClick={() => setPreviewPauta(null)}>Fechar</Button>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+          <div style={{ fontSize: `${previewFontSize}px`, zoom: previewFontSize / 16 } as any}>
           {previewPauta && (() => {
             // Standalone pauta: render topics-based layout with release links
             if (previewPauta.is_standalone) {
@@ -1022,9 +1040,8 @@ export default function CalendarView() {
               </div>
             );
           })()}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setPreviewPauta(null)}>Fechar</Button>
-          </DialogFooter>
+          </div>
+          </div>
         </DialogContent>
       </Dialog>
 
