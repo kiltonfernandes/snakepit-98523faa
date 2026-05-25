@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-builder';
 import { PromptManager } from '@/components/PromptManager';
+import { PromptTemplatesManager } from '@/components/pautas/PromptTemplatesManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
@@ -38,6 +39,7 @@ export default function Settings() {
   const [logSearch, setLogSearch] = useState('');
   const [logFilter, setLogFilter] = useState<string>('all');
   const [promptManagerOpen, setPromptManagerOpen] = useState(false);
+  const [standalonePromptsOpen, setStandalonePromptsOpen] = useState(false);
   const [descTemplateOpen, setDescTemplateOpen] = useState(false);
   const [descTemplateValue, setDescTemplateValue] = useState('');
   const [isDeleting, setIsDeleting] = useState(false);
