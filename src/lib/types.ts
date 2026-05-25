@@ -119,6 +119,7 @@ export interface AppSettings {
   prompt_overrides_json: Record<string, string>;
   description_template_html: string;
   ai_model: string;
+  google_query_templates_json: Record<string, string>;
 }
 
 export interface ActivityLog {
