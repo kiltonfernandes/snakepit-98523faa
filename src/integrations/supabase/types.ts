@@ -439,6 +439,7 @@ export type Database = {
           is_builtin: boolean
           is_default: boolean
           name: string
+          sort_order: number
           template_text: string
           topic_type: string
           updated_at: string
@@ -452,6 +453,7 @@ export type Database = {
           is_builtin?: boolean
           is_default?: boolean
           name: string
+          sort_order?: number
           template_text: string
           topic_type: string
           updated_at?: string
@@ -465,6 +467,7 @@ export type Database = {
           is_builtin?: boolean
           is_default?: boolean
           name?: string
+          sort_order?: number
           template_text?: string
           topic_type?: string
           updated_at?: string
