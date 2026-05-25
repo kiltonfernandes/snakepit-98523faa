@@ -1413,9 +1413,6 @@ export default function Pautas() {
           <Button size="sm" variant="secondary" className="gap-2" onClick={() => setAddPautaDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Pauta
           </Button>
-          <Button size="sm" variant="default" className="gap-2" onClick={() => setNovaPautaOpen(true)}>
-            <Sparkles className="h-4 w-4" /> Nova Pauta
-          </Button>
           <Button size="sm" className="gap-2" onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4" /> Nova Semana
           </Button>
