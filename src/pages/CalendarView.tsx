@@ -99,6 +99,7 @@ export default function CalendarView() {
   const [date, setDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [selectedMaterial, setSelectedMaterial] = useState<EpisodeMaterial | null>(null);
+  const [selectedPauta, setSelectedPauta] = useState<Pauta | null>(null);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
@@ -152,6 +153,7 @@ export default function CalendarView() {
     const mat = materials.find(m => m.id === matId);
     if (mat) {
       setSelectedMaterial(mat);
+      setSelectedPauta(getPautaForMaterial(mat));
       setSpotifyInput(mat.spotify_link || '');
       setMentionedInput(mat.mentioned_in_episode || '');
       setModalOpen(true);
@@ -213,26 +215,55 @@ export default function CalendarView() {
   };
 
   const getItemsForDate = (dateStr: string) => {
-    const items: { type: 'pauta' | 'material' | 'release'; data: any }[] = [];
+    const items: {
+      key: string;
+      type: 'pauta' | 'material' | 'release';
+      data: any;
+      pauta: Pauta | null;
+      material: EpisodeMaterial | null;
+    }[] = [];
 
     if (showPautas) {
       const dayPautas = getPautasForDate(dateStr);
       const dayPautaIds = new Set(dayPautas.map((p) => p.id));
-      dayPautas.forEach((p) => items.push({ type: 'pauta', data: p }));
+      dayPautas.forEach((p) => {
+        items.push({
+          key: `pauta-${p.id}`,
+          type: 'pauta',
+          data: p,
+          pauta: p,
+          material: getMaterialForPauta(p),
+        });
+      });
       materials
         .filter((m) => m.episode_date === dateStr && (!m.source_pauta_id || !dayPautaIds.has(m.source_pauta_id)))
-        .forEach((m) => items.push({ type: 'material', data: m }));
+        .forEach((m) => {
+          items.push({
+            key: `material-${m.id}`,
+            type: 'material',
+            data: m,
+            pauta: getPautaForMaterial(m),
+            material: m,
+          });
+        });
     }
 
     if (showReleases) {
-      releases.filter((r) => r.release_date === dateStr).forEach((r) => items.push({ type: 'release', data: r }));
+      releases.filter((r) => r.release_date === dateStr).forEach((r) => items.push({
+        key: `release-${r.id}`,
+        type: 'release',
+        data: r,
+        pauta: null,
+        material: null,
+      }));
     }
 
     return items;
   };
 
-  const openMaterialModal = (mat: EpisodeMaterial) => {
+  const openMaterialModal = (mat: EpisodeMaterial, pauta: Pauta | null = null) => {
     setSelectedMaterial(mat);
+    setSelectedPauta(pauta);
     setSpotifyInput(mat.spotify_link || '');
     setMentionedInput(mat.mentioned_in_episode || '');
     setModalOpen(true);
