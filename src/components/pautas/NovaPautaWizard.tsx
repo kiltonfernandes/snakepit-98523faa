@@ -210,6 +210,26 @@ function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | unde
   return renderQueryTemplate(`standalone.${type}.url`, vars);
 }
 
+function buildGoogleImagesQuery(topic: StandaloneTopic, release: Release | null | undefined, customQuery?: string | null): string {
+  const notes = (topic.notes || '').trim();
+  const url = (topic.url || '').trim();
+  let host = '';
+  try { if (url) host = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+  const slug = url ? url.split('/').filter(Boolean).slice(-1)[0]?.replace(/[-_]+/g, ' ').replace(/\.\w+$/, '') : '';
+  const renderWith = (tpl: string, vars: Record<string, string>) => {
+    const out = tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, n) => (vars[n] ?? ''));
+    return out.replace(/\s+/g, ' ').trim();
+  };
+  const vars: Record<string, string> = release
+    ? { artist: release.artist, album: release.album, year: release.release_date?.slice(0, 4) || '', notes, slug, host }
+    : { artist: '', album: '', year: '', notes, slug, host };
+  if (customQuery && customQuery.trim()) return renderWith(customQuery, vars);
+  // Fallback default
+  if (release) return `"${release.artist}" "${release.album}" album cover high resolution`;
+  if (slug || notes) return `${[slug, notes].filter(Boolean).join(' ')} album cover high resolution`.trim();
+  return '';
+}
+
 // ─── Inline Add Release form ────────────────────────────────────────────────
 
 function AddReleaseInline({ onCreated, onCancel }: { onCreated: (r: Release) => void; onCancel: () => void }) {
@@ -546,12 +566,21 @@ function TopicStep({
   };
 
   const googleQuery = buildGoogleQuery(topic, selectedRelease, selectedTemplate?.google_query);
+  const googleImagesQuery = buildGoogleImagesQuery(topic, selectedRelease, selectedTemplate?.google_images_query);
   const openGoogle = () => {
     if (!googleQuery) {
       toast.error('Preencha o input para gerar a query');
       return;
     }
     const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+  const openGoogleImages = () => {
+    if (!googleImagesQuery) {
+      toast.error('Preencha o input para gerar a query de imagens');
+      return;
+    }
+    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(googleImagesQuery)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
@@ -652,6 +681,16 @@ function TopicStep({
               <ExternalLink className="mr-1 h-3.5 w-3.5" />
               Pesquisar no Google
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={openGoogleImages}
+              disabled={!googleImagesQuery}
+              title={googleImagesQuery || 'Preencha o input para gerar a query de imagens'}
+            >
+              <ExternalLink className="mr-1 h-3.5 w-3.5" />
+              Google Imagens
+            </Button>
             <CopyExportRow
               text={topic.prompt_text}
               filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
@@ -663,6 +702,11 @@ function TopicStep({
         {googleQuery && (
           <p className="truncate text-[11px] text-muted-foreground" title={googleQuery}>
             <span className="font-semibold">Query Google:</span> {googleQuery}
+          </p>
+        )}
+        {googleImagesQuery && (
+          <p className="truncate text-[11px] text-muted-foreground" title={googleImagesQuery}>
+            <span className="font-semibold">Query Imagens:</span> {googleImagesQuery}
           </p>
         )}
         <Textarea

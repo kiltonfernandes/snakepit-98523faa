@@ -36,7 +36,7 @@ interface Props {
 export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChanged }: Props) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ id: string | null; name: string; topic_type: string; template_text: string; description: string; google_query: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string | null; name: string; topic_type: string; template_text: string; description: string; google_query: string; google_images_query: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = async () => {
@@ -73,6 +73,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
       template_text: builtinText,
       description: '',
       google_query: defaultQuery,
+      google_images_query: '"{{artist}}" "{{album}}" album cover high resolution',
     });
   };
 
@@ -90,6 +91,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
       template_text: t.template_text,
       description: t.description || '',
       google_query: t.google_query || '',
+      google_images_query: t.google_images_query || '',
     });
   };
 
@@ -107,6 +109,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
           template_text: editing.template_text,
           description: editing.description,
           google_query: editing.google_query,
+          google_images_query: editing.google_images_query,
         });
         toast.success('Prompt atualizado');
       } else {
@@ -116,6 +119,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
           template_text: editing.template_text,
           description: editing.description,
           google_query: editing.google_query,
+          google_images_query: editing.google_images_query,
         });
         toast.success('Prompt criado');
       }
@@ -247,6 +251,19 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
                   />
                   <p className="text-[11px] text-muted-foreground">
                     Disparada pelo botão "Pesquisar no Google". Placeholders: <code>{'{{artist}}'}</code>, <code>{'{{album}}'}</code>, <code>{'{{year}}'}</code>, <code>{'{{notes}}'}</code>, <code>{'{{slug}}'}</code>, <code>{'{{host}}'}</code>. Vazio = usa o template global em Configurações.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Query do Google Imagens</Label>
+                  <Textarea
+                    rows={2}
+                    value={editing.google_images_query}
+                    onChange={e => setEditing({ ...editing, google_images_query: e.target.value })}
+                    placeholder='Ex.: "{{artist}}" "{{album}}" album cover high resolution'
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Disparada pelo botão "Google Imagens" para buscar a capa. Mesmos placeholders da query acima. Vazio = usa fallback baseado em artista/álbum.
                   </p>
                 </div>
                 <div className="space-y-1">
