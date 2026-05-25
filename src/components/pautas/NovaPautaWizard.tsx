@@ -49,7 +49,7 @@ import {
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
-import { usePromptTemplates, PromptTemplate } from '@/lib/prompt-templates';
+import { usePromptTemplates, PromptTemplate, getComponentPrompt } from '@/lib/prompt-templates';
 import { PromptTemplatesManager } from './PromptTemplatesManager';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
@@ -539,7 +539,7 @@ function TopicStep({
       notes: topic.notes,
       release: selectedRelease,
       platform: settings,
-    }, selectedTemplate?.template_text);
+    }, getComponentPrompt(selectedTemplate, 'pauta_completa') || selectedTemplate?.template_text);
     if (!topic.prompt_text || topic.prompt_text === lastAuto) {
       setLastAuto(fresh);
       dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
