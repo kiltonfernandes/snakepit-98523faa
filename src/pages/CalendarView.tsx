@@ -952,7 +952,8 @@ export default function CalendarView() {
               <Button variant="outline" size="sm" className="ml-2" onClick={() => setPreviewPauta(null)}>Fechar</Button>
             </div>
           </div>
-          <div className="flex-1 overflow-y-auto" style={{ fontSize: `${previewFontSize}px` }}>
+          <div className="flex-1 overflow-y-auto">
+          <div style={{ fontSize: `${previewFontSize}px`, zoom: previewFontSize / 16 } as any}>
           {previewPauta && (() => {
             // Standalone pauta: render topics-based layout with release links
             if (previewPauta.is_standalone) {
