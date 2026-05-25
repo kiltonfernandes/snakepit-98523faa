@@ -210,6 +210,26 @@ function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | unde
   return renderQueryTemplate(`standalone.${type}.url`, vars);
 }
 
+function buildGoogleImagesQuery(topic: StandaloneTopic, release: Release | null | undefined, customQuery?: string | null): string {
+  const notes = (topic.notes || '').trim();
+  const url = (topic.url || '').trim();
+  let host = '';
+  try { if (url) host = new URL(url).hostname.replace(/^www\./, ''); } catch {}
+  const slug = url ? url.split('/').filter(Boolean).slice(-1)[0]?.replace(/[-_]+/g, ' ').replace(/\.\w+$/, '') : '';
+  const renderWith = (tpl: string, vars: Record<string, string>) => {
+    const out = tpl.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, n) => (vars[n] ?? ''));
+    return out.replace(/\s+/g, ' ').trim();
+  };
+  const vars: Record<string, string> = release
+    ? { artist: release.artist, album: release.album, year: release.release_date?.slice(0, 4) || '', notes, slug, host }
+    : { artist: '', album: '', year: '', notes, slug, host };
+  if (customQuery && customQuery.trim()) return renderWith(customQuery, vars);
+  // Fallback default
+  if (release) return `"${release.artist}" "${release.album}" album cover high resolution`;
+  if (slug || notes) return `${[slug, notes].filter(Boolean).join(' ')} album cover high resolution`.trim();
+  return '';
+}
+
 // ─── Inline Add Release form ────────────────────────────────────────────────
 
 function AddReleaseInline({ onCreated, onCancel }: { onCreated: (r: Release) => void; onCancel: () => void }) {
