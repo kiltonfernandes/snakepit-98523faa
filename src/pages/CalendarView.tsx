@@ -519,7 +519,14 @@ export default function CalendarView() {
       >
         <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
         <div className="mt-2 space-y-1.5">
-          {items.map((item, i) => (
+          {items.map((item, i) => {
+            const relatedMat = item.type === 'pauta'
+              ? materials.find(m => m.episode_date === item.data.publication_date)
+              : item.type === 'material'
+                ? item.data
+                : null;
+            const readyToSchedule = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id) && !relatedMat.spotify_link;
+            return (
             <button
               key={`${item.type}-${i}`}
               className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
@@ -528,7 +535,7 @@ export default function CalendarView() {
                   : item.type === 'release'
                     ? 'border-border bg-secondary/40 hover:border-primary/30 hover:bg-secondary/60'
                     : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
-              }`}
+              } ${readyToSchedule ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]' : ''}`}
               onClick={() => {
                 if (item.type === 'pauta') {
                   const mat = materials.find(m => m.episode_date === item.data.publication_date);
@@ -579,7 +586,8 @@ export default function CalendarView() {
                 </div>
               )}
             </button>
-          ))}
+            );
+          })}
         </div>
       </div>
     );
