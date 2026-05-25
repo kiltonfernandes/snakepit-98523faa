@@ -278,6 +278,28 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
+              {/* Standalone Episode Prompts */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <FileCode className="h-4 w-4" /> Prompts de Episódios Avulsos
+                  </CardTitle>
+                  <CardDescription>
+                    Resenha, notícia, aniversário, entrevista e outros — usados nas pautas avulsas.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">
+                      Crie e edite templates por tipo de bloco
+                    </span>
+                    <Button size="sm" className="gap-2" onClick={() => setStandalonePromptsOpen(true)}>
+                      <FileCode className="h-3.5 w-3.5" /> Gerenciar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Description Template */}
               <Card>
                 <CardHeader>
