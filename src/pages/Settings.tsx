@@ -758,6 +758,34 @@ export default function Settings() {
             </Card>
           </motion.div>
         </TabsContent>
+
+        {/* TAB: Pautas Legacy */}
+        <TabsContent value="legacy">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="space-y-4"
+          >
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Archive className="h-4 w-4" /> Pautas Legacy (semanais)
+                </CardTitle>
+                <CardDescription>
+                  Editor antigo organizado por semana — Insumos, Conteúdo, Flow e Management.
+                  Mantido aqui como sub-aba para acessar pautas semanais já existentes.
+                  Para criar episódios novos, use a aba <strong>Pautas</strong> na barra lateral.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-2">
+                <div className="rounded-lg border border-border/40 bg-muted/10 p-4">
+                  <LegacyPautas />
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        </TabsContent>
       </Tabs>
 
       <PromptManager
