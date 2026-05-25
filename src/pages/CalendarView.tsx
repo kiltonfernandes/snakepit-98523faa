@@ -1041,6 +1041,7 @@ export default function CalendarView() {
             );
           })()}
           </div>
+          </div>
         </DialogContent>
       </Dialog>
 
