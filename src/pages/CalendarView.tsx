@@ -21,6 +21,8 @@ import {
   Sparkles,
   Trash2,
   Wand2,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
