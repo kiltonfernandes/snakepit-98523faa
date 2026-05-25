@@ -648,7 +648,7 @@ function TopicStep({
               size="sm"
               variant="outline"
               onClick={regeneratePrompt}
-              title="Reinjeta os inputs (release, notas, regras da plataforma) no prompt"
+              title="Anexa o conteúdo de Direção editorial / notas ao final do prompt"
             >
               <RefreshCw className="mr-1 h-3.5 w-3.5" />
               Atualizar prompt
