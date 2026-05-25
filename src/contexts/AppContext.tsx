@@ -389,6 +389,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateSettings = useCallback((s: Partial<AppSettings>) => {
     setSettings(prev => ({ ...prev, ...s }));
+    if (s.google_query_templates_json) {
+      setQueryTemplateOverrides(s.google_query_templates_json);
+    }
     supabase.from('app_settings' as any).update(s as any).eq('singleton_id', 1).then();
     logActivity('Configurações atualizadas', JSON.stringify(s));
   }, [logActivity]);
