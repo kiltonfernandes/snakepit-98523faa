@@ -36,6 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { renderQueryTemplate } from '@/lib/google-query-templates';
 import { useApp } from '@/contexts/AppContext';
 import { Release, Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType, TitleOption, DaySlot } from '@/lib/types';
 import {
