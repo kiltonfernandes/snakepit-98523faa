@@ -192,14 +192,35 @@ export default function CalendarView() {
 
   const getPautasForDate = (dateStr: string) => pautas.filter((p) => p.publication_date === dateStr);
 
+  const getUnlinkedMaterialsForDate = (dateStr: string) =>
+    materials.filter((m) => m.episode_date === dateStr && !m.source_pauta_id);
+
+  const getMaterialForPauta = (pauta: Pauta) => {
+    const linkedMaterial = materials.find((m) => m.source_pauta_id === pauta.id);
+    if (linkedMaterial) return linkedMaterial;
+
+    const unlinkedMaterials = getUnlinkedMaterialsForDate(pauta.publication_date);
+    return unlinkedMaterials.length === 1 ? unlinkedMaterials[0] : null;
+  };
+
+  const getPautaForMaterial = (material: EpisodeMaterial) => {
+    if (material.source_pauta_id) {
+      return pautas.find((p) => p.id === material.source_pauta_id) || null;
+    }
+
+    const sameDayPautas = getPautasForDate(material.episode_date);
+    return sameDayPautas.length === 1 ? sameDayPautas[0] : null;
+  };
+
   const getItemsForDate = (dateStr: string) => {
     const items: { type: 'pauta' | 'material' | 'release'; data: any }[] = [];
 
     if (showPautas) {
       const dayPautas = getPautasForDate(dateStr);
+      const dayPautaIds = new Set(dayPautas.map((p) => p.id));
       dayPautas.forEach((p) => items.push({ type: 'pauta', data: p }));
       materials
-        .filter((m) => m.episode_date === dateStr && !dayPautas.some((p) => p.publication_date === m.episode_date))
+        .filter((m) => m.episode_date === dateStr && (!m.source_pauta_id || !dayPautaIds.has(m.source_pauta_id)))
         .forEach((m) => items.push({ type: 'material', data: m }));
     }
 
@@ -521,8 +542,7 @@ export default function CalendarView() {
         <div className="mt-2 space-y-1.5">
           {items.map((item, i) => {
             const relatedMat = item.type === 'pauta'
-              ? (materials.find(m => m.source_pauta_id === item.data.id)
-                  || materials.find(m => m.episode_date === item.data.publication_date && !m.source_pauta_id))
+              ? getMaterialForPauta(item.data)
               : item.type === 'material'
                 ? item.data
                 : null;
@@ -902,7 +922,7 @@ export default function CalendarView() {
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold">Ações rápidas</h3>
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {
-                    const pauta = pautas.find(p => p.publication_date === selectedMaterial.episode_date);
+                    const pauta = getPautaForMaterial(selectedMaterial);
                     if (pauta) setPreviewPauta(pauta);
                     else toast.info('Nenhuma pauta para este episódio');
                   }}>
