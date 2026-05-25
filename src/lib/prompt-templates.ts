@@ -15,7 +15,7 @@ export interface PromptTemplate {
   topic_type: string; // StandaloneTopicType or 'custom'
   template_text: string;
   description: string;
-  google_query: string;
+  google_query: string | null;
   is_default: boolean;
   is_builtin: boolean;
   created_at: string;
