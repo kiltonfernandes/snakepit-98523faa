@@ -566,12 +566,21 @@ function TopicStep({
   };
 
   const googleQuery = buildGoogleQuery(topic, selectedRelease, selectedTemplate?.google_query);
+  const googleImagesQuery = buildGoogleImagesQuery(topic, selectedRelease, selectedTemplate?.google_images_query);
   const openGoogle = () => {
     if (!googleQuery) {
       toast.error('Preencha o input para gerar a query');
       return;
     }
     const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+  const openGoogleImages = () => {
+    if (!googleImagesQuery) {
+      toast.error('Preencha o input para gerar a query de imagens');
+      return;
+    }
+    const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(googleImagesQuery)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
 
@@ -672,6 +681,16 @@ function TopicStep({
               <ExternalLink className="mr-1 h-3.5 w-3.5" />
               Pesquisar no Google
             </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={openGoogleImages}
+              disabled={!googleImagesQuery}
+              title={googleImagesQuery || 'Preencha o input para gerar a query de imagens'}
+            >
+              <ExternalLink className="mr-1 h-3.5 w-3.5" />
+              Google Imagens
+            </Button>
             <CopyExportRow
               text={topic.prompt_text}
               filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
@@ -683,6 +702,11 @@ function TopicStep({
         {googleQuery && (
           <p className="truncate text-[11px] text-muted-foreground" title={googleQuery}>
             <span className="font-semibold">Query Google:</span> {googleQuery}
+          </p>
+        )}
+        {googleImagesQuery && (
+          <p className="truncate text-[11px] text-muted-foreground" title={googleImagesQuery}>
+            <span className="font-semibold">Query Imagens:</span> {googleImagesQuery}
           </p>
         )}
         <Textarea
