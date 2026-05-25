@@ -107,6 +107,7 @@ export default function CalendarView() {
   const [showPautas, setShowPautas] = useState(true);
   const [editForm, setEditForm] = useState({ artist: '', album: '', release_date: '', comments: '' });
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  const [previewFontSize, setPreviewFontSize] = useState(16);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
 
   // Cover generation inline state
