@@ -536,3 +536,57 @@ export function getStandaloneDescriptionPrompt(title: string, content: string, p
 export function getStandaloneCoverPrompt(content: string, platform?: Partial<AppSettings> | null): string {
   return fill(PROMPT_COVER, { content, platform_block: buildPlatformBlock(platform) });
 }
+
+// ─── Stage-aware (per topic type) prompts ──────────────────────────────────
+
+/**
+ * Built-in TEXT for a (stage, type) combination. Used when the prompt_templates
+ * row has template_text === '__BUILTIN__'. We start from the shared base prompt
+ * and append a small per-type instruction so each pauta type can be tweaked.
+ */
+const TYPE_HINT_TITLE: Record<StandaloneTopicType, string> = {
+  anniversary: 'Foco: marco de aniversário (Xº ano), banda e álbum em destaque.',
+  review: 'Foco: ângulo crítico do disco — o que o torna marcante hoje.',
+  news: 'Foco: o fato central da notícia, sem sensacionalismo.',
+  interview: 'Foco: convidado e álbum entrevistado, tom de conversa.',
+};
+const TYPE_HINT_DESCRIPTION: Record<StandaloneTopicType, string> = {
+  anniversary: 'Inclua banda, álbum e ano original na introdução.',
+  review: 'Inclua artista, álbum, gênero e nota interna se houver.',
+  news: 'Inclua fonte e link da matéria original quando disponível.',
+  interview: 'Inclua nome do(s) convidado(s), banda e álbum discutido.',
+};
+const TYPE_HINT_COVER: Record<StandaloneTopicType, string> = {
+  anniversary: 'Visual nostálgico/celebrativo, com referência à era do disco.',
+  review: 'Foque na arte do disco original e tipografia editorial pesada.',
+  news: 'Visual jornalístico/urgente, contraste alto.',
+  interview: 'Visual estúdio/conversa, microfone ou retrato editorial do convidado.',
+};
+
+function withTypeHint(base: string, hint: string): string {
+  return `${base}\n\nESPECÍFICO DESTE TIPO:\n${hint}`;
+}
+
+export function getBuiltinStageText(stage: 'title' | 'description' | 'cover', type: StandaloneTopicType | 'custom'): string {
+  const t = (type === 'custom' ? 'review' : type) as StandaloneTopicType;
+  if (stage === 'title') return withTypeHint(PROMPT_TITLE, TYPE_HINT_TITLE[t]);
+  if (stage === 'description') return withTypeHint(PROMPT_DESCRIPTION, TYPE_HINT_DESCRIPTION[t]);
+  return withTypeHint(PROMPT_COVER, TYPE_HINT_COVER[t]);
+}
+
+export function renderStandaloneStagePrompt(
+  stage: 'title' | 'description' | 'cover',
+  type: StandaloneTopicType | 'custom',
+  vars: { content: string; title?: string; platform?: Partial<AppSettings> | null },
+  overrideTemplate?: string | null,
+): string {
+  const tpl =
+    overrideTemplate && overrideTemplate.trim() && overrideTemplate.trim() !== '__BUILTIN__'
+      ? overrideTemplate
+      : getBuiltinStageText(stage, type);
+  return fill(tpl, {
+    content: vars.content,
+    title: vars.title || '',
+    platform_block: buildPlatformBlock(vars.platform),
+  });
+}
