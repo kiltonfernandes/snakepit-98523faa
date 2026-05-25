@@ -54,6 +54,7 @@ const defaultSettings: AppSettings = {
   prompt_overrides_json: {},
   description_template_html: '',
   ai_model: 'google/gemini-2.5-flash',
+  google_query_templates_json: {},
 };
 
 const emptySections: PautaSections = {
