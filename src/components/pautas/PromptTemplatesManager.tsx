@@ -11,18 +11,23 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Plus, Trash2, Save, X, Lock, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   PromptTemplate,
   TOPIC_TYPE_OPTIONS,
+  COMPONENT_KEYS,
+  COMPONENT_LABELS,
+  ComponentKey,
+  ComponentsMap,
   createPromptTemplate,
   updatePromptTemplate,
   deletePromptTemplate,
   listPromptTemplates,
 } from '@/lib/prompt-templates';
-import { getBuiltinTemplateText } from '@/lib/standalone-prompts';
+import { getBuiltinTemplateText, getBuiltinComponentText } from '@/lib/standalone-prompts';
 import { StandaloneTopicType } from '@/lib/types';
 import { getQueryTemplate } from '@/lib/google-query-templates';
 
@@ -36,7 +41,15 @@ interface Props {
 export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChanged }: Props) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ id: string | null; name: string; topic_type: string; template_text: string; description: string; google_query: string; google_images_query: string } | null>(null);
+  const [editing, setEditing] = useState<{
+    id: string | null;
+    name: string;
+    topic_type: string;
+    description: string;
+    google_query: string;
+    google_images_query: string;
+    components: Record<ComponentKey, string>;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = async () => {
@@ -62,18 +75,30 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
   const startNew = () => {
     setSelectedId(null);
     const initialType = defaultType || 'review';
-    const builtinText = ['anniversary', 'review', 'news', 'interview'].includes(initialType)
-      ? getBuiltinTemplateText(initialType as StandaloneTopicType)
-      : '';
     const defaultQuery = getQueryTemplate(`standalone.${initialType}.with_release`) || '';
+    const components: Record<ComponentKey, string> = {
+      pauta_completa: '',
+      capa: '',
+      titulo: '',
+      descricao: '',
+      segway: '',
+      custom: '',
+    };
+    if (['anniversary', 'review', 'news', 'interview'].includes(initialType)) {
+      // Pre-fill component slots with the BUILTIN markers so the editor sees what will be used.
+      components.pauta_completa = '__BUILTIN__';
+      components.capa = '__BUILTIN__';
+      components.titulo = '__BUILTIN__';
+      components.descricao = '__BUILTIN__';
+    }
     setEditing({
       id: null,
       name: '',
       topic_type: initialType,
-      template_text: builtinText,
       description: '',
       google_query: defaultQuery,
       google_images_query: '"{{artist}}" "{{album}}" album cover high resolution',
+      components,
     });
   };
 
@@ -84,39 +109,56 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
       setEditing(null);
       return;
     }
+    const c = t.components_json || {};
+    const components: Record<ComponentKey, string> = {
+      pauta_completa: c.pauta_completa ?? t.template_text ?? '',
+      capa:           c.capa ?? '',
+      titulo:         c.titulo ?? '',
+      descricao:      c.descricao ?? '',
+      segway:         c.segway ?? '',
+      custom:         c.custom ?? '',
+    };
     setEditing({
       id: t.id,
       name: t.name,
       topic_type: t.topic_type,
-      template_text: t.template_text,
       description: t.description || '',
       google_query: t.google_query || '',
       google_images_query: t.google_images_query || '',
+      components,
     });
   };
 
   const save = async () => {
     if (!editing) return;
-    if (!editing.name.trim() || !editing.template_text.trim()) {
-      toast.error('Nome e texto do prompt são obrigatórios.');
+    if (!editing.name.trim()) {
+      toast.error('Nome é obrigatório.');
+      return;
+    }
+    const hasAnyComponent = COMPONENT_KEYS.some(k => (editing.components[k] || '').trim());
+    if (!hasAnyComponent) {
+      toast.error('Preencha pelo menos um componente.');
       return;
     }
     try {
+      const components_json: ComponentsMap = { ...editing.components };
       if (editing.id) {
         await updatePromptTemplate(editing.id, {
           name: editing.name.trim(),
           topic_type: editing.topic_type,
-          template_text: editing.template_text,
+          template_text: editing.components.pauta_completa || '',
+          components_json,
           description: editing.description,
           google_query: editing.google_query,
           google_images_query: editing.google_images_query,
-        });
+        } as any);
         toast.success('Prompt atualizado');
       } else {
         await createPromptTemplate({
           name: editing.name.trim(),
           topic_type: editing.topic_type,
-          template_text: editing.template_text,
+          template_text: editing.components.pauta_completa || '',
+          components_json,
           description: editing.description,
           google_query: editing.google_query,
           google_images_query: editing.google_images_query,
@@ -177,15 +219,15 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle>Gerenciar prompts</DialogTitle>
           <DialogDescription>
-            Prompts ficam atrelados ao tipo de componente da pauta (Review, Notícia, Aniversário, Entrevista ou Outro). Os "padrão" são built-in e não podem ser editados — duplique para criar variações.
+            Cada template está atrelado a um <b>tipo de pauta</b> (Aniversário, Review, Notícia, Entrevista ou Outro) e contém os sub-prompts de cada <b>componente</b> (capa, título, descrição, pauta completa, segway, custom). Os "padrão" são built-in e não podem ser editados — duplique para criar variações.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-[300px_1fr] gap-4">
+        <div className="grid grid-cols-[300px_1fr] gap-4 flex-1 min-h-0">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-muted-foreground">PROMPTS</span>
@@ -254,7 +296,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
             </ScrollArea>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-3 overflow-y-auto pr-2">
             {!editing ? (
               <div className="flex h-full items-center justify-center rounded-md border border-dashed text-sm text-muted-foreground">
                 {selectedId ? 'Prompt built-in (somente leitura). Crie um novo para editar.' : 'Selecione ou crie um prompt'}
@@ -267,11 +309,11 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
                     <Input
                       value={editing.name}
                       onChange={e => setEditing({ ...editing, name: e.target.value })}
-                      placeholder="Ex.: Resenha reflexiva"
+                      placeholder="Ex.: Review (padrão)"
                     />
                   </div>
                   <div className="space-y-1">
-                    <Label>Tipo de componente</Label>
+                    <Label>Tipo de pauta</Label>
                     <Select
                       value={editing.topic_type}
                       onValueChange={v => setEditing({ ...editing, topic_type: v })}
@@ -317,16 +359,101 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
                     Disparada pelo botão "Google Imagens" para buscar a capa. Mesmos placeholders da query acima. Vazio = usa fallback baseado em artista/álbum.
                   </p>
                 </div>
-                <div className="space-y-1">
-                  <Label>Texto do prompt</Label>
-                  <Textarea
-                    rows={18}
-                    value={editing.template_text}
-                    onChange={e => setEditing({ ...editing, template_text: e.target.value })}
-                    className="font-mono text-xs"
-                  />
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase tracking-wide text-muted-foreground">Componentes</Label>
+                  <Accordion type="multiple" defaultValue={['pauta_completa']} className="rounded-md border">
+                    {COMPONENT_KEYS.map((key) => {
+                      const meta = COMPONENT_LABELS[key];
+                      const value = editing.components[key] || '';
+                      const isBuiltin = value.trim() === '__BUILTIN__';
+                      const filled = value.trim().length > 0;
+                      return (
+                        <AccordionItem key={key} value={key} className="border-b last:border-b-0">
+                          <AccordionTrigger className="px-3 py-2 hover:no-underline">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span>{meta.icon}</span>
+                              <span className="font-medium">{meta.label}</span>
+                              {isBuiltin && <Badge variant="secondary" className="text-[9px] uppercase">built-in</Badge>}
+                              {!isBuiltin && filled && <Badge variant="outline" className="text-[9px] uppercase">custom</Badge>}
+                              {!filled && <span className="text-[10px] italic text-muted-foreground">— vazio —</span>}
+                            </div>
+                          </AccordionTrigger>
+                          <AccordionContent className="px-3 pb-3">
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-[11px] text-muted-foreground">{meta.hint}</p>
+                                <div className="flex gap-1">
+                                  {['anniversary','review','news','interview'].includes(editing.topic_type) && ['pauta_completa','capa','titulo','descricao'].includes(key) && (
+                                    <>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        type="button"
+                                        onClick={() => setEditing({
+                                          ...editing,
+                                          components: { ...editing.components, [key]: '__BUILTIN__' },
+                                        })}
+                                        title="Usar prompt built-in deste componente"
+                                      >
+                                        Usar built-in
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        type="button"
+                                        onClick={() => {
+                                          const tt = getBuiltinComponentText(editing.topic_type as StandaloneTopicType, key as any);
+                                          setEditing({
+                                            ...editing,
+                                            components: { ...editing.components, [key]: tt },
+                                          });
+                                        }}
+                                        title="Copia o texto do built-in para edição livre"
+                                      >
+                                        Duplicar built-in
+                                      </Button>
+                                    </>
+                                  )}
+                                  {filled && (
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      type="button"
+                                      onClick={() => setEditing({
+                                        ...editing,
+                                        components: { ...editing.components, [key]: '' },
+                                      })}
+                                      title="Limpar"
+                                    >
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                              {isBuiltin ? (
+                                <div className="rounded border border-dashed bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
+                                  Usando o prompt built-in do Heavynauta para este componente. Clique em <b>Duplicar built-in</b> para customizar.
+                                </div>
+                              ) : (
+                                <Textarea
+                                  rows={key === 'pauta_completa' ? 14 : 8}
+                                  value={value}
+                                  onChange={(e) => setEditing({
+                                    ...editing,
+                                    components: { ...editing.components, [key]: e.target.value },
+                                  })}
+                                  className="font-mono text-xs"
+                                  placeholder={`Prompt do componente "${meta.label}"…`}
+                                />
+                              )}
+                            </div>
+                          </AccordionContent>
+                        </AccordionItem>
+                      );
+                    })}
+                  </Accordion>
                   <p className="text-[11px] text-muted-foreground">
-                    Placeholders disponíveis: <code>{'{{input}}'}</code>, <code>{'{{notes}}'}</code>, <code>{'{{release_block}}'}</code>, <code>{'{{platform_block}}'}</code>
+                    Placeholders: <code>{'{{input}}'}</code>, <code>{'{{notes}}'}</code>, <code>{'{{release_block}}'}</code>, <code>{'{{platform_block}}'}</code>, <code>{'{{content}}'}</code>, <code>{'{{title}}'}</code>.
                   </p>
                 </div>
                 <div className="flex items-center justify-between">
