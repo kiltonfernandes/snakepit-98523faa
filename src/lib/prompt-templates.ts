@@ -17,6 +17,7 @@ export interface PromptTemplate {
   description: string;
   google_query: string | null;
   google_images_query: string | null;
+  sort_order: number;
   is_default: boolean;
   is_builtin: boolean;
   created_at: string;
@@ -32,7 +33,7 @@ export const TOPIC_TYPE_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export async function listPromptTemplates(topicType?: string): Promise<PromptTemplate[]> {
-  let q = supabase.from('prompt_templates').select('*').order('is_default', { ascending: false }).order('name');
+  let q = supabase.from('prompt_templates').select('*').order('sort_order', { ascending: true }).order('name');
   if (topicType) q = q.eq('topic_type', topicType);
   const { data, error } = await q;
   if (error) throw error;
