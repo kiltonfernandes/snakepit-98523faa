@@ -24,6 +24,7 @@ import {
 } from '@/lib/prompt-templates';
 import { getBuiltinTemplateText } from '@/lib/standalone-prompts';
 import { StandaloneTopicType } from '@/lib/types';
+import { getQueryTemplate } from '@/lib/google-query-templates';
 
 interface Props {
   open: boolean;
@@ -35,7 +36,7 @@ interface Props {
 export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChanged }: Props) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{ id: string | null; name: string; topic_type: string; template_text: string; description: string } | null>(null);
+  const [editing, setEditing] = useState<{ id: string | null; name: string; topic_type: string; template_text: string; description: string; google_query: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const refresh = async () => {
@@ -64,12 +65,14 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
     const builtinText = ['anniversary', 'review', 'news', 'interview'].includes(initialType)
       ? getBuiltinTemplateText(initialType as StandaloneTopicType)
       : '';
+    const defaultQuery = getQueryTemplate(`standalone.${initialType}.with_release`) || '';
     setEditing({
       id: null,
       name: '',
       topic_type: initialType,
       template_text: builtinText,
       description: '',
+      google_query: defaultQuery,
     });
   };
 
@@ -86,6 +89,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
       topic_type: t.topic_type,
       template_text: t.template_text,
       description: t.description || '',
+      google_query: t.google_query || '',
     });
   };
 
@@ -102,6 +106,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
           topic_type: editing.topic_type,
           template_text: editing.template_text,
           description: editing.description,
+          google_query: editing.google_query,
         });
         toast.success('Prompt atualizado');
       } else {
@@ -110,6 +115,7 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
           topic_type: editing.topic_type,
           template_text: editing.template_text,
           description: editing.description,
+          google_query: editing.google_query,
         });
         toast.success('Prompt criado');
       }
@@ -229,6 +235,19 @@ export function PromptTemplatesManager({ open, onOpenChange, defaultType, onChan
                     onChange={e => setEditing({ ...editing, description: e.target.value })}
                     placeholder="Para identificar este prompt no seletor"
                   />
+                </div>
+                <div className="space-y-1">
+                  <Label>Query do Google</Label>
+                  <Textarea
+                    rows={2}
+                    value={editing.google_query}
+                    onChange={e => setEditing({ ...editing, google_query: e.target.value })}
+                    placeholder='Ex.: "{{artist}}" "{{album}}" review {{year}}'
+                    className="font-mono text-xs"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Disparada pelo botão "Pesquisar no Google". Placeholders: <code>{'{{artist}}'}</code>, <code>{'{{album}}'}</code>, <code>{'{{year}}'}</code>, <code>{'{{notes}}'}</code>, <code>{'{{slug}}'}</code>, <code>{'{{host}}'}</code>. Vazio = usa o template global em Configurações.
+                  </p>
                 </div>
                 <div className="space-y-1">
                   <Label>Texto do prompt</Label>

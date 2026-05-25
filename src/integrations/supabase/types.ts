@@ -433,6 +433,7 @@ export type Database = {
         Row: {
           created_at: string
           description: string | null
+          google_query: string | null
           id: string
           is_builtin: boolean
           is_default: boolean
@@ -444,6 +445,7 @@ export type Database = {
         Insert: {
           created_at?: string
           description?: string | null
+          google_query?: string | null
           id: string
           is_builtin?: boolean
           is_default?: boolean
@@ -455,6 +457,7 @@ export type Database = {
         Update: {
           created_at?: string
           description?: string | null
+          google_query?: string | null
           id?: string
           is_builtin?: boolean
           is_default?: boolean
