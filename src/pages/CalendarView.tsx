@@ -53,6 +53,8 @@ import { getEffectivePautaStatus } from '@/lib/episode-status';
 import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
 import type { StandaloneTopic } from '@/lib/types';
 import JSZip from 'jszip';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -959,7 +961,9 @@ export default function CalendarView() {
                           {meta?.icon} {meta?.label}
                         </h3>
                         {text ? (
-                          <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{text}</div>
+                          <div className="prose prose-invert max-w-none text-base leading-relaxed text-white/90 prose-headings:text-white prose-strong:text-white prose-a:text-primary prose-blockquote:text-white/70 prose-blockquote:border-white/30">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+                          </div>
                         ) : (
                           <p className="text-base italic text-white/30">Seção sem resposta da IA ainda.</p>
                         )}
@@ -1006,7 +1010,9 @@ export default function CalendarView() {
                       <h3 className="mb-2 text-lg font-bold uppercase tracking-wider text-white">{sec.label}</h3>
                       {contextNote && <p className="mb-2 text-sm italic text-white/50">{contextNote}</p>}
                       {content ? (
-                        <div className="text-base leading-relaxed whitespace-pre-wrap text-white/90">{content}</div>
+                        <div className="prose prose-invert max-w-none text-base leading-relaxed text-white/90 prose-headings:text-white prose-strong:text-white prose-a:text-primary prose-blockquote:text-white/70 prose-blockquote:border-white/30">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                        </div>
                       ) : (
                         <p className="text-base italic text-white/30">Seção não preenchida</p>
                       )}
