@@ -539,15 +539,21 @@ function TopicStep({
   }, [inputLabel, topic.notes, topic.type, selectedRelease?.id, settings.banned_terms_text, settings.brand_tone_temperature, selectedTemplateId]);
 
   const regeneratePrompt = () => {
-    const fresh = getStandaloneTopicPrompt(topic.type, {
-      input: inputLabel,
-      notes: topic.notes,
-      release: selectedRelease,
-      platform: settings,
-    }, selectedTemplate?.template_text);
-    setLastAuto(fresh);
-    dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
-    toast.success('Prompt atualizado com os inputs atuais');
+    const notes = (topic.notes || '').trim();
+    if (!notes) {
+      toast.error('Sem notas para anexar — preencha a Direção editorial / notas');
+      return;
+    }
+    const current = topic.prompt_text || '';
+    const marker = '## Direção editorial adicional';
+    const appendBlock = `\n\n${marker}\n${notes}\n`;
+    // Replace previous appended block if present, otherwise append.
+    const idx = current.indexOf(marker);
+    const next = idx >= 0
+      ? current.slice(0, idx).replace(/\s+$/, '') + appendBlock
+      : current.replace(/\s+$/, '') + appendBlock;
+    dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: next } });
+    toast.success('Notas anexadas ao final do prompt');
   };
 
   const googleQuery = buildGoogleQuery(topic, selectedRelease);
