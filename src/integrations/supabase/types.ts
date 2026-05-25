@@ -431,6 +431,7 @@ export type Database = {
       }
       prompt_templates: {
         Row: {
+          components_json: Json
           created_at: string
           description: string | null
           google_images_query: string | null
@@ -446,6 +447,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          components_json?: Json
           created_at?: string
           description?: string | null
           google_images_query?: string | null
@@ -461,6 +463,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          components_json?: Json
           created_at?: string
           description?: string | null
           google_images_query?: string | null

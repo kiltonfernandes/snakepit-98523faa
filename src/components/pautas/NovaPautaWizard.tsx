@@ -49,7 +49,7 @@ import {
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
-import { usePromptTemplates, PromptTemplate } from '@/lib/prompt-templates';
+import { usePromptTemplates, PromptTemplate, getComponentPrompt } from '@/lib/prompt-templates';
 import { PromptTemplatesManager } from './PromptTemplatesManager';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
@@ -539,7 +539,7 @@ function TopicStep({
       notes: topic.notes,
       release: selectedRelease,
       platform: settings,
-    }, selectedTemplate?.template_text);
+    }, getComponentPrompt(selectedTemplate, 'pauta_completa') || selectedTemplate?.template_text);
     if (!topic.prompt_text || topic.prompt_text === lastAuto) {
       setLastAuto(fresh);
       dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
@@ -748,8 +748,16 @@ function TopicStep({
 
 function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
+  const { allTemplates } = usePromptTemplates();
   const content = aggregatedContent(state.topics, releases);
-  const prompt = getStandaloneTitlePrompt(content, settings);
+  const firstTopic = state.topics[0];
+  const tpl = firstTopic
+    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type)
+      ?? null
+    : null;
+  const override = getComponentPrompt(tpl, 'titulo');
+  const prompt = getStandaloneTitlePrompt(content, settings, override);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">🏷️ Título do episódio</h3>
@@ -815,9 +823,17 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
 
 function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
+  const { allTemplates } = usePromptTemplates();
   const title = state.selectedTitleIndex != null ? state.titleOptions[state.selectedTitleIndex]?.text || '' : '';
   const content = aggregatedContent(state.topics, releases);
-  const prompt = getStandaloneDescriptionPrompt(title, content, settings);
+  const firstTopic = state.topics[0];
+  const tpl = firstTopic
+    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type)
+      ?? null
+    : null;
+  const override = getComponentPrompt(tpl, 'descricao');
+  const prompt = getStandaloneDescriptionPrompt(title, content, settings, override);
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">📝 Descrição do episódio</h3>
@@ -855,7 +871,14 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const { releases, settings } = useApp();
   const { allTemplates } = usePromptTemplates();
   const content = aggregatedContent(state.topics, releases);
-  const prompt = getStandaloneCoverPrompt(content, settings);
+  const firstTopic = state.topics[0];
+  const tpl = firstTopic
+    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type)
+      ?? null
+    : null;
+  const override = getComponentPrompt(tpl, 'capa');
+  const prompt = getStandaloneCoverPrompt(content, settings, override);
   const episodeTitle = state.selectedTitleIndex != null
     ? state.titleOptions[state.selectedTitleIndex]?.text || ''
     : '';

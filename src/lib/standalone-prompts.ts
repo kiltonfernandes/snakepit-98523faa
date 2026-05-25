@@ -525,14 +525,29 @@ export function getBuiltinTemplateText(type: StandaloneTopicType): string {
   }
 }
 
-export function getStandaloneTitlePrompt(content: string, platform?: Partial<AppSettings> | null): string {
-  return fill(PROMPT_TITLE, { content, platform_block: buildPlatformBlock(platform) });
+function resolveBuiltin(template: string | null | undefined, builtin: string): string {
+  if (!template) return builtin;
+  const trimmed = template.trim();
+  if (!trimmed || trimmed === '__BUILTIN__') return builtin;
+  return template;
 }
 
-export function getStandaloneDescriptionPrompt(title: string, content: string, platform?: Partial<AppSettings> | null): string {
-  return fill(PROMPT_DESCRIPTION, { title, content, platform_block: buildPlatformBlock(platform) });
+export function getStandaloneTitlePrompt(content: string, platform?: Partial<AppSettings> | null, override?: string | null): string {
+  return fill(resolveBuiltin(override, PROMPT_TITLE), { content, platform_block: buildPlatformBlock(platform) });
 }
 
-export function getStandaloneCoverPrompt(content: string, platform?: Partial<AppSettings> | null): string {
-  return fill(PROMPT_COVER, { content, platform_block: buildPlatformBlock(platform) });
+export function getStandaloneDescriptionPrompt(title: string, content: string, platform?: Partial<AppSettings> | null, override?: string | null): string {
+  return fill(resolveBuiltin(override, PROMPT_DESCRIPTION), { title, content, platform_block: buildPlatformBlock(platform) });
+}
+
+export function getStandaloneCoverPrompt(content: string, platform?: Partial<AppSettings> | null, override?: string | null): string {
+  return fill(resolveBuiltin(override, PROMPT_COVER), { content, platform_block: buildPlatformBlock(platform) });
+}
+
+/** Returns the raw built-in text for a given component key + topic type. */
+export function getBuiltinComponentText(type: StandaloneTopicType, key: 'pauta_completa' | 'capa' | 'titulo' | 'descricao'): string {
+  if (key === 'capa')      return PROMPT_COVER;
+  if (key === 'titulo')    return PROMPT_TITLE;
+  if (key === 'descricao') return PROMPT_DESCRIPTION;
+  return getBuiltinTemplateText(type);
 }
