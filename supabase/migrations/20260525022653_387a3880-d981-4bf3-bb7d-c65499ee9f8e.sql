@@ -1,0 +1,1 @@
+ALTER TABLE public.prompt_templates ADD COLUMN IF NOT EXISTS google_images_query text;
