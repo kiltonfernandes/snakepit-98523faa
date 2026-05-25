@@ -853,6 +853,7 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
 
 function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
+  const { allTemplates } = usePromptTemplates();
   const content = aggregatedContent(state.topics, releases);
   const prompt = getStandaloneCoverPrompt(content, settings);
   const episodeTitle = state.selectedTitleIndex != null
@@ -884,18 +885,17 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
     const parts: string[] = [];
     for (const t of state.topics) {
       const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
-      if (rel) {
-        parts.push(`"${rel.artist}" "${rel.album}"`);
-      } else if (t.notes) {
-        const first = t.notes.split('\n')[0].slice(0, 80).trim();
-        if (first) parts.push(t.type === 'anniversary' ? `"${first}"` : first);
-      } else if (t.url) {
-        try { parts.push(new URL(t.url).hostname.replace(/^www\./, '')); } catch { /* ignore */ }
-      }
+      // Pega o template default do tipo (ou primeiro disponível) para reaproveitar a query de imagens configurada em Configurações > Prompts.
+      const tpl =
+        allTemplates.find(x => x.topic_type === t.type && x.is_default) ||
+        allTemplates.find(x => x.topic_type === t.type) ||
+        null;
+      const q = buildGoogleImagesQuery(t, rel, tpl?.google_images_query);
+      if (q) parts.push(q);
     }
-    const base = parts.slice(0, 3).join(' OR ');
-    return (base ? `${base} ` : '') + 'album cover high resolution';
-  }, [state.topics, releases]);
+    if (parts.length === 0) return '';
+    return parts.slice(0, 3).join(' OR ');
+  }, [state.topics, releases, allTemplates]);
   const openGoogleImages = () => {
     const url = `https://www.google.com/search?tbm=isch&q=${encodeURIComponent(imageQuery)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
