@@ -773,6 +773,11 @@ export default function Settings() {
         onOpenChange={setStandalonePromptsOpen}
       />
 
+      <GoogleQueryTemplatesManager
+        open={googleQueriesOpen}
+        onOpenChange={setGoogleQueriesOpen}
+      />
+
       <Dialog open={descTemplateOpen} onOpenChange={setDescTemplateOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh]">
           <DialogHeader>
