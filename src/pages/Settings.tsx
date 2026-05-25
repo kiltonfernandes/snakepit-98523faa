@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu, Music, LayoutTemplate, Save, ToggleLeft, ToggleRight, Edit, Loader2 } from 'lucide-react';
+import { Settings as SettingsIcon, Thermometer, Ban, Activity, Plus, X, Copy, Check, Search, Filter, FileCode, FileText, Download, Trash2, Cpu, Music, LayoutTemplate, Save, ToggleLeft, ToggleRight, Edit, Loader2, Archive } from 'lucide-react';
+import LegacyPautas from '@/pages/Pautas';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
@@ -244,13 +245,14 @@ export default function Settings() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className="grid w-full grid-cols-7">
           <TabsTrigger value="tone" className="gap-1.5 text-xs"><Thermometer className="h-3.5 w-3.5" /> Tom & Prompts</TabsTrigger>
           <TabsTrigger value="templates" className="gap-1.5 text-xs"><LayoutTemplate className="h-3.5 w-3.5" /> Templates</TabsTrigger>
           <TabsTrigger value="banned" className="gap-1.5 text-xs"><Ban className="h-3.5 w-3.5" /> Termos Banidos</TabsTrigger>
           <TabsTrigger value="logs" className="gap-1.5 text-xs"><Activity className="h-3.5 w-3.5" /> Logs</TabsTrigger>
           <TabsTrigger value="tokens" className="gap-1.5 text-xs"><Cpu className="h-3.5 w-3.5" /> IA & Tokens</TabsTrigger>
           <TabsTrigger value="audio" className="gap-1.5 text-xs"><Music className="h-3.5 w-3.5" /> Áudio</TabsTrigger>
+          <TabsTrigger value="legacy" className="gap-1.5 text-xs"><Archive className="h-3.5 w-3.5" /> Pautas Legacy</TabsTrigger>
         </TabsList>
 
         {/* TAB: Tom & Prompts */}
