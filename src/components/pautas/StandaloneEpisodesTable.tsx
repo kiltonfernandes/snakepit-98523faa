@@ -266,6 +266,7 @@ function StandaloneEpisodeEditor({
   const { pauta, material } = state;
   const topics = (pauta.standalone_topics || []) as StandaloneTopic[];
   const [editedTopics, setEditedTopics] = useState<StandaloneTopic[]>(topics);
+  const [pubDate, setPubDate] = useState(pauta.publication_date);
   const [descHtml, setDescHtml] = useState(material?.description_html || '');
   const [coverUrl, setCoverUrl] = useState(material?.cover_url || '');
   const [spotify, setSpotify] = useState(material?.spotify_link || '');
@@ -274,6 +275,7 @@ function StandaloneEpisodeEditor({
 
   const save = () => {
     onSavePauta({
+      publication_date: pubDate,
       standalone_topics: editedTopics,
       sections_json: Object.fromEntries(
         editedTopics.map(t => [`standalone_${t.type}`, (t.parsed_text || t.response_text || '').trim()]),
@@ -282,6 +284,7 @@ function StandaloneEpisodeEditor({
     });
     if (material) {
       onSaveMaterial({
+        episode_date: pubDate,
         description_html: descHtml,
         cover_url: coverUrl || null,
         spotify_link: spotify || null,
@@ -303,6 +306,15 @@ function StandaloneEpisodeEditor({
 
         <ScrollArea className="flex-1 px-6 py-6">
           <div className="mx-auto max-w-4xl space-y-6">
+            <div className="space-y-2 rounded-md border border-border p-4">
+              <Label className="text-xs">Data de publicação</Label>
+              <Input
+                type="date"
+                value={pubDate}
+                onChange={(e) => setPubDate(e.target.value)}
+                className="w-48"
+              />
+            </div>
             {editedTopics.map((t, i) => (
               <div key={t.id} className="space-y-3 rounded-md border border-border p-4">
                 <div className="flex items-center gap-2">
