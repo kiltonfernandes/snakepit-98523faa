@@ -2195,6 +2195,7 @@ export default function Pautas() {
                         ) : (
                           <p className="text-lg italic text-white/30">Seção não preenchida</p>
                         )}
+                        <YouTubeEmbeds text={rawContent} />
                         {quickLinks && (
                           <div className="mt-4 border-t border-white/5 pt-3">
                             <h4 className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/40">Links rápidos</h4>
