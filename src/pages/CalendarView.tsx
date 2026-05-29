@@ -1044,6 +1044,7 @@ export default function CalendarView() {
                         ) : (
                           <p className="text-base italic text-white/30">Seção sem resposta da IA ainda.</p>
                         )}
+                        <YouTubeEmbeds text={text} />
                       </article>
                     );
                   })}
@@ -1093,6 +1094,7 @@ export default function CalendarView() {
                       ) : (
                         <p className="text-base italic text-white/30">Seção não preenchida</p>
                       )}
+                      <YouTubeEmbeds text={content} />
                     </article>
                   );
                 })}
