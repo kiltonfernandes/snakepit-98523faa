@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Cloud, CloudUpload, ExternalLink, Layers, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useApp } from '@/contexts/AppContext';
@@ -18,6 +17,8 @@ import { ElapsedTimer } from '@/components/rivaldo/ElapsedTimer';
 import { ProcessingReportPanel } from '@/components/rivaldo/ProcessingReportPanel';
 import { DesktopJobsPanel } from '@/components/rivaldo/DesktopJobsPanel';
 import { HeavynautaBrand } from '@/components/rivaldo/HeavynautaBrand';
+import { EpisodePickerModal } from '@/components/rivaldo/EpisodePickerModal';
+import { ChevronDown } from 'lucide-react';
 import { mergeQueuedJobIntoState, prepareDesktopPipelinePayload } from '@/lib/desktop/queue';
 import {
   AudioParams,
@@ -121,6 +122,7 @@ const Rivaldo = () => {
   const rivaldo = useRivaldo();
   const bulk = useRivaldoBulk();
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [uploadToCloud, setUploadToCloud] = useState(true); // default ON per user preference
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
   const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>({ ...DEFAULT_PROCESSING_PROFILE });
@@ -220,26 +222,17 @@ const Rivaldo = () => {
       <div className="px-6 py-4 flex items-center gap-4 border-b border-border">
         <HeavynautaBrand compact />
         <div className="flex-1 max-w-md ml-8">
-          <Select value={filename} onValueChange={setFilename}>
-            <SelectTrigger className="w-full bg-transparent border-0 border-b border-border rounded-none focus:ring-0 text-sm font-mono h-auto py-2">
-              <SelectValue placeholder="Selecione o episódio..." />
-            </SelectTrigger>
-            <SelectContent>
-              {episodeGroups.length === 0 && (
-                <div className="px-3 py-2 text-xs text-muted-foreground">Nenhuma pauta finalizada</div>
-              )}
-              {episodeGroups.map((group) => (
-                <SelectGroup key={group.weekId}>
-                  <SelectLabel className="text-xs font-semibold text-muted-foreground">{group.weekLabel}</SelectLabel>
-                  {group.items.map((opt, i) => (
-                    <SelectItem key={`${opt.value}-${i}`} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              ))}
-            </SelectContent>
-          </Select>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="w-full flex items-center justify-between gap-2 border-0 border-b border-border bg-transparent py-2 text-left text-sm font-mono hover:border-primary/60 focus:outline-none"
+            title="Selecionar episódio"
+          >
+            <span className={filename ? 'truncate' : 'truncate text-muted-foreground'}>
+              {filename || 'Selecione o episódio...'}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          </button>
         </div>
         <div className="ml-auto flex items-center gap-2">
           {bulk.isProcessing && (
@@ -337,6 +330,7 @@ const Rivaldo = () => {
       </div>
 
       <BulkModal open={bulkOpen} onOpenChange={setBulkOpen} introFile={files.intro} outroFile={files.outro} audioParams={audioParams} processingProfile={processingProfile} desktopMode={desktopMode} desktopState={desktopState} desktopQueueAvailable={queueAvailable} desktopQueueStatusMessage={queueStatusMessage} onDesktopJobQueued={(job) => { setDesktopState((prev) => mergeQueuedJobIntoState(prev, job)); setQueueFeedback({ type: 'success', message: `Job ${job.name} enfileirado.` }); addUiLog(`Job ${job.name} enfileirado.`, 'success'); }} />
+      <EpisodePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={setFilename} selected={filename} groups={episodeGroups} />
     </div>
   );
 };
