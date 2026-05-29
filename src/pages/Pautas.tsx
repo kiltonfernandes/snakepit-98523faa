@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { resolveAllLinks } from '@/lib/dynamic-links';
+import { YouTubeEmbeds } from '@/components/shared/YouTubeEmbeds';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
@@ -2194,6 +2195,7 @@ export default function Pautas() {
                         ) : (
                           <p className="text-lg italic text-white/30">Seção não preenchida</p>
                         )}
+                        <YouTubeEmbeds text={rawContent} />
                         {quickLinks && (
                           <div className="mt-4 border-t border-white/5 pt-3">
                             <h4 className="mb-2 text-xs font-semibold uppercase tracking-widest text-white/40">Links rápidos</h4>

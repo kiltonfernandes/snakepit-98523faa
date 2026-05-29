@@ -28,6 +28,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { YouTubeEmbeds } from '@/components/shared/YouTubeEmbeds';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1043,6 +1044,7 @@ export default function CalendarView() {
                         ) : (
                           <p className="text-base italic text-white/30">Seção sem resposta da IA ainda.</p>
                         )}
+                        <YouTubeEmbeds text={text} />
                       </article>
                     );
                   })}
@@ -1092,6 +1094,7 @@ export default function CalendarView() {
                       ) : (
                         <p className="text-base italic text-white/30">Seção não preenchida</p>
                       )}
+                      <YouTubeEmbeds text={content} />
                     </article>
                   );
                 })}
