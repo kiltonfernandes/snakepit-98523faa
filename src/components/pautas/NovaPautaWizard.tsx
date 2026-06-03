@@ -1000,9 +1000,10 @@ export interface NovaPautaWizardProps {
   open: boolean;
   onClose: () => void;
   onCreated?: (pautaId: string) => void;
+  initialDate?: string;
 }
 
-export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardProps) {
+export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaPautaWizardProps) {
   const { addPauta, addMaterial, logActivity, releases, settings } = useApp();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [saving, setSaving] = useState(false);
@@ -1017,7 +1018,10 @@ export function NovaPautaWizard({ open, onClose, onCreated }: NovaPautaWizardPro
         if (parsed && typeof parsed === 'object') dispatch({ kind: 'hydrate', state: { ...initialState(), ...parsed } });
       }
     } catch {}
-  }, [open]);
+    if (initialDate) {
+      dispatch({ kind: 'setField', field: 'publicationDate', value: initialDate });
+    }
+  }, [open, initialDate]);
 
   // Persist draft
   useEffect(() => {

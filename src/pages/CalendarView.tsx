@@ -16,6 +16,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Mic,
+  Plus,
   Search,
   Share2,
   Sparkles,
@@ -55,6 +56,7 @@ import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inj
 import { getEffectivePautaStatus } from '@/lib/episode-status';
 import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
 import type { StandaloneTopic } from '@/lib/types';
+import { NovaPautaWizard } from '@/components/pautas/NovaPautaWizard';
 import JSZip from 'jszip';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -111,6 +113,9 @@ export default function CalendarView() {
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
   const [previewFontSize, setPreviewFontSize] = useState(16);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
+
+  // Create-pauta wizard (opened from "+" on a calendar day)
+  const [createDate, setCreateDate] = useState<string | null>(null);
 
   // Cover generation inline state
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
@@ -562,7 +567,7 @@ export default function CalendarView() {
 
     return (
       <div
-        className={`min-h-[88px] rounded-xl border p-2.5 text-xs transition-all ${
+        className={`group min-h-[88px] rounded-xl border p-2.5 text-xs transition-all ${
           isToday
             ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
             : items.length > 0
@@ -570,7 +575,20 @@ export default function CalendarView() {
               : 'border-border/60 bg-card/60 hover:border-primary/30'
         } ${className}`}
       >
-        <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
+        <div className="flex items-center justify-between">
+          <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCreateDate(dateStr);
+            }}
+            title="Criar nova pauta neste dia"
+            className="flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground opacity-0 transition-all hover:border-primary hover:bg-primary/10 hover:text-primary group-hover:opacity-100"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
         <div className="mt-2 space-y-1.5">
           {items.map((item) => {
             const relatedMat = item.material;
@@ -1208,6 +1226,14 @@ export default function CalendarView() {
         onOpenChange={setCoverProgressOpen}
         title="Gerando capa..."
         items={coverProgressItems}
+      />
+
+      {/* Nova pauta (aberta a partir do "+" do calendário) */}
+      <NovaPautaWizard
+        open={!!createDate}
+        initialDate={createDate || undefined}
+        onClose={() => setCreateDate(null)}
+        onCreated={() => setCreateDate(null)}
       />
 
       {/* Confirm delete from OneDrive */}
