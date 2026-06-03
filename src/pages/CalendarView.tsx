@@ -1228,6 +1228,14 @@ export default function CalendarView() {
         items={coverProgressItems}
       />
 
+      {/* Nova pauta (aberta a partir do "+" do calendário) */}
+      <NovaPautaWizard
+        open={!!createDate}
+        initialDate={createDate || undefined}
+        onClose={() => setCreateDate(null)}
+        onCreated={() => setCreateDate(null)}
+      />
+
       {/* Confirm delete from OneDrive */}
       <AlertDialog open={confirmDeleteDriveOpen} onOpenChange={setConfirmDeleteDriveOpen}>
         <AlertDialogContent>
