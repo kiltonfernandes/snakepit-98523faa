@@ -575,7 +575,20 @@ export default function CalendarView() {
               : 'border-border/60 bg-card/60 hover:border-primary/30'
         } ${className}`}
       >
-        <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
+        <div className="flex items-center justify-between">
+          <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setCreateDate(dateStr);
+            }}
+            title="Criar nova pauta neste dia"
+            className="flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground opacity-0 transition-all hover:border-primary hover:bg-primary/10 hover:text-primary group-hover:opacity-100"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
         <div className="mt-2 space-y-1.5">
           {items.map((item) => {
             const relatedMat = item.material;
