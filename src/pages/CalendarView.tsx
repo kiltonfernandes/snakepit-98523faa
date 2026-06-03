@@ -16,6 +16,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Mic,
+  Plus,
   Search,
   Share2,
   Sparkles,
@@ -55,6 +56,7 @@ import { injectMentionedSection, stripMentionedSection } from '@/lib/episode/inj
 import { getEffectivePautaStatus } from '@/lib/episode-status';
 import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
 import type { StandaloneTopic } from '@/lib/types';
+import { NovaPautaWizard } from '@/components/pautas/NovaPautaWizard';
 import JSZip from 'jszip';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
