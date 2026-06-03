@@ -567,7 +567,7 @@ export default function CalendarView() {
 
     return (
       <div
-        className={`min-h-[88px] rounded-xl border p-2.5 text-xs transition-all ${
+        className={`group min-h-[88px] rounded-xl border p-2.5 text-xs transition-all ${
           isToday
             ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
             : items.length > 0
