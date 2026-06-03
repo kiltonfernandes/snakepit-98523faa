@@ -114,6 +114,9 @@ export default function CalendarView() {
   const [previewFontSize, setPreviewFontSize] = useState(16);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
 
+  // Create-pauta wizard (opened from "+" on a calendar day)
+  const [createDate, setCreateDate] = useState<string | null>(null);
+
   // Cover generation inline state
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
   const [coverImageUrl, setCoverImageUrl] = useState('');
