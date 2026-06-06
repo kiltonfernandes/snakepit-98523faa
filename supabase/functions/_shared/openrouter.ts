@@ -16,6 +16,9 @@ export const OPENROUTER_FREE_CHAIN = [
 ];
 /** Default per-model "time to first byte" deadline. */
 const DEFAULT_DEADLINE_MS = 5000;
+/** Deadline for the paid fallback model — must not be aborted aggressively,
+ *  especially when web_search tools are in use. */
+const FALLBACK_DEADLINE_MS = 90_000;
 /** Back-compat export (old code imports OPENROUTER_MODEL). */
 export const OPENROUTER_MODEL = OPENROUTER_FALLBACK_MODEL;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -108,7 +111,10 @@ export function callOpenRouterStreamWithFallback(opts: CallOpenRouterOptions): R
         const isLast = i === chain.length - 1;
         controller.enqueue(metaEvent({ type: "trying", model, attempt: i + 1 }));
         const ctl = new AbortController();
-        const timer = setTimeout(() => ctl.abort("deadline"), deadlineMs);
+        // The paid fallback (last in chain) gets a longer deadline so we don't
+        // kill legitimately slow responses (e.g. web_search tool runs).
+        const effectiveDeadline = isLast ? Math.max(deadlineMs, FALLBACK_DEADLINE_MS) : deadlineMs;
+        const timer = setTimeout(() => ctl.abort("deadline"), effectiveDeadline);
         try {
           const res = await postOpenRouter(model, { ...opts, stream: true }, ctl.signal);
           if (!res.ok || !res.body) {
@@ -169,8 +175,10 @@ export async function callOpenRouterText(opts: CallOpenRouterOptions): Promise<{
   let lastErr: any = null;
   for (let i = 0; i < chain.length; i++) {
     const model = chain[i];
+    const isLast = i === chain.length - 1;
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort("deadline"), deadlineMs);
+    const effectiveDeadline = isLast ? Math.max(deadlineMs, FALLBACK_DEADLINE_MS) : deadlineMs;
+    const timer = setTimeout(() => ctl.abort("deadline"), effectiveDeadline);
     try {
       const res = await postOpenRouter(model, { ...opts, stream: false }, ctl.signal);
       clearTimeout(timer);

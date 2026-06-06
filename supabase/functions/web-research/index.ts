@@ -31,6 +31,10 @@ serve(async (req) => {
         temperature: 0.3,
         maxTokens: 2500,
         webSearch: true,
+        // Web search with tool-calling takes much longer than a plain chat call.
+        // The shared default (5s) is for "time to first byte" on free-chain probing
+        // — too aggressive here. Allow up to 90s.
+        deadlineMs: 90_000,
       });
       return new Response(JSON.stringify({ notes: text }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
