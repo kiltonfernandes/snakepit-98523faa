@@ -879,6 +879,61 @@ function TopicStep({
 
 // ─── Material steps (title / description / cover) ───────────────────────────
 
+async function streamGeneratePauta(opts: {
+  prompt: string;
+  bannedTerms?: string[];
+  temperature?: number;
+  webSearch?: boolean;
+  onChunk: (full: string) => void;
+}) {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+    },
+    body: JSON.stringify({
+      prompt: opts.prompt,
+      bannedTerms: opts.bannedTerms || [],
+      temperature: opts.temperature,
+      webSearch: !!opts.webSearch,
+    }),
+  });
+  if (!resp.ok) {
+    const err = await resp.json().catch(() => ({ error: `Erro ${resp.status}` }));
+    throw new Error(err.error || `Erro ${resp.status}`);
+  }
+  const reader = resp.body?.getReader();
+  if (!reader) throw new Error('Sem stream de resposta');
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let full = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let nlIdx: number;
+    while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+      let line = buffer.slice(0, nlIdx);
+      buffer = buffer.slice(nlIdx + 1);
+      if (line.endsWith('\r')) line = line.slice(0, -1);
+      if (!line.startsWith('data: ')) continue;
+      const jsonStr = line.slice(6).trim();
+      if (jsonStr === '[DONE]') break;
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const content = parsed.choices?.[0]?.delta?.content;
+        if (content) {
+          full += content;
+          opts.onChunk(full);
+        }
+      } catch { /* skip partial */ }
+    }
+  }
+  return full;
+}
+
 function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
   const { allTemplates } = usePromptTemplates();
@@ -891,6 +946,35 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
     : null;
   const override = getComponentPrompt(tpl, 'titulo');
   const prompt = getStandaloneTitlePrompt(content, settings, override);
+  const [generating, setGenerating] = useState(false);
+  const generateTitles = async () => {
+    if (!prompt.trim()) {
+      toast.error('Prompt vazio.');
+      return;
+    }
+    setGenerating(true);
+    dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
+    dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
+    try {
+      const full = await streamGeneratePauta({
+        prompt,
+        bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
+        temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+        webSearch: false,
+        onChunk: (full) => {
+          dispatch({ kind: 'setField', field: 'titleResponse', value: full });
+        },
+      });
+      const opts = parseTitleOptionsFromText(full);
+      dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
+      if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
+      toast.success('Títulos gerados');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao gerar títulos');
+    } finally {
+      setGenerating(false);
+    }
+  };
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">🏷️ Título do episódio</h3>
@@ -904,12 +988,25 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Cole as 3 opções de título (uma por linha)</Label>
-          <CopyExportRow
-            text={state.titleResponse}
-            filename="resposta_titulos.txt"
-            label="Copiar opções"
-            exportLabel="Exportar opções"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={generateTitles}
+              disabled={generating || !prompt.trim()}
+              title="Gera 3 títulos via OpenRouter (DeepSeek V4 Flash) sem web search"
+            >
+              {generating
+                ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+              Gerar títulos
+            </Button>
+            <CopyExportRow
+              text={state.titleResponse}
+              filename="resposta_titulos.txt"
+              label="Copiar opções"
+              exportLabel="Exportar opções"
+            />
+          </div>
         </div>
         <Textarea
           rows={6}
