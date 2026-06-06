@@ -36,7 +36,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import { renderQueryTemplate, getQueryTemplate, type QueryTemplateKey } from '@/lib/google-query-templates';
+import { renderQueryTemplate, hasQueryTemplateOverride, type QueryTemplateKey } from '@/lib/google-query-templates';
 import { useApp } from '@/contexts/AppContext';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
@@ -207,10 +207,7 @@ function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | unde
     } as Record<string, string>;
     // Priority: user override in Settings → per-template google_query → built-in default.
     const key = `standalone.${type}.with_release` as QueryTemplateKey;
-    const settingsTpl = getQueryTemplate(key);
-    const builtin = DEFAULT_TEMPLATES_WITH_RELEASE[type] || '';
-    const isOverride = settingsTpl && settingsTpl !== builtin;
-    if (isOverride) return renderWith(settingsTpl, vars);
+    if (hasQueryTemplateOverride(key)) return renderQueryTemplate(key, vars);
     if (customQuery && customQuery.trim()) return renderWith(customQuery, vars);
     return renderQueryTemplate(key, vars);
   }
@@ -219,10 +216,7 @@ function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | unde
   if (!slug && !notes && !host) return '';
   const vars = { slug: slug || '', notes, host } as Record<string, string>;
   const key = `standalone.${type}.url` as QueryTemplateKey;
-  const settingsTpl = getQueryTemplate(key);
-  const builtin = DEFAULT_TEMPLATES_URL[type] || '';
-  const isOverride = settingsTpl && settingsTpl !== builtin;
-  if (isOverride) return renderWith(settingsTpl, vars);
+  if (hasQueryTemplateOverride(key)) return renderQueryTemplate(key, vars);
   if (customQuery && customQuery.trim()) return renderWith(customQuery, vars);
   return renderQueryTemplate(key, vars);
 }
