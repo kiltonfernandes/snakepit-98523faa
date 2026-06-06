@@ -501,8 +501,8 @@ function buildAuditText(
 // ─── Topic step ─────────────────────────────────────────────────────────────
 
 function TopicStep({
-  topic, dispatch,
-}: { topic: StandaloneTopic; dispatch: React.Dispatch<Action> }) {
+  topic, dispatch, state,
+}: { topic: StandaloneTopic; dispatch: React.Dispatch<Action>; state: WizardState }) {
   const meta = STANDALONE_TOPIC_META[topic.type];
   const { releases, settings } = useApp();
   const selectedRelease = topic.release_id ? releases.find(r => r.id === topic.release_id) : null;
