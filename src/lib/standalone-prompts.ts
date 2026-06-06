@@ -337,6 +337,8 @@ DIREÇÃO EDITORIAL:
 
 const PROMPT_NEWS = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Transforme a notícia abaixo em uma matéria editorial Heavynauta.
 - Estrutura: o que aconteceu, quem está envolvido, contexto, impacto.
 - Cruze com contexto da cena/banda/gênero.
