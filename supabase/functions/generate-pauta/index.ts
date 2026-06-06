@@ -28,7 +28,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { prompt, bannedTerms: bannedOverride, webSearch, temperature: tempOverride, system } = body;
+    const { prompt, bannedTerms: bannedOverride, webSearch, temperature: tempOverride, system, models, deadlinesByModel } = body;
     if (!prompt || typeof prompt !== "string") {
       return new Response(JSON.stringify({ error: "prompt is required" }), {
         status: 400,
@@ -51,6 +51,8 @@ serve(async (req) => {
       bannedTerms,
       webSearch: !!webSearch,
       stream: true,
+      models: Array.isArray(models) && models.length > 0 ? models : undefined,
+      deadlinesByModel: deadlinesByModel && typeof deadlinesByModel === "object" ? deadlinesByModel : undefined,
     });
 
     return new Response(stream, {
