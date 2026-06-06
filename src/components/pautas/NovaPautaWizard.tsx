@@ -1018,6 +1018,7 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
   const override = getComponentPrompt(tpl, 'descricao');
   const prompt = getStandaloneDescriptionPrompt(title, content, settings, override);
   const [generating, setGenerating] = useState(false);
+  const aiProgress = useAiCallProgress();
   const generateDescription = async () => {
     if (!prompt.trim()) {
       toast.error('Prompt vazio.');
@@ -1032,6 +1033,8 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
         bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
         temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
         webSearch: false,
+        label: 'Gerando descrição',
+        progress: aiProgress,
         onChunk: (full) => {
           dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
           dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
