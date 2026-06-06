@@ -512,7 +512,11 @@ function TopicStep({
     [allTemplates, topic.type],
   );
   const [managerOpen, setManagerOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedTemplateId, setSelectedTemplateIdState] = useState<string>(topic.template_id || '');
+  const setSelectedTemplateId = (id: string) => {
+    setSelectedTemplateIdState(id);
+    dispatch({ kind: 'patchTopic', id: topic.id, patch: { template_id: id || null } });
+  };
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [autoSearching, setAutoSearching] = useState(false);
   const [generatingPauta, setGeneratingPauta] = useState(false);
@@ -862,7 +866,8 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const content = aggregatedContent(state.topics, releases);
   const firstTopic = state.topics[0];
   const tpl = firstTopic
-    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+    ? (firstTopic.template_id ? allTemplates.find(x => x.id === firstTopic.template_id) : null)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
       ?? allTemplates.find(x => x.topic_type === firstTopic.type)
       ?? null
     : null;
@@ -983,7 +988,8 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
   const content = aggregatedContent(state.topics, releases);
   const firstTopic = state.topics[0];
   const tpl = firstTopic
-    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+    ? (firstTopic.template_id ? allTemplates.find(x => x.id === firstTopic.template_id) : null)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
       ?? allTemplates.find(x => x.topic_type === firstTopic.type)
       ?? null
     : null;
@@ -1072,7 +1078,8 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const content = aggregatedContent(state.topics, releases);
   const firstTopic = state.topics[0];
   const tpl = firstTopic
-    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+    ? (firstTopic.template_id ? allTemplates.find(x => x.id === firstTopic.template_id) : null)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
       ?? allTemplates.find(x => x.topic_type === firstTopic.type)
       ?? null
     : null;
@@ -1107,8 +1114,10 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
     const parts: string[] = [];
     for (const t of state.topics) {
       const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
-      // Pega o template default do tipo (ou primeiro disponível) para reaproveitar a query de imagens configurada em Configurações > Prompts.
+      // Usa o template selecionado para este tópico (persistido em template_id);
+      // fallback: default do tipo, depois qualquer um do tipo.
       const tpl =
+        (t.template_id ? allTemplates.find(x => x.id === t.template_id) : null) ||
         allTemplates.find(x => x.topic_type === t.type && x.is_default) ||
         allTemplates.find(x => x.topic_type === t.type) ||
         null;
