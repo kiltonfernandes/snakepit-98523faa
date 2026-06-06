@@ -990,6 +990,17 @@ function TopicStep({
             Resposta registrada ({topic.response_text.length} caracteres).
           </div>
         )}
+        {topic.response_text && (
+          <div className="space-y-2 rounded-md border border-border bg-card/30 p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                Pré-visualização da pauta (Markdown)
+              </Label>
+            </div>
+            <ReleaseLinkBar release={selectedRelease} />
+            <MarkdownView text={topic.response_text} />
+          </div>
+        )}
       </div>
     </div>
   );
