@@ -659,6 +659,50 @@ function TopicStep({
         onChanged={refresh}
       />
 
+      <Dialog open={searchModalOpen} onOpenChange={setSearchModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pesquisar no Google</DialogTitle>
+            <DialogDescription>
+              Escolha como conduzir a pesquisa para este tópico.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+            <span className="font-semibold">Query:</span> {googleQuery}
+          </div>
+          <div className="grid gap-3">
+            <Button
+              variant="outline"
+              className="h-auto justify-start py-3 text-left"
+              onClick={() => { openGoogle(); setSearchModalOpen(false); }}
+              disabled={autoSearching}
+            >
+              <ExternalLink className="mr-2 h-4 w-4 shrink-0" />
+              <span className="flex flex-col items-start gap-0.5">
+                <span className="font-semibold">Busca manual</span>
+                <span className="text-[11px] text-muted-foreground">Abre o Google em uma nova aba com a query montada.</span>
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto justify-start py-3 text-left"
+              onClick={runAutoSearch}
+              disabled={autoSearching}
+            >
+              {autoSearching
+                ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                : <Sparkles className="mr-2 h-4 w-4 shrink-0" />}
+              <span className="flex flex-col items-start gap-0.5">
+                <span className="font-semibold">Busca automática (IA)</span>
+                <span className="text-[11px] text-muted-foreground">
+                  DeepSeek V4 Flash + web search. Popula a Direção editorial / notas.
+                </span>
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-2">
         <Label>{meta.inputLabel}</Label>
         {meta.inputKind === 'release' ? (
