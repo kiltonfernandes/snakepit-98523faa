@@ -512,7 +512,11 @@ function TopicStep({
     [allTemplates, topic.type],
   );
   const [managerOpen, setManagerOpen] = useState(false);
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [selectedTemplateId, setSelectedTemplateIdState] = useState<string>(topic.template_id || '');
+  const setSelectedTemplateId = (id: string) => {
+    setSelectedTemplateIdState(id);
+    dispatch({ kind: 'patchTopic', id: topic.id, patch: { template_id: id || null } });
+  };
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [autoSearching, setAutoSearching] = useState(false);
   const [generatingPauta, setGeneratingPauta] = useState(false);
