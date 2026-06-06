@@ -40,7 +40,7 @@ export default function Dashboard() {
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]));
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([`${new Date().getFullYear()}-${new Date().getMonth()}`]));
   const [filterStatus, setFilterStatus] = useState<'all' | 'incomplete' | 'complete'>('all');
-  const [dashTab, setDashTab] = useState('current');
+  const [dashTab, setDashTab] = useState('releases');
 
   const DASHBOARD_SLOTS = DAY_SLOTS.filter(d => d.key !== 'sunday');
 
@@ -262,9 +262,8 @@ export default function Dashboard() {
 
       <Tabs value={dashTab} onValueChange={setDashTab}>
         <TabsList>
-          <TabsTrigger value="current" className="gap-1.5"><Zap className="h-3.5 w-3.5" /> Semana Atual</TabsTrigger>
-          <TabsTrigger value="history" className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Histórico</TabsTrigger>
           <TabsTrigger value="releases" className="gap-1.5"><Disc className="h-3.5 w-3.5" /> Releases</TabsTrigger>
+          <TabsTrigger value="history" className="gap-1.5"><Clock className="h-3.5 w-3.5" /> Histórico</TabsTrigger>
         </TabsList>
 
         {/* ===== CURRENT WEEK TAB ===== */}
