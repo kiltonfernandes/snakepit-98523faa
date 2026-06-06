@@ -1111,8 +1111,10 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
     const parts: string[] = [];
     for (const t of state.topics) {
       const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
-      // Pega o template default do tipo (ou primeiro disponível) para reaproveitar a query de imagens configurada em Configurações > Prompts.
+      // Usa o template selecionado para este tópico (persistido em template_id);
+      // fallback: default do tipo, depois qualquer um do tipo.
       const tpl =
+        (t.template_id ? allTemplates.find(x => x.id === t.template_id) : null) ||
         allTemplates.find(x => x.topic_type === t.type && x.is_default) ||
         allTemplates.find(x => x.topic_type === t.type) ||
         null;
