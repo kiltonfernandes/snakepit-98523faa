@@ -513,6 +513,7 @@ function TopicStep({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [autoSearching, setAutoSearching] = useState(false);
+  const [generatingPauta, setGeneratingPauta] = useState(false);
 
   // Auto-select default template for this type once loaded.
   useEffect(() => {
@@ -618,6 +619,68 @@ function TopicStep({
       id: topic.id,
       patch: { response_text: val, parsed_text: val.trim() },
     });
+  };
+
+  const generatePautaWithAI = async () => {
+    const prompt = (topic.prompt_text || '').trim();
+    if (!prompt) {
+      toast.error('Prompt vazio — preencha antes de gerar.');
+      return;
+    }
+    setGeneratingPauta(true);
+    onPaste('');
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({
+          prompt,
+          bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
+          temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+          webSearch: false,
+        }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: `Erro ${resp.status}` }));
+        throw new Error(err.error || `Erro ${resp.status}`);
+      }
+      const reader = resp.body?.getReader();
+      if (!reader) throw new Error('Sem stream de resposta');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let full = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let nlIdx: number;
+        while ((nlIdx = buffer.indexOf('\n')) !== -1) {
+          let line = buffer.slice(0, nlIdx);
+          buffer = buffer.slice(nlIdx + 1);
+          if (line.endsWith('\r')) line = line.slice(0, -1);
+          if (!line.startsWith('data: ')) continue;
+          const jsonStr = line.slice(6).trim();
+          if (jsonStr === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(jsonStr);
+            const content = parsed.choices?.[0]?.delta?.content;
+            if (content) {
+              full += content;
+              onPaste(full);
+            }
+          } catch { /* skip partial */ }
+        }
+      }
+      toast.success('Pauta gerada');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao gerar pauta');
+    } finally {
+      setGeneratingPauta(false);
+    }
   };
 
   return (
@@ -792,12 +855,25 @@ function TopicStep({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Cole aqui a resposta da IA</Label>
-          <CopyExportRow
-            text={topic.response_text}
-            filename={`resposta_${topic.type}_${topic.id.slice(0, 6)}.txt`}
-            label="Copiar resposta"
-            exportLabel="Exportar resposta"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={generatePautaWithAI}
+              disabled={generatingPauta || !topic.prompt_text?.trim()}
+              title="Gera a pauta via OpenRouter (DeepSeek V4 Flash) sem web search"
+            >
+              {generatingPauta
+                ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+              Gerar pauta
+            </Button>
+            <CopyExportRow
+              text={topic.response_text}
+              filename={`resposta_${topic.type}_${topic.id.slice(0, 6)}.txt`}
+              label="Copiar resposta"
+              exportLabel="Exportar resposta"
+            />
+          </div>
         </div>
         <Textarea
           rows={10}
