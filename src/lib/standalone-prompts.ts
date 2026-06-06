@@ -510,6 +510,8 @@ REGRAS EDITORIAIS DA PLATAFORMA:
 
 const PROMPT_COVER = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Descreva uma capa quadrada (3000x3000) para o episódio.
 Estilo Heavynauta: visual editorial pesado, contrastado, tipografia forte.
 Em uma frase de até 30 palavras, dê uma direção visual concreta (cor, mood, elementos).
