@@ -58,8 +58,19 @@ export const STANDALONE_TOPIC_META: Record<StandaloneTopicType, StandaloneTopicM
 
 const SHARED_VOICE_RULES = `Você escreve para o Heavynauta — Papo Sério Sobre Música Pesada.
 Voz editorial: precisa, equilibrada, sem clickbait enganoso, respeitosa com todos os subgêneros.
-Português (BR), clareza ESL B1, frases curtas, sem markdown além de [Texto](url) para catálogo.
+Português (BR), clareza ESL B1, frases curtas.
 Nunca invente fatos. Se faltar insumo, faça um fallback honesto.`;
+
+/**
+ * Output rule applied to every prompt EXCEPT a descrição final (que é HTML).
+ * Garante que o LLM devolve Markdown puro, sem encapsular tudo em ```fences```
+ * ou em blocos de aspas triplas — o que quebra a renderização no app.
+ */
+const MARKDOWN_OUTPUT_RULE = `FORMATO DE SAÍDA (OBRIGATÓRIO):
+- Responda em Markdown puro (cabeçalhos #, ##, ###; listas com -; links [texto](url); negrito **assim**).
+- NÃO envolva a resposta inteira em \`\`\`markdown ... \`\`\` nem em \`\`\` ... \`\`\` nem em ''' ... '''.
+- Use blocos de código \`\`\` APENAS para trechos de código de verdade — nunca para o corpo do texto.
+- Não acrescente nenhum prefixo ou sufixo fora do Markdown (sem "Aqui está:", sem assinatura).`;
 
 // ─── Dynamic context blocks ────────────────────────────────────────────────
 
@@ -120,6 +131,8 @@ export function buildPlatformBlock(settings: Partial<AppSettings> | null | undef
 
 const PROMPT_ANNIVERSARY = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Escreva uma seção editorial sobre o aniversário de um álbum.
 - Identifique álbum, banda, ano de lançamento, marco do aniversário.
 - Cubra contexto histórico, recepção, impacto e legado.
@@ -140,6 +153,8 @@ DIREÇÃO EDITORIAL:
 {{notes}}`;
 
 const PROMPT_REVIEW = `${SHARED_VOICE_RULES}
+
+${MARKDOWN_OUTPUT_RULE}
 
 TAREFA: Monte a PAUTA completa de um episódio AVULSO de review de álbum no formato Heavynauta abaixo.
 Siga EXATAMENTE a estrutura, ordem, emojis, bullets, indentação e blocos fixos. Não troque rótulos.
@@ -322,6 +337,8 @@ DIREÇÃO EDITORIAL:
 
 const PROMPT_NEWS = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Transforme a notícia abaixo em uma matéria editorial Heavynauta.
 - Estrutura: o que aconteceu, quem está envolvido, contexto, impacto.
 - Cruze com contexto da cena/banda/gênero.
@@ -337,6 +354,9 @@ DIREÇÃO EDITORIAL:
 {{notes}}`;
 
 const PROMPT_INTERVIEW = `Você é um(a) produtor(a) de podcast e entrevistador(a) especialista em Heavy Metal, com experiência em entrevistas com bandas, artistas, produtores e músicos.
+
+${MARKDOWN_OUTPUT_RULE}
+
 Sua tarefa é criar uma pauta completa e escalável para o quadro:
 Heavynauta — Faixa a Faixa
 Este quadro faz parte do podcast apresentado por Kilton Fernandes e Rafa.
@@ -448,6 +468,8 @@ DIREÇÃO EDITORIAL EXTRA:
 
 const PROMPT_TITLE = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Gere 3 opções de título para um episódio Heavynauta a partir do conteúdo abaixo.
 Cada opção em uma linha, sem numeração nem marcadores. Estilos:
 1) Clickbait (instigante mas honesto)
@@ -487,6 +509,8 @@ REGRAS EDITORIAIS DA PLATAFORMA:
 {{platform_block}}`;
 
 const PROMPT_COVER = `${SHARED_VOICE_RULES}
+
+${MARKDOWN_OUTPUT_RULE}
 
 TAREFA: Descreva uma capa quadrada (3000x3000) para o episódio.
 Estilo Heavynauta: visual editorial pesado, contrastado, tipografia forte.

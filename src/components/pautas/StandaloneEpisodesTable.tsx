@@ -32,6 +32,9 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { MarkdownView } from '@/components/shared/MarkdownView';
+import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
+import { sanitizeMarkdownOutput } from '@/lib/ai/markdown-sanitize';
 
 const TYPE_FILTERS: { value: 'all' | StandaloneTopicType; label: string }[] = [
   { value: 'all', label: 'Todos os blocos' },
@@ -264,6 +267,7 @@ function StandaloneEpisodeEditor({
   onSaveMaterial: (m: Partial<EpisodeMaterial>) => void;
 }) {
   const { pauta, material } = state;
+  const { releases } = useApp();
   const topics = (pauta.standalone_topics || []) as StandaloneTopic[];
   const [editedTopics, setEditedTopics] = useState<StandaloneTopic[]>(topics);
   const [pubDate, setPubDate] = useState(pauta.publication_date);
@@ -321,6 +325,9 @@ function StandaloneEpisodeEditor({
                   <span className="text-xl">{STANDALONE_TOPIC_META[t.type].icon}</span>
                   <h4 className="font-semibold">{STANDALONE_TOPIC_META[t.type].label}</h4>
                 </div>
+                {t.release_id && (
+                  <ReleaseLinkBar release={releases.find(r => r.id === t.release_id) || null} />
+                )}
                 {STANDALONE_TOPIC_META[t.type].inputKind === 'url' && (
                   <div className="space-y-1">
                     <Label className="text-xs">URL</Label>
@@ -351,10 +358,19 @@ function StandaloneEpisodeEditor({
                     value={t.response_text}
                     onChange={(e) => {
                       const v = e.target.value;
-                      setEditedTopics(prev => prev.map((x, idx) => idx === i ? { ...x, response_text: v, parsed_text: v.trim() } : x));
+                      const clean = sanitizeMarkdownOutput(v);
+                      setEditedTopics(prev => prev.map((x, idx) => idx === i ? { ...x, response_text: clean, parsed_text: clean.trim() } : x));
                     }}
                   />
                 </div>
+                {t.response_text && (
+                  <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
+                    <Label className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Pré-visualização (Markdown)
+                    </Label>
+                    <MarkdownView text={t.response_text} />
+                  </div>
+                )}
               </div>
             ))}
 
