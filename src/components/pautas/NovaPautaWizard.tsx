@@ -1064,6 +1064,34 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
     : null;
   const override = getComponentPrompt(tpl, 'descricao');
   const prompt = getStandaloneDescriptionPrompt(title, content, settings, override);
+  const [generating, setGenerating] = useState(false);
+  const generateDescription = async () => {
+    if (!prompt.trim()) {
+      toast.error('Prompt vazio.');
+      return;
+    }
+    setGenerating(true);
+    dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
+    dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
+    try {
+      const full = await streamGeneratePauta({
+        prompt,
+        bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
+        temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+        webSearch: false,
+        onChunk: (full) => {
+          dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
+          dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
+        },
+      });
+      dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
+      toast.success('Descrição gerada');
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha ao gerar descrição');
+    } finally {
+      setGenerating(false);
+    }
+  };
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-semibold">📝 Descrição do episódio</h3>
@@ -1077,12 +1105,25 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Cole a descrição (HTML ou texto)</Label>
-          <CopyExportRow
-            text={state.descriptionHtml}
-            filename="descricao.html"
-            label="Copiar HTML"
-            exportLabel="Exportar HTML"
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              onClick={generateDescription}
+              disabled={generating || !prompt.trim()}
+              title="Gera a descrição via OpenRouter (DeepSeek V4 Flash) sem web search"
+            >
+              {generating
+                ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+              Gerar com IA
+            </Button>
+            <CopyExportRow
+              text={state.descriptionHtml}
+              filename="descricao.html"
+              label="Copiar HTML"
+              exportLabel="Exportar HTML"
+            />
+          </div>
         </div>
         <Textarea
           rows={10}
