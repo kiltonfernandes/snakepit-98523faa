@@ -131,6 +131,8 @@ export function buildPlatformBlock(settings: Partial<AppSettings> | null | undef
 
 const PROMPT_ANNIVERSARY = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Escreva uma seção editorial sobre o aniversário de um álbum.
 - Identifique álbum, banda, ano de lançamento, marco do aniversário.
 - Cubra contexto histórico, recepção, impacto e legado.
