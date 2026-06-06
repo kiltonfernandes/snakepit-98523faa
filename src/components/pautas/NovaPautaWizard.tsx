@@ -897,6 +897,7 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const override = getComponentPrompt(tpl, 'titulo');
   const prompt = getStandaloneTitlePrompt(content, settings, override);
   const [generating, setGenerating] = useState(false);
+  const aiProgress = useAiCallProgress();
   const generateTitles = async () => {
     if (!prompt.trim()) {
       toast.error('Prompt vazio.');
@@ -911,6 +912,8 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
         bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
         temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
         webSearch: false,
+        label: 'Gerando títulos',
+        progress: aiProgress,
         onChunk: (full) => {
           dispatch({ kind: 'setField', field: 'titleResponse', value: full });
         },
