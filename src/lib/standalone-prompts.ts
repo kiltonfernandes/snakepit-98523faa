@@ -9,6 +9,7 @@
  * weekly pautas pipeline so the editorial tone stays consistent.
  */
 import { StandaloneTopicType, Release, AppSettings } from './types';
+import { getPromptText, type PromptOverrides } from './prompt-defaults';
 
 export interface StandaloneTopicMeta {
   type: StandaloneTopicType;
@@ -456,7 +457,8 @@ TAREFA: Escreva a DESCRIÇÃO (HTML simples) para a publicação do episódio.
 - Use só <p>, <b>, <i>, <a>, <br>, <ul>, <li>.
 - Use o título como âncora.
 - Inclua os principais tópicos como lista curta.
-- NÃO inclua o bloco institucional "Heavynauta — Papo Sério Sobre Música Pesada".
+- INCLUA o BLOCO INSTITUCIONAL Heavynauta EXATAMENTE como fornecido abaixo, ao FINAL da descrição (último item).
+- Siga as REGRAS DE "MENCIONADO NESTE EPISÓDIO" abaixo: se houver conteúdo mencionado, insira a seção no TOPO da descrição (antes do bloco institucional).
 - NÃO inclua CTAs de plataformas.
 
 TÍTULO ESCOLHIDO:
@@ -464,6 +466,12 @@ TÍTULO ESCOLHIDO:
 
 CONTEÚDO DO EPISÓDIO:
 {{content}}
+
+REGRAS DE "MENCIONADO NESTE EPISÓDIO":
+{{mentioned_instructions}}
+
+BLOCO INSTITUCIONAL (cole no FINAL da descrição, sem alterações):
+{{brand_block}}
 
 REGRAS EDITORIAIS DA PLATAFORMA:
 {{platform_block}}`;
@@ -537,7 +545,14 @@ export function getStandaloneTitlePrompt(content: string, platform?: Partial<App
 }
 
 export function getStandaloneDescriptionPrompt(title: string, content: string, platform?: Partial<AppSettings> | null, override?: string | null): string {
-  return fill(resolveBuiltin(override, PROMPT_DESCRIPTION), { title, content, platform_block: buildPlatformBlock(platform) });
+  const overrides = ((platform?.prompt_overrides_json as PromptOverrides | undefined) ?? {}) as PromptOverrides;
+  return fill(resolveBuiltin(override, PROMPT_DESCRIPTION), {
+    title,
+    content,
+    platform_block: buildPlatformBlock(platform),
+    mentioned_instructions: getPromptText('material_mentioned_instructions', overrides),
+    brand_block: getPromptText('material_brand_block', overrides),
+  });
 }
 
 export function getStandaloneCoverPrompt(content: string, platform?: Partial<AppSettings> | null, override?: string | null): string {
