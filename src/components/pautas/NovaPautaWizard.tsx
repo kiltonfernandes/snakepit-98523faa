@@ -640,51 +640,15 @@ function TopicStep({
     setGeneratingPauta(true);
     onPaste('');
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          prompt,
-          bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
-          temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
-          webSearch: false,
-        }),
+      await streamGeneratePauta({
+        prompt,
+        bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
+        temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+        webSearch: false,
+        label: 'Gerando pauta',
+        progress: aiProgressTopic,
+        onChunk: (full) => onPaste(full),
       });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: `Erro ${resp.status}` }));
-        throw new Error(err.error || `Erro ${resp.status}`);
-      }
-      const reader = resp.body?.getReader();
-      if (!reader) throw new Error('Sem stream de resposta');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let full = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nlIdx: number;
-        while ((nlIdx = buffer.indexOf('\n')) !== -1) {
-          let line = buffer.slice(0, nlIdx);
-          buffer = buffer.slice(nlIdx + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              full += content;
-              onPaste(full);
-            }
-          } catch { /* skip partial */ }
-        }
-      }
       toast.success('Pauta gerada');
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao gerar pauta');
