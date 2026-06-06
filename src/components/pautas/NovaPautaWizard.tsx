@@ -51,6 +51,7 @@ import {
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { usePromptTemplates, PromptTemplate, getComponentPrompt } from '@/lib/prompt-templates';
 import { PromptTemplatesManager } from './PromptTemplatesManager';
 
