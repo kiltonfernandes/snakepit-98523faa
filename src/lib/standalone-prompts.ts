@@ -354,6 +354,9 @@ DIREÇÃO EDITORIAL:
 {{notes}}`;
 
 const PROMPT_INTERVIEW = `Você é um(a) produtor(a) de podcast e entrevistador(a) especialista em Heavy Metal, com experiência em entrevistas com bandas, artistas, produtores e músicos.
+
+${MARKDOWN_OUTPUT_RULE}
+
 Sua tarefa é criar uma pauta completa e escalável para o quadro:
 Heavynauta — Faixa a Faixa
 Este quadro faz parte do podcast apresentado por Kilton Fernandes e Rafa.
