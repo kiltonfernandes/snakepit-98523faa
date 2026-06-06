@@ -798,36 +798,7 @@ function TopicStep({
         <h3 className="text-lg font-semibold">{meta.label}</h3>
       </div>
 
-      {selectedRelease && (() => {
-        const links: Array<[string, string | null | undefined]> = [
-          ['Metal Archives', selectedRelease.metal_archives_url],
-          ['YouTube', selectedRelease.youtube_url],
-          ['Spotify', selectedRelease.spotify_url],
-          ['Deezer', selectedRelease.deezer_url],
-          ['Apple Music', selectedRelease.apple_music_url],
-          ['Bandcamp', selectedRelease.bandcamp_url],
-        ];
-        const active = links.filter(([, url]) => !!url);
-        if (active.length === 0) return null;
-        return (
-          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 p-2">
-            <span className="text-[11px] uppercase tracking-wide text-muted-foreground mr-1">
-              {selectedRelease.artist} — {selectedRelease.album}
-            </span>
-            {active.map(([label, url]) => (
-              <Button
-                key={label}
-                size="sm"
-                variant="outline"
-                onClick={() => window.open(url!, '_blank', 'noopener,noreferrer')}
-              >
-                <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                {label}
-              </Button>
-            ))}
-          </div>
-        );
-      })()}
+      <ReleaseLinkBar release={selectedRelease} />
 
       <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
         <div className="flex items-center justify-between gap-2">
