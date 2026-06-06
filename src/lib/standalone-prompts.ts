@@ -154,6 +154,8 @@ DIREÇÃO EDITORIAL:
 
 const PROMPT_REVIEW = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Monte a PAUTA completa de um episódio AVULSO de review de álbum no formato Heavynauta abaixo.
 Siga EXATAMENTE a estrutura, ordem, emojis, bullets, indentação e blocos fixos. Não troque rótulos.
 Preencha todos os campos entre colchetes com base nos DADOS DO RELEASE e na pesquisa.
