@@ -38,6 +38,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { renderQueryTemplate } from '@/lib/google-query-templates';
 import { useApp } from '@/contexts/AppContext';
+import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
+import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { Release, Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType, TitleOption, DaySlot } from '@/lib/types';
 import {
   STANDALONE_TOPIC_META,
