@@ -829,11 +829,6 @@ function TopicStep({
             <span className="font-semibold">Query Google:</span> {googleQuery}
           </p>
         )}
-        {googleImagesQuery && (
-          <p className="truncate text-[11px] text-muted-foreground" title={googleImagesQuery}>
-            <span className="font-semibold">Query Imagens:</span> {googleImagesQuery}
-          </p>
-        )}
         <Textarea
           rows={10}
           value={topic.prompt_text}
