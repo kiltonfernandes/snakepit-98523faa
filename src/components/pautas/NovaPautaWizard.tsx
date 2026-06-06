@@ -511,6 +511,8 @@ function TopicStep({
   );
   const [managerOpen, setManagerOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [autoSearching, setAutoSearching] = useState(false);
 
   // Auto-select default template for this type once loaded.
   useEffect(() => {
@@ -575,6 +577,32 @@ function TopicStep({
     const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
   };
+  const runAutoSearch = async () => {
+    if (!googleQuery) {
+      toast.error('Preencha o input para gerar a query');
+      return;
+    }
+    setAutoSearching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('web-research', {
+        body: { query: googleQuery, context: topic.notes || '' },
+      });
+      if (error) throw error;
+      const notes = (data as any)?.notes as string | undefined;
+      if (!notes) throw new Error('Resposta vazia da IA');
+      const prev = (topic.notes || '').trim();
+      const merged = prev
+        ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
+        : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
+      dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: merged } });
+      toast.success('Pesquisa concluída — notas atualizadas');
+      setSearchModalOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha na pesquisa automática');
+    } finally {
+      setAutoSearching(false);
+    }
+  };
   const openGoogleImages = () => {
     if (!googleImagesQuery) {
       toast.error('Preencha o input para gerar a query de imagens');
@@ -631,6 +659,50 @@ function TopicStep({
         onChanged={refresh}
       />
 
+      <Dialog open={searchModalOpen} onOpenChange={setSearchModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pesquisar no Google</DialogTitle>
+            <DialogDescription>
+              Escolha como conduzir a pesquisa para este tópico.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3 text-xs">
+            <span className="font-semibold">Query:</span> {googleQuery}
+          </div>
+          <div className="grid gap-3">
+            <Button
+              variant="outline"
+              className="h-auto justify-start py-3 text-left"
+              onClick={() => { openGoogle(); setSearchModalOpen(false); }}
+              disabled={autoSearching}
+            >
+              <ExternalLink className="mr-2 h-4 w-4 shrink-0" />
+              <span className="flex flex-col items-start gap-0.5">
+                <span className="font-semibold">Busca manual</span>
+                <span className="text-[11px] text-muted-foreground">Abre o Google em uma nova aba com a query montada.</span>
+              </span>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-auto justify-start py-3 text-left"
+              onClick={runAutoSearch}
+              disabled={autoSearching}
+            >
+              {autoSearching
+                ? <Loader2 className="mr-2 h-4 w-4 shrink-0 animate-spin" />
+                : <Sparkles className="mr-2 h-4 w-4 shrink-0" />}
+              <span className="flex flex-col items-start gap-0.5">
+                <span className="font-semibold">Busca automática (IA)</span>
+                <span className="text-[11px] text-muted-foreground">
+                  DeepSeek V4 Flash + web search. Popula a Direção editorial / notas.
+                </span>
+              </span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-2">
         <Label>{meta.inputLabel}</Label>
         {meta.inputKind === 'release' ? (
@@ -674,7 +746,7 @@ function TopicStep({
             <Button
               size="sm"
               variant="outline"
-              onClick={openGoogle}
+              onClick={() => setSearchModalOpen(true)}
               disabled={!googleQuery}
               title={googleQuery || 'Preencha o input para gerar a query'}
             >
