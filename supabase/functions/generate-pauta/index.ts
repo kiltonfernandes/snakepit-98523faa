@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { callOpenRouter, openRouterErrorResponse } from "../_shared/openrouter.ts";
+import { callOpenRouterStreamWithFallback, openRouterErrorResponse } from "../_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,7 +44,7 @@ serve(async (req) => {
       ? system.trim()
       : "Você é um redator especialista em música pesada (heavy metal, rock, punk, etc). Siga rigorosamente o contrato de resposta descrito no prompt do usuário. Responda sempre em português brasileiro.";
 
-    const response = await callOpenRouter({
+    const stream = callOpenRouterStreamWithFallback({
       system: systemPrompt,
       user: prompt,
       temperature,
@@ -53,13 +53,7 @@ serve(async (req) => {
       stream: true,
     });
 
-    if (!response.ok) {
-      const txt = await response.text().catch(() => "");
-      console.error("OpenRouter error:", response.status, txt);
-      return openRouterErrorResponse(response.status, "AI error", corsHeaders);
-    }
-
-    return new Response(response.body, {
+    return new Response(stream, {
       headers: { ...corsHeaders, "Content-Type": "text/event-stream" },
     });
   } catch (e) {
