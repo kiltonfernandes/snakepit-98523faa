@@ -1453,7 +1453,7 @@ export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaP
             )}
 
             {stepKind === 'topic' && topicForStep && (
-              <TopicStep topic={topicForStep} dispatch={dispatch} />
+              <TopicStep topic={topicForStep} dispatch={dispatch} state={state} />
             )}
             {stepKind === 'title' && <TitleStep state={state} dispatch={dispatch} />}
             {stepKind === 'description' && <DescriptionStep state={state} dispatch={dispatch} />}
