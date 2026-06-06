@@ -511,6 +511,8 @@ function TopicStep({
   );
   const [managerOpen, setManagerOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [autoSearching, setAutoSearching] = useState(false);
 
   // Auto-select default template for this type once loaded.
   useEffect(() => {
@@ -574,6 +576,32 @@ function TopicStep({
     }
     const url = `https://www.google.com/search?q=${encodeURIComponent(googleQuery)}`;
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+  const runAutoSearch = async () => {
+    if (!googleQuery) {
+      toast.error('Preencha o input para gerar a query');
+      return;
+    }
+    setAutoSearching(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('web-research', {
+        body: { query: googleQuery, context: topic.notes || '' },
+      });
+      if (error) throw error;
+      const notes = (data as any)?.notes as string | undefined;
+      if (!notes) throw new Error('Resposta vazia da IA');
+      const prev = (topic.notes || '').trim();
+      const merged = prev
+        ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
+        : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
+      dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: merged } });
+      toast.success('Pesquisa concluída — notas atualizadas');
+      setSearchModalOpen(false);
+    } catch (e: any) {
+      toast.error(e?.message || 'Falha na pesquisa automática');
+    } finally {
+      setAutoSearching(false);
+    }
   };
   const openGoogleImages = () => {
     if (!googleImagesQuery) {
@@ -674,7 +702,7 @@ function TopicStep({
             <Button
               size="sm"
               variant="outline"
-              onClick={openGoogle}
+              onClick={() => setSearchModalOpen(true)}
               disabled={!googleQuery}
               title={googleQuery || 'Preencha o input para gerar a query'}
             >
