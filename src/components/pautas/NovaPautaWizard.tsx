@@ -54,6 +54,9 @@ import { Sparkles, Settings2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { usePromptTemplates, PromptTemplate, getComponentPrompt } from '@/lib/prompt-templates';
 import { PromptTemplatesManager } from './PromptTemplatesManager';
+import { MarkdownView } from '@/components/shared/MarkdownView';
+import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
+import { sanitizeMarkdownOutput } from '@/lib/ai/markdown-sanitize';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
 const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
