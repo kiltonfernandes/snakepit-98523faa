@@ -267,6 +267,7 @@ function StandaloneEpisodeEditor({
   onSaveMaterial: (m: Partial<EpisodeMaterial>) => void;
 }) {
   const { pauta, material } = state;
+  const { releases } = useApp();
   const topics = (pauta.standalone_topics || []) as StandaloneTopic[];
   const [editedTopics, setEditedTopics] = useState<StandaloneTopic[]>(topics);
   const [pubDate, setPubDate] = useState(pauta.publication_date);
