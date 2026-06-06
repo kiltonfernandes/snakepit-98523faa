@@ -349,6 +349,9 @@ export default function Settings() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* OpenRouter model chain */}
+              <ModelChainManager />
             </div>
 
             {/* Tone Lab */}
