@@ -523,6 +523,14 @@ function TopicStep({
   const [generatingPauta, setGeneratingPauta] = useState(false);
   const aiProgressTopic = useAiCallProgress();
 
+  // "Gerar tudo" toggle — persisted across sessions.
+  const [generateAll, setGenerateAll] = useState<boolean>(() => {
+    try { return localStorage.getItem('pauta_wizard_gerar_tudo') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('pauta_wizard_gerar_tudo', generateAll ? '1' : '0'); } catch {}
+  }, [generateAll]);
+
   // Auto-select default template for this type once loaded.
   useEffect(() => {
     if (selectedTemplateId) return;
