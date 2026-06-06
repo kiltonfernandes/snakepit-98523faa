@@ -10,6 +10,7 @@
  */
 import { StandaloneTopicType, Release, AppSettings } from './types';
 import { getPromptText, type PromptOverrides } from './prompt-defaults';
+import { toneProfileForTemperature } from './prompt-builder';
 
 export interface StandaloneTopicMeta {
   type: StandaloneTopicType;
@@ -94,10 +95,19 @@ export function buildPlatformBlock(settings: Partial<AppSettings> | null | undef
   if (!settings) return '(sem regras adicionais)';
   const lines: string[] = [];
   if (typeof settings.brand_tone_temperature === 'number') {
-    lines.push(`Temperatura editorial (0=cirúrgico, 100=incendiário): ${settings.brand_tone_temperature}`);
+    const temp = settings.brand_tone_temperature;
+    const tone = toneProfileForTemperature(temp);
+    const overrides = ((settings.prompt_overrides_json as PromptOverrides | undefined) ?? {}) as PromptOverrides;
+    const brandVoice = getPromptText('brand_voice', overrides);
+    lines.push('VOZ DA MARCA:');
+    lines.push(brandVoice);
+    lines.push('');
+    lines.push(`TOM: ${tone.label} (${temp}/100) — ${tone.description}`);
+    for (const d of tone.style_directives) lines.push(`- ${d}`);
   }
   const banned = (settings.banned_terms_text || '').trim();
   if (banned) {
+    lines.push('');
     lines.push('Termos PROIBIDOS (não usar nem variações):');
     for (const t of banned.split(/[\n,;]+/).map(s => s.trim()).filter(Boolean)) {
       lines.push(`- ${t}`);
