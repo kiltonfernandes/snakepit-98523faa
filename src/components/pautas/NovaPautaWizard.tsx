@@ -976,16 +976,24 @@ function TopicStep({
         <div className="flex items-center justify-between">
           <Label>Cole aqui a resposta da IA</Label>
           <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs">
+              <Switch checked={generateAll} onCheckedChange={setGenerateAll} />
+              <span className="font-medium">Gerar tudo</span>
+            </label>
             <Button
               size="sm"
-              onClick={generatePautaWithAI}
+              onClick={generateAll ? runGenerateAll : generatePautaWithAI}
               disabled={generatingPauta || !topic.prompt_text?.trim()}
-              title="Gera a pauta via OpenRouter (DeepSeek V4 Flash) sem web search"
+              title={
+                generateAll
+                  ? 'Roda toda a pipeline: pesquisa web → pauta → títulos → descrição'
+                  : 'Gera a pauta via OpenRouter (DeepSeek V4 Flash) sem web search'
+              }
             >
               {generatingPauta
                 ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                 : <Sparkles className="mr-1 h-3.5 w-3.5" />}
-              Gerar pauta
+              {generateAll ? 'Gerar tudo' : 'Gerar pauta'}
             </Button>
             <CopyExportRow
               text={topic.response_text}
