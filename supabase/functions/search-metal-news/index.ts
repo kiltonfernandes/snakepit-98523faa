@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callOpenRouterText, openRouterErrorResponse } from "../_shared/openrouter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,7 +31,6 @@ async function fetchRSS(source: { name: string; url: string }): Promise<NewsItem
     });
     if (!resp.ok) return [];
     const xml = await resp.text();
-
     const items: NewsItem[] = [];
     const itemRegex = /<item>([\s\S]*?)<\/item>/gi;
     let match;
@@ -38,23 +38,15 @@ async function fetchRSS(source: { name: string; url: string }): Promise<NewsItem
       const block = match[1];
       const titleMatch = block.match(/<title><!\[CDATA\[([\s\S]*?)\]\]>|<title>([\s\S]*?)<\/title>/);
       const title = (titleMatch?.[1] || titleMatch?.[2] || "").trim();
-      // Handle <link>url</link>, <link href="url"/>, and bare <link>url\n patterns
-      const linkMatch = block.match(/<link>\s*(https?:\/\/[^\s<]+)\s*<\/link>/) 
+      const linkMatch = block.match(/<link>\s*(https?:\/\/[^\s<]+)\s*<\/link>/)
         || block.match(/<link[^>]+href=["']([^"']+)["']/)
         || block.match(/<link>\s*(https?:\/\/[^\s<]+)/);
       const link = (linkMatch?.[1] || "").trim();
       const pubDate = block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1]?.trim() || "";
       const desc = block.match(/<description><!\[CDATA\[([\s\S]*?)\]\]>/)?.[1] || block.match(/<description>([\s\S]*?)<\/description>/)?.[1] || "";
       const snippet = desc.replace(/<[^>]+>/g, "").slice(0, 200);
-
       if (title) {
-        items.push({
-          title: title.replace(/<!\[CDATA\[|\]\]>/g, "").trim(),
-          link: link.trim(),
-          source: source.name,
-          pubDate,
-          snippet,
-        });
+        items.push({ title: title.replace(/<!\[CDATA\[|\]\]>/g, "").trim(), link: link.trim(), source: source.name, pubDate, snippet });
       }
     }
     return items;
@@ -70,7 +62,6 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const { week_start, max_per_day = 3 } = body;
-
     if (!week_start) {
       return new Response(JSON.stringify({ error: "week_start is required" }), {
         status: 400,
@@ -78,15 +69,6 @@ serve(async (req) => {
       });
     }
 
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-    if (!lovableApiKey) {
-      return new Response(JSON.stringify({ error: "API key not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Calculate week dates (Mon-Sat)
     const startDate = new Date(week_start + "T12:00:00Z");
     const weekDates: string[] = [];
     for (let i = 0; i < 6; i++) {
@@ -95,7 +77,6 @@ serve(async (req) => {
       weekDates.push(d.toISOString().slice(0, 10));
     }
 
-    // Fetch news from all sources in parallel
     const allResults = await Promise.all(NEWS_SOURCES.map((s) => fetchRSS(s)));
     const allNews = allResults.flat();
 
@@ -105,14 +86,13 @@ serve(async (req) => {
       });
     }
 
-    // Build compact news list for the LLM
     const newsLines = allNews
       .slice(0, 80)
       .map((n, i) => `${i + 1}. [${n.source}] ${n.title} | ${n.link}${n.snippet ? " | " + n.snippet : ""}`)
       .join("\n");
 
-    const prompt = `You are a metal/rock news editor for a Brazilian podcast called "Snakepit". 
-Given the following list of recent metal/rock news headlines from various sources, select the most interesting and relevant news for a heavy metal podcast.
+    const prompt = `You are a metal/rock news editor for a Brazilian podcast called "Snakepit".
+Given the following list of recent metal/rock news headlines from various sources, select the most interesting and relevant news for a heavy metal podcast. You can use web search to verify or enrich details when needed.
 
 For each day of this week (${weekDates.join(", ")}), pick up to ${max_per_day} news items that would make good talking points. Prefer:
 - Tour/concert announcements
@@ -139,65 +119,34 @@ Respond in this EXACT JSON format (no markdown, no code blocks):
 NEWS LIST:
 ${newsLines}`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${lovableApiKey}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
-        max_tokens: 4000,
-      }),
-    });
-
-    if (!response.ok) {
-      const err = await response.text();
-      console.error("LLM error:", response.status, err);
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit excedido, tente novamente." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Créditos insuficientes." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      return new Response(JSON.stringify({ error: "LLM request failed" }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || "";
-
-    // Parse JSON from response (strip markdown code fences if present)
-    let parsed: any = {};
     try {
-      const jsonStr = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
-      parsed = JSON.parse(jsonStr);
-    } catch {
-      console.error("Failed to parse LLM response:", text);
-      return new Response(JSON.stringify({ error: "Failed to parse AI response", raw: text }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const { text } = await callOpenRouterText({
+        user: prompt,
+        temperature: 0.3,
+        maxTokens: 4000,
+        webSearch: true,
       });
-    }
 
-    return new Response(
-      JSON.stringify({
-        news: parsed.days || {},
-        raw_count: allNews.length,
-        sources: NEWS_SOURCES.map((s) => s.name),
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      let parsed: any = {};
+      try {
+        const jsonStr = text.replace(/```json\s*/g, "").replace(/```\s*/g, "").trim();
+        parsed = JSON.parse(jsonStr);
+      } catch {
+        console.error("Failed to parse LLM response:", text);
+        return new Response(JSON.stringify({ error: "Failed to parse AI response", raw: text }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(
+        JSON.stringify({ news: parsed.days || {}, raw_count: allNews.length, sources: NEWS_SOURCES.map((s) => s.name) }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } catch (e: any) {
+      console.error("OpenRouter error:", e?.message);
+      return openRouterErrorResponse(e?.status ?? 502, "LLM request failed", corsHeaders);
+    }
   } catch (err) {
     console.error("Error:", err);
     return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" }), {

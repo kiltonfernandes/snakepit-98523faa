@@ -24,7 +24,7 @@ import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
-import { AI_MODELS, DEFAULT_AI_MODEL } from '@/lib/ai-models';
+// Lovable AI model picker removed: app now uses OpenRouter + DeepSeek V4 Flash (fixed).
 
 const TONE_PRESETS = [
   { label: 'Cirúrgico', value: 30, desc: 'Extremamente preciso e direto. Mínimo de adjetivos, foco em dados.' },
@@ -602,42 +602,12 @@ export default function Settings() {
                   <Cpu className="h-4 w-4" /> Modelo de IA
                 </CardTitle>
                 <CardDescription>
-                  Escolha qual modelo será usado nas gerações de texto (pautas, descrições, enriquecimento). Aplica-se a todas as edge functions de IA.
+                  Todas as gerações de IA agora usam <strong>OpenRouter</strong> com o modelo fixo <code className="font-mono">deepseek/deepseek-v4-flash</code>. Pesquisas (releases, notícias, países) usam <code className="font-mono">openrouter:web_search</code> automaticamente.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                <Label className="text-xs">Modelo ativo</Label>
-                <Select
-                  value={settings.ai_model || DEFAULT_AI_MODEL}
-                  onValueChange={(v) => {
-                    updateSettings({ ai_model: v });
-                    const m = AI_MODELS.find(x => x.id === v);
-                    toast.success(`Modelo alterado para ${m?.label || v}`);
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(['Google Gemini', 'OpenAI GPT'] as const).map(provider => (
-                      <div key={provider}>
-                        <div className="px-2 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                          {provider}
-                        </div>
-                        {AI_MODELS.filter(m => m.provider === provider).map(m => (
-                          <SelectItem key={m.id} value={m.id}>
-                            <div className="flex flex-col">
-                              <span className="text-sm">{m.label}</span>
-                              <span className="text-[10px] text-muted-foreground">{m.description}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </div>
-                    ))}
-                  </SelectContent>
-                </Select>
                 <div className="text-[11px] text-muted-foreground bg-muted/30 rounded p-2">
-                  <strong>Modelo atual:</strong> <code className="font-mono">{settings.ai_model || DEFAULT_AI_MODEL}</code>
+                  <strong>Provedor:</strong> OpenRouter &nbsp;·&nbsp; <strong>Modelo:</strong> <code className="font-mono">deepseek/deepseek-v4-flash</code>
                 </div>
               </CardContent>
             </Card>
