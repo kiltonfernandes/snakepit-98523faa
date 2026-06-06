@@ -468,6 +468,8 @@ DIREÇÃO EDITORIAL EXTRA:
 
 const PROMPT_TITLE = `${SHARED_VOICE_RULES}
 
+${MARKDOWN_OUTPUT_RULE}
+
 TAREFA: Gere 3 opções de título para um episódio Heavynauta a partir do conteúdo abaixo.
 Cada opção em uma linha, sem numeração nem marcadores. Estilos:
 1) Clickbait (instigante mas honesto)
