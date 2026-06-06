@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { ExternalLink } from 'lucide-react';
 import type { Release } from '@/lib/types';
+import { resolveAllLinks } from '@/lib/dynamic-links';
 
 interface Props {
   release: Release | null | undefined;
@@ -15,16 +16,17 @@ interface Props {
  */
 export function ReleaseLinkBar({ release, heading }: Props) {
   if (!release) return null;
-  const links: Array<[string, string | null | undefined]> = [
-    ['Metal Archives', release.metal_archives_url],
-    ['YouTube', release.youtube_url],
-    ['Spotify', release.spotify_url],
-    ['Deezer', release.deezer_url],
-    ['Apple Music', release.apple_music_url],
-    ['Bandcamp', release.bandcamp_url],
+  // Always render the full 6-platform bar. When no manual override is set,
+  // we fall back to a search URL built from artist+album (see dynamic-links).
+  const resolved = resolveAllLinks(release);
+  const active: Array<[string, string]> = [
+    ['Metal Archives', resolved.metal_archives],
+    ['YouTube', resolved.youtube],
+    ['Spotify', resolved.spotify],
+    ['Deezer', resolved.deezer],
+    ['Apple Music', resolved.apple_music],
+    ['Bandcamp', resolved.bandcamp],
   ];
-  const active = links.filter(([, url]) => !!url) as Array<[string, string]>;
-  if (active.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 p-2">
       <span className="mr-1 text-[11px] uppercase tracking-wide text-muted-foreground">
