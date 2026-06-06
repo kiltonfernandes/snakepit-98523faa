@@ -670,6 +670,123 @@ function TopicStep({
     }
   };
 
+  // ─── Gerar tudo: pesquisa → prompt → pauta → títulos → descrição ─────────
+  const runGenerateAll = async () => {
+    if (!topic.prompt_text?.trim() && !googleQuery && !topic.notes?.trim()) {
+      toast.error('Sem contexto suficiente para gerar tudo.');
+      return;
+    }
+    setGeneratingPauta(true);
+    aiProgressTopic.start('Gerar tudo — pipeline completa');
+    try {
+      // 1. Pesquisa web (best effort — não bloqueia se faltar query)
+      let mergedNotes = topic.notes || '';
+      if (googleQuery) {
+        aiProgressTopic.setStage('streaming');
+        aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'trying' });
+        try {
+          const { data, error } = await supabase.functions.invoke('web-research', {
+            body: { query: googleQuery, context: topic.notes || '' },
+          });
+          if (error) throw error;
+          const notes = (data as any)?.notes as string | undefined;
+          if (notes) {
+            aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'selected' });
+            const prev = (topic.notes || '').trim();
+            mergedNotes = prev
+              ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
+              : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
+            dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: mergedNotes } });
+          }
+        } catch (e: any) {
+          aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'failed', reason: e?.message || 'falha' });
+          // segue mesmo sem pesquisa
+        }
+      }
+
+      // 2. Atualiza prompt anexando as notas (se houver)
+      let promptToUse = topic.prompt_text || '';
+      const notesTrim = mergedNotes.trim();
+      if (notesTrim) {
+        const marker = '## Direção editorial adicional';
+        const appendBlock = `\n\n${marker}\n${notesTrim}\n`;
+        const idx = promptToUse.indexOf(marker);
+        promptToUse = idx >= 0
+          ? promptToUse.slice(0, idx).replace(/\s+$/, '') + appendBlock
+          : promptToUse.replace(/\s+$/, '') + appendBlock;
+        dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: promptToUse } });
+      }
+
+      // 3. Gerar pauta
+      onPaste('');
+      const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
+      const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
+      const pautaFull = await streamGeneratePauta({
+        prompt: promptToUse,
+        bannedTerms,
+        temperature,
+        webSearch: false,
+        label: 'Gerar tudo — pauta',
+        progress: aiProgressTopic,
+        onChunk: (full) => onPaste(full),
+      });
+
+      // Build aggregated content with the freshly-generated pauta for this topic.
+      const updatedTopics = state.topics.map(t =>
+        t.id === topic.id
+          ? { ...t, notes: mergedNotes, prompt_text: promptToUse, response_text: pautaFull, parsed_text: pautaFull.trim() }
+          : t
+      );
+      const content = aggregatedContent(updatedTopics, releases);
+
+      // 4. Gerar títulos
+      const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
+      const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
+      dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
+      dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
+      const titleFull = await streamGeneratePauta({
+        prompt: titlePrompt,
+        bannedTerms,
+        temperature,
+        webSearch: false,
+        label: 'Gerar tudo — títulos',
+        progress: aiProgressTopic,
+        onChunk: (full) => dispatch({ kind: 'setField', field: 'titleResponse', value: full }),
+      });
+      const opts = parseTitleOptionsFromText(titleFull);
+      dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
+      if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
+      const chosenTitle = opts[0]?.text || '';
+
+      // 5. Gerar descrição
+      const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
+      const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
+      dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
+      dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
+      const descFull = await streamGeneratePauta({
+        prompt: descPrompt,
+        bannedTerms,
+        temperature,
+        webSearch: false,
+        label: 'Gerar tudo — descrição',
+        progress: aiProgressTopic,
+        onChunk: (full) => {
+          dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
+          dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
+        },
+      });
+      dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(descFull) });
+
+      aiProgressTopic.finish(null);
+      toast.success('Pipeline completa: pauta + títulos + descrição gerados');
+    } catch (e: any) {
+      aiProgressTopic.finish(e?.message || 'Falha na pipeline');
+      toast.error(e?.message || 'Falha ao gerar tudo');
+    } finally {
+      setGeneratingPauta(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
