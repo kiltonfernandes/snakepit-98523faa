@@ -640,10 +640,11 @@ function TopicStep({
   };
 
   const onPaste = (val: string) => {
+    const clean = sanitizeMarkdownOutput(val);
     dispatch({
       kind: 'patchTopic',
       id: topic.id,
-      patch: { response_text: val, parsed_text: val.trim() },
+      patch: { response_text: clean, parsed_text: clean.trim() },
     });
   };
 
