@@ -168,6 +168,12 @@ export function getQueryTemplate(key: QueryTemplateKey | string): string {
   return DEFAULTS_MAP[key] || '';
 }
 
+/** True when the user has saved a custom override for this template key. */
+export function hasQueryTemplateOverride(key: QueryTemplateKey | string): boolean {
+  const o = overrides[key];
+  return typeof o === 'string' && o.trim().length > 0;
+}
+
 /** Render a template with placeholder values. Unknown vars become empty. */
 export function renderQueryTemplate(
   key: QueryTemplateKey | string,
