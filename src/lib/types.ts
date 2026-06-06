@@ -107,6 +107,8 @@ export interface StandaloneTopic {
   parsed_text?: string | null;
   /** Warnings/notes about the parsing step. */
   parse_warnings?: string[];
+  /** Persisted ID of the prompt template selected for this topic. */
+  template_id?: string | null;
 }
 
 export interface AppSettings {
