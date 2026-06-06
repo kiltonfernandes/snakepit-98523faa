@@ -35,6 +35,8 @@ export interface CallOpenRouterOptions {
   models?: string[];
   /** Per-model deadline in ms. Defaults to 5000. */
   deadlineMs?: number;
+  /** Optional map of model-id -> deadline ms. Overrides deadlineMs when present. */
+  deadlinesByModel?: Record<string, number>;
 }
 
 function buildSystem(system: string | undefined, bannedTerms?: string[]) {
@@ -111,9 +113,12 @@ export function callOpenRouterStreamWithFallback(opts: CallOpenRouterOptions): R
         const isLast = i === chain.length - 1;
         controller.enqueue(metaEvent({ type: "trying", model, attempt: i + 1 }));
         const ctl = new AbortController();
-        // The paid fallback (last in chain) gets a longer deadline so we don't
-        // kill legitimately slow responses (e.g. web_search tool runs).
-        const effectiveDeadline = isLast ? Math.max(deadlineMs, FALLBACK_DEADLINE_MS) : deadlineMs;
+        // Per-model deadline (from client config) wins. Otherwise: last model gets the
+        // generous fallback deadline so we don't kill legitimately slow responses.
+        const perModel = opts.deadlinesByModel?.[model];
+        const effectiveDeadline = typeof perModel === "number" && perModel > 0
+          ? perModel
+          : isLast ? Math.max(deadlineMs, FALLBACK_DEADLINE_MS) : deadlineMs;
         const timer = setTimeout(() => ctl.abort("deadline"), effectiveDeadline);
         try {
           const res = await postOpenRouter(model, { ...opts, stream: true }, ctl.signal);

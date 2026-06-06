@@ -20,6 +20,7 @@ import { buildToneProbePrompt, toneProfileForTemperature } from '@/lib/prompt-bu
 import { PromptManager } from '@/components/PromptManager';
 import { PromptTemplatesManager } from '@/components/pautas/PromptTemplatesManager';
 import { GoogleQueryTemplatesManager } from '@/components/GoogleQueryTemplatesManager';
+import { ModelChainManager } from '@/components/ModelChainManager';
 import { PROMPT_BLOCKS } from '@/lib/prompt-defaults';
 import { PautaTemplate, PautaTemplateSectionConfig } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
@@ -348,6 +349,9 @@ export default function Settings() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* OpenRouter model chain */}
+              <ModelChainManager />
             </div>
 
             {/* Tone Lab */}
