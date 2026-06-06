@@ -51,6 +51,7 @@ import {
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { usePromptTemplates, PromptTemplate, getComponentPrompt } from '@/lib/prompt-templates';
 import { PromptTemplatesManager } from './PromptTemplatesManager';
 
@@ -500,8 +501,8 @@ function buildAuditText(
 // ─── Topic step ─────────────────────────────────────────────────────────────
 
 function TopicStep({
-  topic, dispatch,
-}: { topic: StandaloneTopic; dispatch: React.Dispatch<Action> }) {
+  topic, dispatch, state,
+}: { topic: StandaloneTopic; dispatch: React.Dispatch<Action>; state: WizardState }) {
   const meta = STANDALONE_TOPIC_META[topic.type];
   const { releases, settings } = useApp();
   const selectedRelease = topic.release_id ? releases.find(r => r.id === topic.release_id) : null;
@@ -521,6 +522,14 @@ function TopicStep({
   const [autoSearching, setAutoSearching] = useState(false);
   const [generatingPauta, setGeneratingPauta] = useState(false);
   const aiProgressTopic = useAiCallProgress();
+
+  // "Gerar tudo" toggle — persisted across sessions.
+  const [generateAll, setGenerateAll] = useState<boolean>(() => {
+    try { return localStorage.getItem('pauta_wizard_gerar_tudo') === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('pauta_wizard_gerar_tudo', generateAll ? '1' : '0'); } catch {}
+  }, [generateAll]);
 
   // Auto-select default template for this type once loaded.
   useEffect(() => {
@@ -661,12 +670,160 @@ function TopicStep({
     }
   };
 
+  // ─── Gerar tudo: pesquisa → prompt → pauta → títulos → descrição ─────────
+  const runGenerateAll = async () => {
+    if (!topic.prompt_text?.trim() && !googleQuery && !topic.notes?.trim()) {
+      toast.error('Sem contexto suficiente para gerar tudo.');
+      return;
+    }
+    setGeneratingPauta(true);
+    aiProgressTopic.start('Gerar tudo — pipeline completa');
+    try {
+      // 1. Pesquisa web (best effort — não bloqueia se faltar query)
+      let mergedNotes = topic.notes || '';
+      if (googleQuery) {
+        aiProgressTopic.setStage('streaming');
+        aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'trying' });
+        try {
+          const { data, error } = await supabase.functions.invoke('web-research', {
+            body: { query: googleQuery, context: topic.notes || '' },
+          });
+          if (error) throw error;
+          const notes = (data as any)?.notes as string | undefined;
+          if (notes) {
+            aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'selected' });
+            const prev = (topic.notes || '').trim();
+            mergedNotes = prev
+              ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
+              : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
+            dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: mergedNotes } });
+          }
+        } catch (e: any) {
+          aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'failed', reason: e?.message || 'falha' });
+          // segue mesmo sem pesquisa
+        }
+      }
+
+      // 2. Atualiza prompt anexando as notas (se houver)
+      let promptToUse = topic.prompt_text || '';
+      const notesTrim = mergedNotes.trim();
+      if (notesTrim) {
+        const marker = '## Direção editorial adicional';
+        const appendBlock = `\n\n${marker}\n${notesTrim}\n`;
+        const idx = promptToUse.indexOf(marker);
+        promptToUse = idx >= 0
+          ? promptToUse.slice(0, idx).replace(/\s+$/, '') + appendBlock
+          : promptToUse.replace(/\s+$/, '') + appendBlock;
+        dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: promptToUse } });
+      }
+
+      // 3. Gerar pauta
+      onPaste('');
+      const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
+      const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
+      const pautaFull = await streamGeneratePauta({
+        prompt: promptToUse,
+        bannedTerms,
+        temperature,
+        webSearch: false,
+        label: 'Gerar tudo — pauta',
+        progress: aiProgressTopic,
+        onChunk: (full) => onPaste(full),
+      });
+
+      // Build aggregated content with the freshly-generated pauta for this topic.
+      const updatedTopics = state.topics.map(t =>
+        t.id === topic.id
+          ? { ...t, notes: mergedNotes, prompt_text: promptToUse, response_text: pautaFull, parsed_text: pautaFull.trim() }
+          : t
+      );
+      const content = aggregatedContent(updatedTopics, releases);
+
+      // 4. Gerar títulos
+      const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
+      const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
+      dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
+      dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
+      const titleFull = await streamGeneratePauta({
+        prompt: titlePrompt,
+        bannedTerms,
+        temperature,
+        webSearch: false,
+        label: 'Gerar tudo — títulos',
+        progress: aiProgressTopic,
+        onChunk: (full) => dispatch({ kind: 'setField', field: 'titleResponse', value: full }),
+      });
+      const opts = parseTitleOptionsFromText(titleFull);
+      dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
+      if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
+      const chosenTitle = opts[0]?.text || '';
+
+      // 5. Gerar descrição
+      const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
+      const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
+      dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
+      dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
+      const descFull = await streamGeneratePauta({
+        prompt: descPrompt,
+        bannedTerms,
+        temperature,
+        webSearch: false,
+        label: 'Gerar tudo — descrição',
+        progress: aiProgressTopic,
+        onChunk: (full) => {
+          dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
+          dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
+        },
+      });
+      dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(descFull) });
+
+      aiProgressTopic.finish(null);
+      toast.success('Pipeline completa: pauta + títulos + descrição gerados');
+    } catch (e: any) {
+      aiProgressTopic.finish(e?.message || 'Falha na pipeline');
+      toast.error(e?.message || 'Falha ao gerar tudo');
+    } finally {
+      setGeneratingPauta(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <span className="text-2xl">{meta.icon}</span>
         <h3 className="text-lg font-semibold">{meta.label}</h3>
       </div>
+
+      {selectedRelease && (() => {
+        const links: Array<[string, string | null | undefined]> = [
+          ['Metal Archives', selectedRelease.metal_archives_url],
+          ['YouTube', selectedRelease.youtube_url],
+          ['Spotify', selectedRelease.spotify_url],
+          ['Deezer', selectedRelease.deezer_url],
+          ['Apple Music', selectedRelease.apple_music_url],
+          ['Bandcamp', selectedRelease.bandcamp_url],
+        ];
+        const active = links.filter(([, url]) => !!url);
+        if (active.length === 0) return null;
+        return (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/20 p-2">
+            <span className="text-[11px] uppercase tracking-wide text-muted-foreground mr-1">
+              {selectedRelease.artist} — {selectedRelease.album}
+            </span>
+            {active.map(([label, url]) => (
+              <Button
+                key={label}
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(url!, '_blank', 'noopener,noreferrer')}
+              >
+                <ExternalLink className="mr-1 h-3.5 w-3.5" />
+                {label}
+              </Button>
+            ))}
+          </div>
+        );
+      })()}
 
       <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
         <div className="flex items-center justify-between gap-2">
@@ -819,16 +976,24 @@ function TopicStep({
         <div className="flex items-center justify-between">
           <Label>Cole aqui a resposta da IA</Label>
           <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2 rounded-md border border-border bg-muted/30 px-2 py-1 text-xs">
+              <Switch checked={generateAll} onCheckedChange={setGenerateAll} />
+              <span className="font-medium">Gerar tudo</span>
+            </label>
             <Button
               size="sm"
-              onClick={generatePautaWithAI}
+              onClick={generateAll ? runGenerateAll : generatePautaWithAI}
               disabled={generatingPauta || !topic.prompt_text?.trim()}
-              title="Gera a pauta via OpenRouter (DeepSeek V4 Flash) sem web search"
+              title={
+                generateAll
+                  ? 'Roda toda a pipeline: pesquisa web → pauta → títulos → descrição'
+                  : 'Gera a pauta via OpenRouter (DeepSeek V4 Flash) sem web search'
+              }
             >
               {generatingPauta
                 ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
                 : <Sparkles className="mr-1 h-3.5 w-3.5" />}
-              Gerar pauta
+              {generateAll ? 'Gerar tudo' : 'Gerar pauta'}
             </Button>
             <CopyExportRow
               text={topic.response_text}
@@ -1452,7 +1617,7 @@ export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaP
             )}
 
             {stepKind === 'topic' && topicForStep && (
-              <TopicStep topic={topicForStep} dispatch={dispatch} />
+              <TopicStep topic={topicForStep} dispatch={dispatch} state={state} />
             )}
             {stepKind === 'title' && <TitleStep state={state} dispatch={dispatch} />}
             {stepKind === 'description' && <DescriptionStep state={state} dispatch={dispatch} />}
