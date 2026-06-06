@@ -516,6 +516,7 @@ function TopicStep({
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [autoSearching, setAutoSearching] = useState(false);
   const [generatingPauta, setGeneratingPauta] = useState(false);
+  const aiProgressTopic = useAiCallProgress();
 
   // Auto-select default template for this type once loaded.
   useEffect(() => {
