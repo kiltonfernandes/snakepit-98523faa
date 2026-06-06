@@ -38,6 +38,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { renderQueryTemplate } from '@/lib/google-query-templates';
 import { useApp } from '@/contexts/AppContext';
+import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
+import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { Release, Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType, TitleOption, DaySlot } from '@/lib/types';
 import {
   STANDALONE_TOPIC_META,
@@ -514,6 +516,7 @@ function TopicStep({
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [autoSearching, setAutoSearching] = useState(false);
   const [generatingPauta, setGeneratingPauta] = useState(false);
+  const aiProgressTopic = useAiCallProgress();
 
   // Auto-select default template for this type once loaded.
   useEffect(() => {
@@ -584,6 +587,9 @@ function TopicStep({
       return;
     }
     setAutoSearching(true);
+    aiProgressTopic.start('Pesquisa automática (web)');
+    aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash', status: 'trying' });
+    aiProgressTopic.setStage('streaming');
     try {
       const { data, error } = await supabase.functions.invoke('web-research', {
         body: { query: googleQuery, context: topic.notes || '' },
@@ -591,14 +597,18 @@ function TopicStep({
       if (error) throw error;
       const notes = (data as any)?.notes as string | undefined;
       if (!notes) throw new Error('Resposta vazia da IA');
+      aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash', status: 'selected' });
+      aiProgressTopic.setStage('populating');
       const prev = (topic.notes || '').trim();
       const merged = prev
         ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
         : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
       dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: merged } });
+      aiProgressTopic.finish(null);
       toast.success('Pesquisa concluída — notas atualizadas');
       setSearchModalOpen(false);
     } catch (e: any) {
+      aiProgressTopic.finish(e?.message || 'Falha na pesquisa');
       toast.error(e?.message || 'Falha na pesquisa automática');
     } finally {
       setAutoSearching(false);
@@ -630,51 +640,15 @@ function TopicStep({
     setGeneratingPauta(true);
     onPaste('');
     try {
-      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-        },
-        body: JSON.stringify({
-          prompt,
-          bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
-          temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
-          webSearch: false,
-        }),
+      await streamGeneratePauta({
+        prompt,
+        bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
+        temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+        webSearch: false,
+        label: 'Gerando pauta',
+        progress: aiProgressTopic,
+        onChunk: (full) => onPaste(full),
       });
-      if (!resp.ok) {
-        const err = await resp.json().catch(() => ({ error: `Erro ${resp.status}` }));
-        throw new Error(err.error || `Erro ${resp.status}`);
-      }
-      const reader = resp.body?.getReader();
-      if (!reader) throw new Error('Sem stream de resposta');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let full = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let nlIdx: number;
-        while ((nlIdx = buffer.indexOf('\n')) !== -1) {
-          let line = buffer.slice(0, nlIdx);
-          buffer = buffer.slice(nlIdx + 1);
-          if (line.endsWith('\r')) line = line.slice(0, -1);
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const content = parsed.choices?.[0]?.delta?.content;
-            if (content) {
-              full += content;
-              onPaste(full);
-            }
-          } catch { /* skip partial */ }
-        }
-      }
       toast.success('Pauta gerada');
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao gerar pauta');
@@ -879,60 +853,8 @@ function TopicStep({
 
 // ─── Material steps (title / description / cover) ───────────────────────────
 
-async function streamGeneratePauta(opts: {
-  prompt: string;
-  bannedTerms?: string[];
-  temperature?: number;
-  webSearch?: boolean;
-  onChunk: (full: string) => void;
-}) {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
-  const resp = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-    },
-    body: JSON.stringify({
-      prompt: opts.prompt,
-      bannedTerms: opts.bannedTerms || [],
-      temperature: opts.temperature,
-      webSearch: !!opts.webSearch,
-    }),
-  });
-  if (!resp.ok) {
-    const err = await resp.json().catch(() => ({ error: `Erro ${resp.status}` }));
-    throw new Error(err.error || `Erro ${resp.status}`);
-  }
-  const reader = resp.body?.getReader();
-  if (!reader) throw new Error('Sem stream de resposta');
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let full = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    let nlIdx: number;
-    while ((nlIdx = buffer.indexOf('\n')) !== -1) {
-      let line = buffer.slice(0, nlIdx);
-      buffer = buffer.slice(nlIdx + 1);
-      if (line.endsWith('\r')) line = line.slice(0, -1);
-      if (!line.startsWith('data: ')) continue;
-      const jsonStr = line.slice(6).trim();
-      if (jsonStr === '[DONE]') break;
-      try {
-        const parsed = JSON.parse(jsonStr);
-        const content = parsed.choices?.[0]?.delta?.content;
-        if (content) {
-          full += content;
-          opts.onChunk(full);
-        }
-      } catch { /* skip partial */ }
-    }
-  }
-  return full;
-}
+// streamGeneratePauta is provided by @/lib/ai/openrouter-client and wired
+// into the global AI progress modal.
 
 function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Dispatch<Action> }) {
   const { releases, settings } = useApp();
@@ -947,6 +869,7 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const override = getComponentPrompt(tpl, 'titulo');
   const prompt = getStandaloneTitlePrompt(content, settings, override);
   const [generating, setGenerating] = useState(false);
+  const aiProgress = useAiCallProgress();
   const generateTitles = async () => {
     if (!prompt.trim()) {
       toast.error('Prompt vazio.');
@@ -961,6 +884,8 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
         bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
         temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
         webSearch: false,
+        label: 'Gerando títulos',
+        progress: aiProgress,
         onChunk: (full) => {
           dispatch({ kind: 'setField', field: 'titleResponse', value: full });
         },
@@ -1065,6 +990,7 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
   const override = getComponentPrompt(tpl, 'descricao');
   const prompt = getStandaloneDescriptionPrompt(title, content, settings, override);
   const [generating, setGenerating] = useState(false);
+  const aiProgress = useAiCallProgress();
   const generateDescription = async () => {
     if (!prompt.trim()) {
       toast.error('Prompt vazio.');
@@ -1079,6 +1005,8 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
         bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
         temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
         webSearch: false,
+        label: 'Gerando descrição',
+        progress: aiProgress,
         onChunk: (full) => {
           dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
           dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });

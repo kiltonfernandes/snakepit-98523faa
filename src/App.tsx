@@ -6,6 +6,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppProvider } from "@/contexts/AppContext";
 import { RivaldoProvider } from "@/contexts/RivaldoContext";
 import { RivaldoBulkProvider } from "@/contexts/RivaldoBulkContext";
+import { AiCallProgressProvider } from "@/contexts/AiCallProgressContext";
+import { AiCallProgressModal } from "@/components/AiCallProgressModal";
 import { AppLayout } from "@/layouts/AppLayout";
 import Dashboard from "@/pages/Dashboard";
 import Releases from "@/pages/Releases";
@@ -26,9 +28,11 @@ const App = () => (
     <AppProvider>
     <RivaldoProvider>
     <RivaldoBulkProvider>
+    <AiCallProgressProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <AiCallProgressModal />
       <BrowserRouter>
         <Routes>
           <Route element={<AppLayout />}>
@@ -47,6 +51,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </AiCallProgressProvider>
     </RivaldoBulkProvider>
     </RivaldoProvider>
     </AppProvider>
