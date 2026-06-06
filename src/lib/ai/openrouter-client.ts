@@ -1,4 +1,5 @@
 import type { AiAttempt } from '@/contexts/AiCallProgressContext';
+import { loadModelChain } from '@/lib/ai/model-chain';
 
 export interface ProgressHandlers {
   start: (label: string) => void;
@@ -32,6 +33,10 @@ export async function streamGeneratePauta(opts: StreamGeneratePautaOptions): Pro
   p?.start(opts.label || 'Chamada IA');
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
+  const chain = loadModelChain();
+  const models = chain.map(e => e.id);
+  // Use the smallest non-zero deadline as base (per-model deadlines handled server-side per index).
+  const deadlinesByModel: Record<string, number> = Object.fromEntries(chain.map(e => [e.id, e.deadlineMs]));
   let resp: Response;
   try {
     resp = await fetch(url, {
@@ -46,6 +51,8 @@ export async function streamGeneratePauta(opts: StreamGeneratePautaOptions): Pro
         temperature: opts.temperature,
         webSearch: !!opts.webSearch,
         system: opts.system,
+        models,
+        deadlinesByModel,
       }),
     });
   } catch (e: any) {
