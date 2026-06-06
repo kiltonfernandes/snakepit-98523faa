@@ -32,6 +32,9 @@ import { StatusBadge } from '@/components/StatusBadge';
 import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { MarkdownView } from '@/components/shared/MarkdownView';
+import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
+import { sanitizeMarkdownOutput } from '@/lib/ai/markdown-sanitize';
 
 const TYPE_FILTERS: { value: 'all' | StandaloneTopicType; label: string }[] = [
   { value: 'all', label: 'Todos os blocos' },
