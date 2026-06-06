@@ -1670,7 +1670,9 @@ export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaP
                                 exportLabel="Exportar"
                               />
                             </div>
-                            <Textarea readOnly rows={6} value={t.response_text} className="font-mono text-[11px]" />
+                            <div className="max-h-[260px] overflow-auto rounded-md border border-border bg-muted/30 p-3">
+                              <MarkdownView text={t.response_text} />
+                            </div>
                           </div>
                         </div>
                       </div>
