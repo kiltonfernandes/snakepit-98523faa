@@ -816,16 +816,6 @@ function TopicStep({
               <ExternalLink className="mr-1 h-3.5 w-3.5" />
               Pesquisar no Google
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={openGoogleImages}
-              disabled={!googleImagesQuery}
-              title={googleImagesQuery || 'Preencha o input para gerar a query de imagens'}
-            >
-              <ExternalLink className="mr-1 h-3.5 w-3.5" />
-              Google Imagens
-            </Button>
             <CopyExportRow
               text={topic.prompt_text}
               filename={`prompt_${topic.type}_${topic.id.slice(0, 6)}.txt`}
