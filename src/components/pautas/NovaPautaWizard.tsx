@@ -866,7 +866,8 @@ function TitleStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const content = aggregatedContent(state.topics, releases);
   const firstTopic = state.topics[0];
   const tpl = firstTopic
-    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+    ? (firstTopic.template_id ? allTemplates.find(x => x.id === firstTopic.template_id) : null)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
       ?? allTemplates.find(x => x.topic_type === firstTopic.type)
       ?? null
     : null;
@@ -987,7 +988,8 @@ function DescriptionStep({ state, dispatch }: { state: WizardState; dispatch: Re
   const content = aggregatedContent(state.topics, releases);
   const firstTopic = state.topics[0];
   const tpl = firstTopic
-    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+    ? (firstTopic.template_id ? allTemplates.find(x => x.id === firstTopic.template_id) : null)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
       ?? allTemplates.find(x => x.topic_type === firstTopic.type)
       ?? null
     : null;
@@ -1076,7 +1078,8 @@ function CoverStep({ state, dispatch }: { state: WizardState; dispatch: React.Di
   const content = aggregatedContent(state.topics, releases);
   const firstTopic = state.topics[0];
   const tpl = firstTopic
-    ? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
+    ? (firstTopic.template_id ? allTemplates.find(x => x.id === firstTopic.template_id) : null)
+      ?? allTemplates.find(x => x.topic_type === firstTopic.type && x.is_default)
       ?? allTemplates.find(x => x.topic_type === firstTopic.type)
       ?? null
     : null;
