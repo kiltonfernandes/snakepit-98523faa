@@ -586,6 +586,9 @@ function TopicStep({
       return;
     }
     setAutoSearching(true);
+    aiProgressTopic.start('Pesquisa automática (web)');
+    aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash', status: 'trying' });
+    aiProgressTopic.setStage('streaming');
     try {
       const { data, error } = await supabase.functions.invoke('web-research', {
         body: { query: googleQuery, context: topic.notes || '' },
@@ -593,14 +596,18 @@ function TopicStep({
       if (error) throw error;
       const notes = (data as any)?.notes as string | undefined;
       if (!notes) throw new Error('Resposta vazia da IA');
+      aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash', status: 'selected' });
+      aiProgressTopic.setStage('populating');
       const prev = (topic.notes || '').trim();
       const merged = prev
         ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
         : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
       dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: merged } });
+      aiProgressTopic.finish(null);
       toast.success('Pesquisa concluída — notas atualizadas');
       setSearchModalOpen(false);
     } catch (e: any) {
+      aiProgressTopic.finish(e?.message || 'Falha na pesquisa');
       toast.error(e?.message || 'Falha na pesquisa automática');
     } finally {
       setAutoSearching(false);
