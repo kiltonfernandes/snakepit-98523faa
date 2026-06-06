@@ -30,6 +30,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { YouTubeEmbeds } from '@/components/shared/YouTubeEmbeds';
+import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -1050,11 +1051,13 @@ export default function CalendarView() {
                   {topics.map((t) => {
                     const meta = STANDALONE_TOPIC_META[t.type];
                     const text = (t.parsed_text || t.response_text || '').trim();
+                    const rel = t.release_id ? releases.find(r => r.id === t.release_id) : null;
                     return (
                       <article key={t.id} className="border-t border-white/10 pt-4 space-y-3">
                         <h3 className="text-lg font-bold uppercase tracking-wider text-white">
                           {meta?.icon} {meta?.label}
                         </h3>
+                        {rel && <ReleaseLinkBar release={rel} />}
                         {text ? (
                           <div className="prose prose-invert max-w-none text-base leading-relaxed text-white/90 prose-headings:text-white prose-strong:text-white prose-a:text-primary prose-blockquote:text-white/70 prose-blockquote:border-white/30">
                             <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
