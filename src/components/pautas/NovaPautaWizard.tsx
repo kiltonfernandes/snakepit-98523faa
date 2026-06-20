@@ -664,15 +664,29 @@ function TopicStep({
     setGeneratingPauta(true);
     onPaste('');
     try {
-      await streamGeneratePauta({
+      const target = topic.target_words ?? 0;
+      const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
+      const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
+      let full = await streamGeneratePauta({
         prompt,
-        bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
-        temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+        bannedTerms,
+        temperature,
         webSearch: false,
         label: 'Gerando pauta',
         progress: aiProgressTopic,
         onChunk: (full) => onPaste(full),
       });
+      if (target > 0) {
+        full = await enforceLengthOnce({
+          text: full,
+          targetWords: target,
+          basePrompt: prompt,
+          bannedTerms,
+          temperature,
+          progress: aiProgressTopic,
+          onChunk: (txt) => onPaste(txt),
+        });
+      }
       toast.success('Pauta gerada');
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao gerar pauta');
