@@ -593,7 +593,13 @@ export default function CalendarView() {
         <div className="mt-2 space-y-1.5">
           {items.map((item) => {
             const relatedMat = item.material;
-            const readyToSchedule = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id) && !relatedMat.spotify_link;
+            const hasOneDrive = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id);
+            const hasSpotify = !!relatedMat && !!relatedMat.spotify_link;
+            const haloClass = hasSpotify
+              ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]'
+              : hasOneDrive
+                ? 'ring-2 ring-[#1e90ff] border-[#1e90ff] shadow-[0_0_8px_#1e90ffaa]'
+                : '';
             return (
             <button
               key={item.key}
@@ -603,7 +609,7 @@ export default function CalendarView() {
                   : item.type === 'release'
                     ? 'border-border bg-secondary/40 hover:border-primary/30 hover:bg-secondary/60'
                     : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
-              } ${readyToSchedule ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]' : ''}`}
+              } ${haloClass}`}
               onClick={() => {
                 if (item.type === 'pauta') {
                   if (relatedMat) openMaterialModal(relatedMat, item.pauta);
