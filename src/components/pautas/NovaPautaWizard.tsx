@@ -567,13 +567,14 @@ function TopicStep({
       notes: topic.notes,
       release: selectedRelease,
       platform: settings,
+      targetWords: topic.target_words ?? 500,
     }, getComponentPrompt(selectedTemplate, 'pauta_completa') || selectedTemplate?.template_text);
     if (!topic.prompt_text || topic.prompt_text === lastAuto) {
       setLastAuto(fresh);
       dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputLabel, topic.notes, topic.type, selectedRelease?.id, settings.banned_terms_text, settings.brand_tone_temperature, selectedTemplateId]);
+  }, [inputLabel, topic.notes, topic.type, topic.target_words, selectedRelease?.id, settings.banned_terms_text, settings.brand_tone_temperature, selectedTemplateId]);
 
   const regeneratePrompt = () => {
     const notes = (topic.notes || '').trim();
