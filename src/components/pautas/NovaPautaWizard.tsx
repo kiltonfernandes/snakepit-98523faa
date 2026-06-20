@@ -999,6 +999,32 @@ function TopicStep({
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor={`length-${topic.id}`}>Length (nº de palavras alvo)</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id={`length-${topic.id}`}
+            type="number"
+            min={50}
+            max={10000}
+            step={50}
+            className="w-32"
+            value={topic.target_words ?? 500}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              dispatch({
+                kind: 'patchTopic',
+                id: topic.id,
+                patch: { target_words: Number.isFinite(v) && v > 0 ? v : null },
+              });
+            }}
+          />
+          <span className="text-xs text-muted-foreground">
+            A IA receberá uma regra para escrever ~{topic.target_words ?? 500} palavras (±15%). Se ficar fora, fazemos um ajuste automático.
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt (editável)</Label>
           <div className="flex flex-wrap gap-2">
