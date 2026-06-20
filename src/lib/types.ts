@@ -109,6 +109,8 @@ export interface StandaloneTopic {
   parse_warnings?: string[];
   /** Persisted ID of the prompt template selected for this topic. */
   template_id?: string | null;
+  /** Target word count for the generated pauta body. Default 500. */
+  target_words?: number | null;
 }
 
 export interface AppSettings {
