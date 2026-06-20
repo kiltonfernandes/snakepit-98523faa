@@ -1120,7 +1120,8 @@ function TopicStep({
         {topic.response_text && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Check className="h-3.5 w-3.5 text-emerald-500" />
-            Resposta registrada ({topic.response_text.length} caracteres).
+            Resposta registrada ({topic.response_text.length} caracteres · {countWords(topic.response_text)} palavras
+            {topic.target_words ? ` / alvo ${topic.target_words}` : ''}).
           </div>
         )}
         {topic.response_text && (
