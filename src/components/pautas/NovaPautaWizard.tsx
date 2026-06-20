@@ -123,6 +123,7 @@ function reducer(state: WizardState, action: Action): WizardState {
           response_text: '',
           parsed_text: null,
           parse_warnings: [],
+          target_words: 500,
         },
       );
       return { ...state, selectedTypes: orderedTypes, topics };
@@ -181,6 +182,80 @@ function descriptionHtmlFromResponse(raw: string): string {
   if (/<\w+/.test(trimmed)) return trimmed; // already HTML
   // Convert paragraphs/bullets minimally.
   return trimmed.split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('');
+}
+
+/** Counts words in plain editorial text (strips markdown punctuation). */
+function countWords(text: string): number {
+  if (!text) return 0;
+  const clean = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[#>*_`~\-\[\]\(\)!]/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return 0;
+  return clean.split(' ').filter(Boolean).length;
+}
+
+/** Returns true when the word count is inside ±15% of target. */
+function isWithinTarget(words: number, target: number): boolean {
+  if (!target) return true;
+  const min = Math.round(target * 0.85);
+  const max = Math.round(target * 1.15);
+  return words >= min && words <= max;
+}
+
+/**
+ * After a draft is generated, if it's outside ±15% of the target, fires a
+ * single follow-up call asking the model to rewrite to the exact target.
+ */
+async function enforceLengthOnce(opts: {
+  text: string;
+  targetWords: number;
+  basePrompt: string;
+  bannedTerms: string[];
+  temperature?: number;
+  progress?: any;
+  onChunk: (full: string) => void;
+}): Promise<string> {
+  const current = countWords(opts.text);
+  if (isWithinTarget(current, opts.targetWords)) return opts.text;
+  const direction = current < opts.targetWords ? 'EXPANDIR' : 'CONDENSAR';
+  const fixPrompt = [
+    `Reescreva a pauta abaixo para ter EXATAMENTE ~${opts.targetWords} palavras (faixa aceitável: ${Math.round(opts.targetWords * 0.9)}–${Math.round(opts.targetWords * 1.1)}).`,
+    `A versão atual tem ${current} palavras — você deve ${direction}.`,
+    'Mantenha o mesmo tom, estrutura, cabeçalhos e blocos fixos (SEGWAY, links, listas).',
+    'Devolva APENAS a pauta reescrita em Markdown puro, sem comentários nem meta-informação.',
+    '',
+    '---',
+    'CONTEXTO ORIGINAL DO PROMPT (para você não perder a voz/regras):',
+    opts.basePrompt,
+    '',
+    '---',
+    'PAUTA ATUAL (a ser reescrita):',
+    opts.text,
+  ].join('\n');
+  try {
+    const fixed = await streamGeneratePauta({
+      prompt: fixPrompt,
+      bannedTerms: opts.bannedTerms,
+      temperature: opts.temperature,
+      webSearch: false,
+      label: `Ajustando extensão (~${opts.targetWords} palavras)`,
+      progress: opts.progress,
+      onChunk: opts.onChunk,
+    });
+    const finalCount = countWords(fixed);
+    if (!isWithinTarget(finalCount, opts.targetWords)) {
+      toast.warning(`Pauta gerada com ${finalCount} palavras (alvo ${opts.targetWords}). Considere ajustar manualmente.`);
+    } else {
+      toast.success(`Pauta ajustada para ${finalCount} palavras.`);
+    }
+    return fixed;
+  } catch (e) {
+    toast.warning(`Não foi possível ajustar extensão (${current}/${opts.targetWords} palavras).`);
+    return opts.text;
+  }
 }
 
 // Build a granular Google query per topic type, using release + notes + URL.
@@ -566,13 +641,14 @@ function TopicStep({
       notes: topic.notes,
       release: selectedRelease,
       platform: settings,
+      targetWords: topic.target_words ?? 500,
     }, getComponentPrompt(selectedTemplate, 'pauta_completa') || selectedTemplate?.template_text);
     if (!topic.prompt_text || topic.prompt_text === lastAuto) {
       setLastAuto(fresh);
       dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: fresh } });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inputLabel, topic.notes, topic.type, selectedRelease?.id, settings.banned_terms_text, settings.brand_tone_temperature, selectedTemplateId]);
+  }, [inputLabel, topic.notes, topic.type, topic.target_words, selectedRelease?.id, settings.banned_terms_text, settings.brand_tone_temperature, selectedTemplateId]);
 
   const regeneratePrompt = () => {
     const notes = (topic.notes || '').trim();
@@ -662,15 +738,29 @@ function TopicStep({
     setGeneratingPauta(true);
     onPaste('');
     try {
-      await streamGeneratePauta({
+      const target = topic.target_words ?? 0;
+      const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
+      const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
+      let full = await streamGeneratePauta({
         prompt,
-        bannedTerms: settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [],
-        temperature: typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined,
+        bannedTerms,
+        temperature,
         webSearch: false,
         label: 'Gerando pauta',
         progress: aiProgressTopic,
         onChunk: (full) => onPaste(full),
       });
+      if (target > 0) {
+        full = await enforceLengthOnce({
+          text: full,
+          targetWords: target,
+          basePrompt: prompt,
+          bannedTerms,
+          temperature,
+          progress: aiProgressTopic,
+          onChunk: (txt) => onPaste(txt),
+        });
+      }
       toast.success('Pauta gerada');
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao gerar pauta');
@@ -730,7 +820,7 @@ function TopicStep({
       onPaste('');
       const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
       const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
-      const pautaFull = await streamGeneratePauta({
+      let pautaFull = await streamGeneratePauta({
         prompt: promptToUse,
         bannedTerms,
         temperature,
@@ -739,6 +829,18 @@ function TopicStep({
         progress: aiProgressTopic,
         onChunk: (full) => onPaste(full),
       });
+      const target = topic.target_words ?? 0;
+      if (target > 0) {
+        pautaFull = await enforceLengthOnce({
+          text: pautaFull,
+          targetWords: target,
+          basePrompt: promptToUse,
+          bannedTerms,
+          temperature,
+          progress: aiProgressTopic,
+          onChunk: (txt) => onPaste(txt),
+        });
+      }
 
       // Build aggregated content with the freshly-generated pauta for this topic.
       const updatedTopics = state.topics.map(t =>
@@ -909,6 +1011,32 @@ function TopicStep({
       </div>
 
       <div className="space-y-2">
+        <Label htmlFor={`length-${topic.id}`}>Length (nº de palavras alvo)</Label>
+        <div className="flex items-center gap-2">
+          <Input
+            id={`length-${topic.id}`}
+            type="number"
+            min={50}
+            max={10000}
+            step={50}
+            className="w-32"
+            value={topic.target_words ?? 500}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              dispatch({
+                kind: 'patchTopic',
+                id: topic.id,
+                patch: { target_words: Number.isFinite(v) && v > 0 ? v : null },
+              });
+            }}
+          />
+          <span className="text-xs text-muted-foreground">
+            A IA receberá uma regra para escrever ~{topic.target_words ?? 500} palavras (±15%). Se ficar fora, fazemos um ajuste automático.
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Prompt (editável)</Label>
           <div className="flex flex-wrap gap-2">
@@ -992,7 +1120,8 @@ function TopicStep({
         {topic.response_text && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Check className="h-3.5 w-3.5 text-emerald-500" />
-            Resposta registrada ({topic.response_text.length} caracteres).
+            Resposta registrada ({topic.response_text.length} caracteres · {countWords(topic.response_text)} palavras
+            {topic.target_words ? ` / alvo ${topic.target_words}` : ''}).
           </div>
         )}
         {topic.response_text && (

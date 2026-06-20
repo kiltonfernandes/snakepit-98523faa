@@ -533,6 +533,30 @@ export interface StandaloneTopicPromptCtx {
   notes: string;
   release?: Release | null;
   platform?: Partial<AppSettings> | null;
+  /** Target word count for the pauta body. */
+  targetWords?: number | null;
+}
+
+/** Builds a strict, language-explicit length directive prepended to every prompt. */
+export function buildLengthRule(targetWords?: number | null): string {
+  const n = typeof targetWords === 'number' && targetWords > 0 ? Math.round(targetWords) : null;
+  if (!n) return '';
+  const min = Math.round(n * 0.9);
+  const max = Math.round(n * 1.1);
+  return [
+    'REGRA DE EXTENSÃO (OBRIGATÓRIA, INEGOCIÁVEL):',
+    `- O CORPO da pauta deve ter aproximadamente ${n} palavras em português (faixa aceitável: ${min}–${max} palavras).`,
+    '- Conte SOMENTE o texto editorial (ignore títulos, bullets curtos, links e blocos institucionais fixos como SEGWAY).',
+    `- Se o conteúdo natural for mais curto, EXPANDA com contexto, exemplos e análise até atingir ${n} palavras.`,
+    `- Se for mais longo, CONDENSE mantendo os pontos mais importantes até atingir ${n} palavras.`,
+    '- NÃO escreva "(palavras: N)" nem qualquer meta-informação sobre tamanho na resposta final.',
+  ].join('\n');
+}
+
+function withLengthRule(prompt: string, targetWords?: number | null): string {
+  const rule = buildLengthRule(targetWords);
+  if (!rule) return prompt;
+  return `${rule}\n\n${prompt}`;
 }
 
 export function getStandaloneTopicPrompt(
@@ -546,15 +570,18 @@ export function getStandaloneTopicPrompt(
     release_block: buildReleaseBlock(vars.release),
     platform_block: buildPlatformBlock(vars.platform),
   };
+  let body: string;
   if (overrideTemplate && overrideTemplate.trim() && overrideTemplate.trim() !== '__BUILTIN__') {
-    return fill(overrideTemplate, filled);
+    body = fill(overrideTemplate, filled);
+  } else {
+    switch (type) {
+      case 'anniversary': body = fill(PROMPT_ANNIVERSARY, filled); break;
+      case 'review':      body = fill(PROMPT_REVIEW, filled); break;
+      case 'news':        body = fill(PROMPT_NEWS, filled); break;
+      case 'interview':   body = fill(PROMPT_INTERVIEW, filled); break;
+    }
   }
-  switch (type) {
-    case 'anniversary': return fill(PROMPT_ANNIVERSARY, filled);
-    case 'review':      return fill(PROMPT_REVIEW, filled);
-    case 'news':        return fill(PROMPT_NEWS, filled);
-    case 'interview':   return fill(PROMPT_INTERVIEW, filled);
-  }
+  return withLengthRule(body!, vars.targetWords);
 }
 
 /** Returns the raw built-in template text for a given topic type (for cloning into custom templates). */
