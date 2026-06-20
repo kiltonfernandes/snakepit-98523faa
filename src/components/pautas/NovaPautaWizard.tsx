@@ -820,7 +820,7 @@ function TopicStep({
       onPaste('');
       const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
       const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
-      const pautaFull = await streamGeneratePauta({
+      let pautaFull = await streamGeneratePauta({
         prompt: promptToUse,
         bannedTerms,
         temperature,
@@ -829,6 +829,18 @@ function TopicStep({
         progress: aiProgressTopic,
         onChunk: (full) => onPaste(full),
       });
+      const target = topic.target_words ?? 0;
+      if (target > 0) {
+        pautaFull = await enforceLengthOnce({
+          text: pautaFull,
+          targetWords: target,
+          basePrompt: promptToUse,
+          bannedTerms,
+          temperature,
+          progress: aiProgressTopic,
+          onChunk: (txt) => onPaste(txt),
+        });
+      }
 
       // Build aggregated content with the freshly-generated pauta for this topic.
       const updatedTopics = state.topics.map(t =>
