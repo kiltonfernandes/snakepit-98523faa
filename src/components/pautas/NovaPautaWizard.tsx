@@ -184,6 +184,80 @@ function descriptionHtmlFromResponse(raw: string): string {
   return trimmed.split(/\n\s*\n/).map(p => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('');
 }
 
+/** Counts words in plain editorial text (strips markdown punctuation). */
+function countWords(text: string): number {
+  if (!text) return 0;
+  const clean = text
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/[#>*_`~\-\[\]\(\)!]/g, ' ')
+    .replace(/https?:\/\/\S+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!clean) return 0;
+  return clean.split(' ').filter(Boolean).length;
+}
+
+/** Returns true when the word count is inside ±15% of target. */
+function isWithinTarget(words: number, target: number): boolean {
+  if (!target) return true;
+  const min = Math.round(target * 0.85);
+  const max = Math.round(target * 1.15);
+  return words >= min && words <= max;
+}
+
+/**
+ * After a draft is generated, if it's outside ±15% of the target, fires a
+ * single follow-up call asking the model to rewrite to the exact target.
+ */
+async function enforceLengthOnce(opts: {
+  text: string;
+  targetWords: number;
+  basePrompt: string;
+  bannedTerms: string[];
+  temperature?: number;
+  progress?: any;
+  onChunk: (full: string) => void;
+}): Promise<string> {
+  const current = countWords(opts.text);
+  if (isWithinTarget(current, opts.targetWords)) return opts.text;
+  const direction = current < opts.targetWords ? 'EXPANDIR' : 'CONDENSAR';
+  const fixPrompt = [
+    `Reescreva a pauta abaixo para ter EXATAMENTE ~${opts.targetWords} palavras (faixa aceitável: ${Math.round(opts.targetWords * 0.9)}–${Math.round(opts.targetWords * 1.1)}).`,
+    `A versão atual tem ${current} palavras — você deve ${direction}.`,
+    'Mantenha o mesmo tom, estrutura, cabeçalhos e blocos fixos (SEGWAY, links, listas).',
+    'Devolva APENAS a pauta reescrita em Markdown puro, sem comentários nem meta-informação.',
+    '',
+    '---',
+    'CONTEXTO ORIGINAL DO PROMPT (para você não perder a voz/regras):',
+    opts.basePrompt,
+    '',
+    '---',
+    'PAUTA ATUAL (a ser reescrita):',
+    opts.text,
+  ].join('\n');
+  try {
+    const fixed = await streamGeneratePauta({
+      prompt: fixPrompt,
+      bannedTerms: opts.bannedTerms,
+      temperature: opts.temperature,
+      webSearch: false,
+      label: `Ajustando extensão (~${opts.targetWords} palavras)`,
+      progress: opts.progress,
+      onChunk: opts.onChunk,
+    });
+    const finalCount = countWords(fixed);
+    if (!isWithinTarget(finalCount, opts.targetWords)) {
+      toast.warning(`Pauta gerada com ${finalCount} palavras (alvo ${opts.targetWords}). Considere ajustar manualmente.`);
+    } else {
+      toast.success(`Pauta ajustada para ${finalCount} palavras.`);
+    }
+    return fixed;
+  } catch (e) {
+    toast.warning(`Não foi possível ajustar extensão (${current}/${opts.targetWords} palavras).`);
+    return opts.text;
+  }
+}
+
 // Build a granular Google query per topic type, using release + notes + URL.
 function buildGoogleQuery(topic: StandaloneTopic, release: Release | null | undefined, customQuery?: string | null): string {
   const notes = (topic.notes || '').trim();
