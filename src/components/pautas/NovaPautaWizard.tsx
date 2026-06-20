@@ -123,6 +123,7 @@ function reducer(state: WizardState, action: Action): WizardState {
           response_text: '',
           parsed_text: null,
           parse_warnings: [],
+          target_words: 500,
         },
       );
       return { ...state, selectedTypes: orderedTypes, topics };
