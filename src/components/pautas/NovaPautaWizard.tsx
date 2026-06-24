@@ -621,10 +621,15 @@ function TopicStep({
   // Picker do "Gerar tudo" — escolhe quais etapas rodar.
   const [generateAllOpen, setGenerateAllOpen] = useState(false);
   const [generateAllSteps, setGenerateAllSteps] = useState<GenerateAllSteps>({
-    pesquisa: true, pauta: true, titulos: true, descricao: true,
+    pesquisa: true, pauta: true, formatarApenas: false, titulos: true, descricao: true,
   });
   const toggleStep = (k: keyof GenerateAllSteps) =>
-    setGenerateAllSteps(s => ({ ...s, [k]: !s[k] }));
+    setGenerateAllSteps(s => {
+      const next = { ...s, [k]: !s[k] };
+      // "formatarApenas" só faz sentido quando "pauta" está desligada.
+      if (k === 'pauta' && next.pauta) next.formatarApenas = false;
+      return next;
+    });
 
   // "Gerar tudo" toggle — persisted across sessions.
   const [generateAll, setGenerateAll] = useState<boolean>(() => {
@@ -793,7 +798,9 @@ function TopicStep({
   };
 
   // ─── Gerar tudo: pesquisa → prompt → pauta → títulos → descrição ─────────
-  const runGenerateAll = async (steps: GenerateAllSteps = { pesquisa: true, pauta: true, titulos: true, descricao: true }) => {
+  const runGenerateAll = async (
+    steps: GenerateAllSteps = { pesquisa: true, pauta: true, formatarApenas: false, titulos: true, descricao: true },
+  ) => {
     if (!topic.prompt_text?.trim() && !googleQuery && !topic.notes?.trim()) {
       toast.error('Sem contexto suficiente para gerar tudo.');
       return;
