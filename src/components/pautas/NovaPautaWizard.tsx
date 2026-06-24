@@ -762,6 +762,9 @@ function TopicStep({
           onChunk: (txt) => onPaste(txt),
         });
       }
+      // Guardrail: garante SEGWAY intro/outro mesmo se o LLM ignorar.
+      const wrapped = wrapWithSegways(full);
+      if (wrapped !== full) onPaste(wrapped);
       toast.success('Pauta gerada');
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao gerar pauta');
