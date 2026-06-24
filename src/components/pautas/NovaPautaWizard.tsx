@@ -50,6 +50,7 @@ import {
   buildReleaseBlock,
   wrapWithSegways,
 } from '@/lib/standalone-prompts';
+import { getStandaloneFormatPrompt } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -65,6 +66,9 @@ const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'in
 interface GenerateAllSteps {
   pesquisa: boolean;
   pauta: boolean;
+  /** Sub-opção de "pauta": só vale quando pauta=false. Em vez de gerar,
+   *  pega o texto cru já presente em response_text e devolve formatado em Markdown. */
+  formatarApenas: boolean;
   titulos: boolean;
   descricao: boolean;
 }
