@@ -614,6 +614,14 @@ function TopicStep({
   const [generatingPauta, setGeneratingPauta] = useState(false);
   const aiProgressTopic = useAiCallProgress();
 
+  // Picker do "Gerar tudo" — escolhe quais etapas rodar.
+  const [generateAllOpen, setGenerateAllOpen] = useState(false);
+  const [generateAllSteps, setGenerateAllSteps] = useState<GenerateAllSteps>({
+    pesquisa: true, pauta: true, titulos: true, descricao: true,
+  });
+  const toggleStep = (k: keyof GenerateAllSteps) =>
+    setGenerateAllSteps(s => ({ ...s, [k]: !s[k] }));
+
   // "Gerar tudo" toggle — persisted across sessions.
   const [generateAll, setGenerateAll] = useState<boolean>(() => {
     try { return localStorage.getItem('pauta_wizard_gerar_tudo') === '1'; } catch { return false; }
