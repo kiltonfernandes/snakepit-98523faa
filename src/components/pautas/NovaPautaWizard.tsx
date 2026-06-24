@@ -48,6 +48,7 @@ import {
   getStandaloneDescriptionPrompt,
   getStandaloneCoverPrompt,
   buildReleaseBlock,
+  wrapWithSegways,
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
