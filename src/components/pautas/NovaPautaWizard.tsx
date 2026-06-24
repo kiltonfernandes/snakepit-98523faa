@@ -62,6 +62,13 @@ import { sanitizeMarkdownOutput } from '@/lib/ai/markdown-sanitize';
 const DRAFT_KEY = 'nova_pauta_draft_v1';
 const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
 
+interface GenerateAllSteps {
+  pesquisa: boolean;
+  pauta: boolean;
+  titulos: boolean;
+  descricao: boolean;
+}
+
 // ─── Wizard state ───────────────────────────────────────────────────────────
 
 interface WizardState {
