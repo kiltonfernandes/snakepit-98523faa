@@ -603,8 +603,11 @@ export function buildLengthRule(targetWords?: number | null): string {
 
 function withLengthRule(prompt: string, targetWords?: number | null): string {
   const rule = buildLengthRule(targetWords);
-  if (!rule) return prompt;
-  return `${rule}\n\n${prompt}`;
+  const segway = buildSegwayInstruction();
+  const parts = [segway];
+  if (rule) parts.push(rule);
+  parts.push(prompt);
+  return parts.join('\n\n');
 }
 
 export function getStandaloneTopicPrompt(
