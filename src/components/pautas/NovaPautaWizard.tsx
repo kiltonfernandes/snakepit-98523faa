@@ -1123,7 +1123,7 @@ function TopicStep({
             </label>
             <Button
               size="sm"
-              onClick={generateAll ? runGenerateAll : generatePautaWithAI}
+              onClick={generateAll ? () => setGenerateAllOpen(true) : generatePautaWithAI}
               disabled={generatingPauta || !topic.prompt_text?.trim()}
               title={
                 generateAll
