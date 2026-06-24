@@ -48,6 +48,7 @@ import {
   getStandaloneDescriptionPrompt,
   getStandaloneCoverPrompt,
   buildReleaseBlock,
+  wrapWithSegways,
 } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
@@ -60,6 +61,13 @@ import { sanitizeMarkdownOutput } from '@/lib/ai/markdown-sanitize';
 
 const DRAFT_KEY = 'nova_pauta_draft_v1';
 const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
+
+interface GenerateAllSteps {
+  pesquisa: boolean;
+  pauta: boolean;
+  titulos: boolean;
+  descricao: boolean;
+}
 
 // ─── Wizard state ───────────────────────────────────────────────────────────
 
@@ -606,6 +614,14 @@ function TopicStep({
   const [generatingPauta, setGeneratingPauta] = useState(false);
   const aiProgressTopic = useAiCallProgress();
 
+  // Picker do "Gerar tudo" — escolhe quais etapas rodar.
+  const [generateAllOpen, setGenerateAllOpen] = useState(false);
+  const [generateAllSteps, setGenerateAllSteps] = useState<GenerateAllSteps>({
+    pesquisa: true, pauta: true, titulos: true, descricao: true,
+  });
+  const toggleStep = (k: keyof GenerateAllSteps) =>
+    setGenerateAllSteps(s => ({ ...s, [k]: !s[k] }));
+
   // "Gerar tudo" toggle — persisted across sessions.
   const [generateAll, setGenerateAll] = useState<boolean>(() => {
     try { return localStorage.getItem('pauta_wizard_gerar_tudo') === '1'; } catch { return false; }
@@ -761,6 +777,9 @@ function TopicStep({
           onChunk: (txt) => onPaste(txt),
         });
       }
+      // Guardrail: garante SEGWAY intro/outro mesmo se o LLM ignorar.
+      const wrapped = wrapWithSegways(full);
+      if (wrapped !== full) onPaste(wrapped);
       toast.success('Pauta gerada');
     } catch (e: any) {
       toast.error(e?.message || 'Falha ao gerar pauta');
@@ -770,7 +789,7 @@ function TopicStep({
   };
 
   // ─── Gerar tudo: pesquisa → prompt → pauta → títulos → descrição ─────────
-  const runGenerateAll = async () => {
+  const runGenerateAll = async (steps: GenerateAllSteps = { pesquisa: true, pauta: true, titulos: true, descricao: true }) => {
     if (!topic.prompt_text?.trim() && !googleQuery && !topic.notes?.trim()) {
       toast.error('Sem contexto suficiente para gerar tudo.');
       return;
@@ -780,7 +799,7 @@ function TopicStep({
     try {
       // 1. Pesquisa web (best effort — não bloqueia se faltar query)
       let mergedNotes = topic.notes || '';
-      if (googleQuery) {
+      if (steps.pesquisa && googleQuery) {
         aiProgressTopic.setStage('streaming');
         aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'trying' });
         try {
@@ -817,29 +836,38 @@ function TopicStep({
       }
 
       // 3. Gerar pauta
-      onPaste('');
       const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
       const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
-      let pautaFull = await streamGeneratePauta({
-        prompt: promptToUse,
-        bannedTerms,
-        temperature,
-        webSearch: false,
-        label: 'Gerar tudo — pauta',
-        progress: aiProgressTopic,
-        onChunk: (full) => onPaste(full),
-      });
-      const target = topic.target_words ?? 0;
-      if (target > 0) {
-        pautaFull = await enforceLengthOnce({
-          text: pautaFull,
-          targetWords: target,
-          basePrompt: promptToUse,
+      let pautaFull = topic.response_text || '';
+      if (steps.pauta) {
+        onPaste('');
+        pautaFull = await streamGeneratePauta({
+          prompt: promptToUse,
           bannedTerms,
           temperature,
+          webSearch: false,
+          label: 'Gerar tudo — pauta',
           progress: aiProgressTopic,
-          onChunk: (txt) => onPaste(txt),
+          onChunk: (full) => onPaste(full),
         });
+        const target = topic.target_words ?? 0;
+        if (target > 0) {
+          pautaFull = await enforceLengthOnce({
+            text: pautaFull,
+            targetWords: target,
+            basePrompt: promptToUse,
+            bannedTerms,
+            temperature,
+            progress: aiProgressTopic,
+            onChunk: (txt) => onPaste(txt),
+          });
+        }
+        // Guardrail: garante SEGWAY intro/outro mesmo se o LLM ignorar.
+        const wrapped = wrapWithSegways(pautaFull);
+        if (wrapped !== pautaFull) {
+          pautaFull = wrapped;
+          onPaste(wrapped);
+        }
       }
 
       // Build aggregated content with the freshly-generated pauta for this topic.
@@ -851,42 +879,47 @@ function TopicStep({
       const content = aggregatedContent(updatedTopics, releases);
 
       // 4. Gerar títulos
-      const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
-      const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
-      dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
-      dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
-      const titleFull = await streamGeneratePauta({
-        prompt: titlePrompt,
-        bannedTerms,
-        temperature,
-        webSearch: false,
-        label: 'Gerar tudo — títulos',
-        progress: aiProgressTopic,
-        onChunk: (full) => dispatch({ kind: 'setField', field: 'titleResponse', value: full }),
-      });
-      const opts = parseTitleOptionsFromText(titleFull);
-      dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
-      if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
-      const chosenTitle = opts[0]?.text || '';
+      let chosenTitle = state.titleOptions[state.selectedTitleIndex ?? 0]?.text || '';
+      if (steps.titulos) {
+        const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
+        const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
+        dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
+        dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
+        const titleFull = await streamGeneratePauta({
+          prompt: titlePrompt,
+          bannedTerms,
+          temperature,
+          webSearch: false,
+          label: 'Gerar tudo — títulos',
+          progress: aiProgressTopic,
+          onChunk: (full) => dispatch({ kind: 'setField', field: 'titleResponse', value: full }),
+        });
+        const opts = parseTitleOptionsFromText(titleFull);
+        dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
+        if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
+        chosenTitle = opts[0]?.text || '';
+      }
 
       // 5. Gerar descrição
-      const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
-      const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
-      dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
-      dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
-      const descFull = await streamGeneratePauta({
-        prompt: descPrompt,
-        bannedTerms,
-        temperature,
-        webSearch: false,
-        label: 'Gerar tudo — descrição',
-        progress: aiProgressTopic,
-        onChunk: (full) => {
-          dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
-          dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
-        },
-      });
-      dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(descFull) });
+      if (steps.descricao) {
+        const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
+        const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
+        dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
+        dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
+        const descFull = await streamGeneratePauta({
+          prompt: descPrompt,
+          bannedTerms,
+          temperature,
+          webSearch: false,
+          label: 'Gerar tudo — descrição',
+          progress: aiProgressTopic,
+          onChunk: (full) => {
+            dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
+            dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
+          },
+        });
+        dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(descFull) });
+      }
 
       aiProgressTopic.finish(null);
       toast.success('Pipeline completa: pauta + títulos + descrição gerados');
@@ -938,6 +971,54 @@ function TopicStep({
         defaultType={topic.type}
         onChanged={refresh}
       />
+
+      <Dialog open={generateAllOpen} onOpenChange={(o) => !generatingPauta && setGenerateAllOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gerar tudo — escolha as etapas</DialogTitle>
+            <DialogDescription>
+              Tudo selecionado por padrão. Desmarque o que você não quer gerar nesta rodada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {([
+              { key: 'pesquisa' as const, label: 'Pesquisa web (DeepSeek + web search)', hint: 'Popula a Direção editorial / notas a partir da query do Google.' },
+              { key: 'pauta' as const,    label: 'Pauta', hint: 'Gera o corpo editorial completo com SEGWAY intro/outro.' },
+              { key: 'titulos' as const,  label: 'Títulos (3 opções)', hint: 'Clickbait, curiosidade e impacto — escolhe a primeira por padrão.' },
+              { key: 'descricao' as const,label: 'Descrição (HTML)', hint: 'Descrição final com bloco institucional e seção "Mencionado".' },
+            ]).map(opt => (
+              <label key={opt.key} className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/40">
+                <Checkbox
+                  checked={generateAllSteps[opt.key]}
+                  onCheckedChange={() => toggleStep(opt.key)}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{opt.label}</span>
+                  <span className="text-[11px] text-muted-foreground">{opt.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setGenerateAllOpen(false)} disabled={generatingPauta}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!Object.values(generateAllSteps).some(Boolean)) {
+                  toast.error('Selecione pelo menos uma etapa.');
+                  return;
+                }
+                setGenerateAllOpen(false);
+                await runGenerateAll(generateAllSteps);
+              }}
+              disabled={generatingPauta}
+            >
+              {generatingPauta ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+              Iniciar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={searchModalOpen} onOpenChange={setSearchModalOpen}>
         <DialogContent className="max-w-md">
@@ -1090,7 +1171,7 @@ function TopicStep({
             </label>
             <Button
               size="sm"
-              onClick={generateAll ? runGenerateAll : generatePautaWithAI}
+              onClick={generateAll ? () => setGenerateAllOpen(true) : generatePautaWithAI}
               disabled={generatingPauta || !topic.prompt_text?.trim()}
               title={
                 generateAll

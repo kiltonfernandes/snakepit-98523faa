@@ -12,6 +12,54 @@ import { StandaloneTopicType, Release, AppSettings } from './types';
 import { getPromptText, type PromptOverrides } from './prompt-defaults';
 import { toneProfileForTemperature } from './prompt-builder';
 
+// ─── SEGWAY (intro/outro fixos para TODA pauta) ─────────────────────────────
+
+/** Abertura obrigatória de toda pauta avulsa (qualquer prompt). */
+export const SEGWAY_INTRO = `Saudações, heavynautas!
+
+Nossa nave está aterrissando em mais um episódio do nosso podcast diário com os melhores lançamentos do heavy metal. O meu nome é Kilton Fernandes e hoje eu estou com meu copiloto Rafa Ferreira. Seja muito bem-vindo!`;
+
+/** Encerramento obrigatório de toda pauta avulsa (qualquer prompt). */
+export const SEGWAY_OUTRO = `Kilton: Nossa nave espacial está se preparando para levantar voo e partir por hoje. Muito obrigado por nos acompanhar nessa jornada pelo universo do heavy metal.
+
+Rafa: E não se esqueçam, heavynautas! Estamos de volta amanhã com mais novidades do mundo do metal. O Snakepit vai ao ar todos os dias, de segunda a sexta as 6 da manhã. Desejo a todos uma ótima noite e até a nossa próxima viagem!`;
+
+function normalizeForCompare(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Garante que o texto da pauta comece com SEGWAY_INTRO e termine com
+ * SEGWAY_OUTRO. Idempotente: se já existirem (mesmo com pequenas variações
+ * de espaço), não duplica.
+ */
+export function wrapWithSegways(text: string): string {
+  const body = (text || '').trim();
+  const norm = normalizeForCompare(body);
+  const introNorm = normalizeForCompare(SEGWAY_INTRO);
+  const outroNorm = normalizeForCompare(SEGWAY_OUTRO);
+  const hasIntro = norm.startsWith(introNorm.slice(0, Math.min(80, introNorm.length)));
+  const hasOutro = norm.endsWith(outroNorm.slice(-Math.min(80, outroNorm.length)));
+  const parts: string[] = [];
+  if (!hasIntro) parts.push(SEGWAY_INTRO);
+  parts.push(body);
+  if (!hasOutro) parts.push(SEGWAY_OUTRO);
+  return parts.join('\n\n');
+}
+
+/** Bloco a injetar dentro do prompt para que o LLM já gere com os segways. */
+export function buildSegwayInstruction(): string {
+  return [
+    'BLOCOS FIXOS OBRIGATÓRIOS (copie literalmente, sem reescrever):',
+    '',
+    '[INTRO — primeira coisa da pauta, antes de qualquer cabeçalho]',
+    SEGWAY_INTRO,
+    '',
+    '[OUTRO — última coisa da pauta, depois de todo o conteúdo]',
+    SEGWAY_OUTRO,
+  ].join('\n');
+}
+
 export interface StandaloneTopicMeta {
   type: StandaloneTopicType;
   label: string;
@@ -555,8 +603,11 @@ export function buildLengthRule(targetWords?: number | null): string {
 
 function withLengthRule(prompt: string, targetWords?: number | null): string {
   const rule = buildLengthRule(targetWords);
-  if (!rule) return prompt;
-  return `${rule}\n\n${prompt}`;
+  const segway = buildSegwayInstruction();
+  const parts = [segway];
+  if (rule) parts.push(rule);
+  parts.push(prompt);
+  return parts.join('\n\n');
 }
 
 export function getStandaloneTopicPrompt(
