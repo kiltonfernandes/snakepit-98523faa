@@ -879,6 +879,30 @@ function TopicStep({
           pautaFull = wrapped;
           onPaste(wrapped);
         }
+      } else if (steps.formatarApenas) {
+        // Sub-opção: não gera, apenas formata o texto cru já presente em response_text.
+        const raw = (topic.response_text || '').trim();
+        if (!raw) {
+          toast.warning('Formatar apenas: cole o conteúdo bruto no campo "Cole aqui a resposta da IA" antes de iniciar.');
+        } else {
+          const formatPrompt = getStandaloneFormatPrompt(raw);
+          onPaste('');
+          let formatted = await streamGeneratePauta({
+            prompt: formatPrompt,
+            bannedTerms,
+            temperature,
+            webSearch: false,
+            label: 'Gerar tudo — formatar apenas',
+            progress: aiProgressTopic,
+            onChunk: (full) => onPaste(full),
+          });
+          const wrapped = wrapWithSegways(formatted);
+          if (wrapped !== formatted) {
+            formatted = wrapped;
+            onPaste(wrapped);
+          }
+          pautaFull = formatted;
+        }
       }
 
       // Build aggregated content with the freshly-generated pauta for this topic.
