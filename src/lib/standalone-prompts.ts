@@ -60,6 +60,38 @@ export function buildSegwayInstruction(): string {
   ].join('\n');
 }
 
+/**
+ * Prompt de "formatar apenas" — não gera conteúdo novo, apenas pega o texto
+ * cru colado pelo editor e devolve em Markdown bem estruturado, mantendo o
+ * conteúdo intacto e envolvendo com os SEGWAYs fixos.
+ */
+export function getStandaloneFormatPrompt(rawText: string): string {
+  return [
+    'TAREFA: FORMATAR APENAS — NÃO GERAR CONTEÚDO NOVO.',
+    '',
+    'Você vai receber um texto cru (rascunho ou resposta de outra IA).',
+    'Sua única função é REESCREVER esse texto em Markdown limpo e legível,',
+    'preservando 100% do conteúdo, fatos, opiniões, ordem e voz do original.',
+    '',
+    'REGRAS:',
+    '- NÃO invente, NÃO acrescente, NÃO resuma e NÃO remova informações.',
+    '- Use cabeçalhos (##, ###) onde fizer sentido editorialmente.',
+    '- Use listas, negrito e itálico com parcimônia, só onde melhora a leitura.',
+    '- Quebre parágrafos longos. Corrija pontuação e espaçamento.',
+    '- NÃO traduza. Mantenha o idioma original (português).',
+    '- NÃO inclua meta-comentários ("aqui está a versão formatada", etc.).',
+    '',
+    buildSegwayInstruction(),
+    '',
+    'TEXTO ORIGINAL A FORMATAR (entre <<< >>>):',
+    '<<<',
+    rawText,
+    '>>>',
+    '',
+    'Devolva apenas o Markdown final, começando pelo SEGWAY intro e terminando pelo SEGWAY outro.',
+  ].join('\n');
+}
+
 export interface StandaloneTopicMeta {
   type: StandaloneTopicType;
   label: string;

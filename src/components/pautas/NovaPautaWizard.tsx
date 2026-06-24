@@ -50,6 +50,7 @@ import {
   buildReleaseBlock,
   wrapWithSegways,
 } from '@/lib/standalone-prompts';
+import { getStandaloneFormatPrompt } from '@/lib/standalone-prompts';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { Sparkles, Settings2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -65,6 +66,9 @@ const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'in
 interface GenerateAllSteps {
   pesquisa: boolean;
   pauta: boolean;
+  /** Sub-opção de "pauta": só vale quando pauta=false. Em vez de gerar,
+   *  pega o texto cru já presente em response_text e devolve formatado em Markdown. */
+  formatarApenas: boolean;
   titulos: boolean;
   descricao: boolean;
 }
@@ -617,10 +621,15 @@ function TopicStep({
   // Picker do "Gerar tudo" — escolhe quais etapas rodar.
   const [generateAllOpen, setGenerateAllOpen] = useState(false);
   const [generateAllSteps, setGenerateAllSteps] = useState<GenerateAllSteps>({
-    pesquisa: true, pauta: true, titulos: true, descricao: true,
+    pesquisa: true, pauta: true, formatarApenas: false, titulos: true, descricao: true,
   });
   const toggleStep = (k: keyof GenerateAllSteps) =>
-    setGenerateAllSteps(s => ({ ...s, [k]: !s[k] }));
+    setGenerateAllSteps(s => {
+      const next = { ...s, [k]: !s[k] };
+      // "formatarApenas" só faz sentido quando "pauta" está desligada.
+      if (k === 'pauta' && next.pauta) next.formatarApenas = false;
+      return next;
+    });
 
   // "Gerar tudo" toggle — persisted across sessions.
   const [generateAll, setGenerateAll] = useState<boolean>(() => {
@@ -789,7 +798,9 @@ function TopicStep({
   };
 
   // ─── Gerar tudo: pesquisa → prompt → pauta → títulos → descrição ─────────
-  const runGenerateAll = async (steps: GenerateAllSteps = { pesquisa: true, pauta: true, titulos: true, descricao: true }) => {
+  const runGenerateAll = async (
+    steps: GenerateAllSteps = { pesquisa: true, pauta: true, formatarApenas: false, titulos: true, descricao: true },
+  ) => {
     if (!topic.prompt_text?.trim() && !googleQuery && !topic.notes?.trim()) {
       toast.error('Sem contexto suficiente para gerar tudo.');
       return;
@@ -867,6 +878,30 @@ function TopicStep({
         if (wrapped !== pautaFull) {
           pautaFull = wrapped;
           onPaste(wrapped);
+        }
+      } else if (steps.formatarApenas) {
+        // Sub-opção: não gera, apenas formata o texto cru já presente em response_text.
+        const raw = (topic.response_text || '').trim();
+        if (!raw) {
+          toast.warning('Formatar apenas: cole o conteúdo bruto no campo "Cole aqui a resposta da IA" antes de iniciar.');
+        } else {
+          const formatPrompt = getStandaloneFormatPrompt(raw);
+          onPaste('');
+          let formatted = await streamGeneratePauta({
+            prompt: formatPrompt,
+            bannedTerms,
+            temperature,
+            webSearch: false,
+            label: 'Gerar tudo — formatar apenas',
+            progress: aiProgressTopic,
+            onChunk: (full) => onPaste(full),
+          });
+          const wrapped = wrapWithSegways(formatted);
+          if (wrapped !== formatted) {
+            formatted = wrapped;
+            onPaste(wrapped);
+          }
+          pautaFull = formatted;
         }
       }
 
@@ -987,7 +1022,8 @@ function TopicStep({
               { key: 'titulos' as const,  label: 'Títulos (3 opções)', hint: 'Clickbait, curiosidade e impacto — escolhe a primeira por padrão.' },
               { key: 'descricao' as const,label: 'Descrição (HTML)', hint: 'Descrição final com bloco institucional e seção "Mencionado".' },
             ]).map(opt => (
-              <label key={opt.key} className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/40">
+              <div key={opt.key} className="space-y-2">
+              <label className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/40">
                 <Checkbox
                   checked={generateAllSteps[opt.key]}
                   onCheckedChange={() => toggleStep(opt.key)}
@@ -998,6 +1034,30 @@ function TopicStep({
                   <span className="text-[11px] text-muted-foreground">{opt.hint}</span>
                 </span>
               </label>
+              {opt.key === 'pauta' && (
+                <label
+                  className={`ml-8 flex items-start gap-3 rounded-md border border-dashed p-2.5 transition-opacity ${
+                    generateAllSteps.pauta
+                      ? 'border-border/50 bg-muted/10 opacity-50 cursor-not-allowed'
+                      : 'border-primary/40 bg-primary/5 cursor-pointer hover:bg-primary/10'
+                  }`}
+                  title={generateAllSteps.pauta ? 'Disponível apenas quando "Pauta" está desligada.' : ''}
+                >
+                  <Checkbox
+                    checked={generateAllSteps.formatarApenas}
+                    disabled={generateAllSteps.pauta}
+                    onCheckedChange={() => toggleStep('formatarApenas')}
+                    className="mt-0.5"
+                  />
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-xs font-medium">↳ Formatar apenas (sem gerar)</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      Lê o conteúdo do campo "Cole aqui a resposta da IA" e devolve formatado em Markdown, com SEGWAY intro/outro. Não cria conteúdo novo.
+                    </span>
+                  </span>
+                </label>
+              )}
+              </div>
             ))}
           </div>
           <DialogFooter>
