@@ -972,6 +972,54 @@ function TopicStep({
         onChanged={refresh}
       />
 
+      <Dialog open={generateAllOpen} onOpenChange={(o) => !generatingPauta && setGenerateAllOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gerar tudo — escolha as etapas</DialogTitle>
+            <DialogDescription>
+              Tudo selecionado por padrão. Desmarque o que você não quer gerar nesta rodada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {([
+              { key: 'pesquisa' as const, label: 'Pesquisa web (DeepSeek + web search)', hint: 'Popula a Direção editorial / notas a partir da query do Google.' },
+              { key: 'pauta' as const,    label: 'Pauta', hint: 'Gera o corpo editorial completo com SEGWAY intro/outro.' },
+              { key: 'titulos' as const,  label: 'Títulos (3 opções)', hint: 'Clickbait, curiosidade e impacto — escolhe a primeira por padrão.' },
+              { key: 'descricao' as const,label: 'Descrição (HTML)', hint: 'Descrição final com bloco institucional e seção "Mencionado".' },
+            ]).map(opt => (
+              <label key={opt.key} className="flex items-start gap-3 rounded-md border border-border bg-muted/20 p-3 cursor-pointer hover:bg-muted/40">
+                <Checkbox
+                  checked={generateAllSteps[opt.key]}
+                  onCheckedChange={() => toggleStep(opt.key)}
+                  className="mt-0.5"
+                />
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">{opt.label}</span>
+                  <span className="text-[11px] text-muted-foreground">{opt.hint}</span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setGenerateAllOpen(false)} disabled={generatingPauta}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!Object.values(generateAllSteps).some(Boolean)) {
+                  toast.error('Selecione pelo menos uma etapa.');
+                  return;
+                }
+                setGenerateAllOpen(false);
+                await runGenerateAll(generateAllSteps);
+              }}
+              disabled={generatingPauta}
+            >
+              {generatingPauta ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1 h-3.5 w-3.5" />}
+              Iniciar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={searchModalOpen} onOpenChange={setSearchModalOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
