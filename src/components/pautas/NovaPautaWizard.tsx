@@ -1639,30 +1639,159 @@ export interface NovaPautaWizardProps {
 }
 
 export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaPautaWizardProps) {
-  const { addPauta, addMaterial, logActivity, releases, settings } = useApp();
+  const { addPauta, addMaterial, updatePauta, updateMaterial, logActivity, releases, settings } = useApp();
   const [state, dispatch] = useReducer(reducer, undefined, initialState);
   const [saving, setSaving] = useState(false);
 
-  // Recover draft on open
+  // DB-first persistence — every change syncs to Supabase so the draft is
+  // available cross-device / cross-IP. The first meaningful edit creates
+  // the pauta + material rows; subsequent edits debounce-update them.
+  const pautaIdRef = useRef<string>('');
+  const materialIdRef = useRef<string>('');
+  const persistedRef = useRef<boolean>(false);
+  const hydratingRef = useRef<boolean>(false);
+
+  const isMeaningful = (s: WizardState): boolean =>
+    s.selectedTypes.length > 0 ||
+    s.topics.some(t => (t.notes || t.response_text || t.url || t.release_id)) ||
+    !!s.titleResponse || !!s.descriptionHtml || !!s.coverUrl ||
+    s.titleOptions.length > 0;
+
+  // Recover or create draft id on open + try to hydrate from DB.
   useEffect(() => {
     if (!open) return;
-    try {
-      const raw = localStorage.getItem(DRAFT_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as WizardState;
-        if (parsed && typeof parsed === 'object') dispatch({ kind: 'hydrate', state: { ...initialState(), ...parsed } });
+    let cancelled = false;
+    (async () => {
+      hydratingRef.current = true;
+      let id = '';
+      try { id = localStorage.getItem(DRAFT_ID_KEY) || ''; } catch {}
+      if (id) {
+        try {
+          const { data } = await supabase.from('pautas' as any)
+            .select('id, raw_inputs_json, standalone_topics, publication_date').eq('id', id).maybeSingle();
+          if (!cancelled && data) {
+            const raw = (data as any).raw_inputs_json || {};
+            const snap = raw.wizard_state as WizardState | undefined;
+            if (snap && typeof snap === 'object') {
+              dispatch({ kind: 'hydrate', state: { ...initialState(), ...snap } });
+              pautaIdRef.current = id;
+              persistedRef.current = true;
+              // Resolve material id linked to this pauta if present.
+              const { data: mat } = await supabase.from('episode_materials' as any)
+                .select('id').eq('source_pauta_id', id).maybeSingle();
+              if (mat) materialIdRef.current = (mat as any).id;
+            }
+          }
+        } catch (e) { console.warn('draft hydrate failed', e); }
       }
-    } catch {}
-    if (initialDate) {
-      dispatch({ kind: 'setField', field: 'publicationDate', value: initialDate });
-    }
+      // Legacy: migrate localStorage draft once if no DB draft existed.
+      if (!persistedRef.current) {
+        try {
+          const legacy = localStorage.getItem(DRAFT_KEY);
+          if (legacy) {
+            const parsed = JSON.parse(legacy) as WizardState;
+            if (parsed && typeof parsed === 'object') dispatch({ kind: 'hydrate', state: { ...initialState(), ...parsed } });
+          }
+        } catch {}
+      }
+      if (initialDate) dispatch({ kind: 'setField', field: 'publicationDate', value: initialDate });
+      hydratingRef.current = false;
+    })();
+    return () => { cancelled = true; };
   }, [open, initialDate]);
 
-  // Persist draft
+  // Debounced DB sync on every state change.
   useEffect(() => {
-    if (!open) return;
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(state)); } catch {}
+    if (!open || hydratingRef.current) return;
+    if (!isMeaningful(state)) return;
+    const t = setTimeout(() => { void syncDraft(state); }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, open]);
+
+  const ensurePersisted = async (s: WizardState): Promise<{ pautaId: string; materialId: string }> => {
+    if (persistedRef.current && pautaIdRef.current) {
+      return { pautaId: pautaIdRef.current, materialId: materialIdRef.current };
+    }
+    const weekId = standaloneWeekIdFor(s.publicationDate);
+    const weekStart = standaloneWeekStart(s.publicationDate);
+    await supabase.from('editorial_weeks' as any).upsert({
+      id: weekId, start_date: weekStart, status: 'draft',
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    } as any, { onConflict: 'id' });
+
+    const wd = new Date(s.publicationDate + 'T12:00:00').getDay();
+    const slotMap: Record<number, DaySlot> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
+    const pautaId = crypto.randomUUID();
+    const materialId = crypto.randomUUID();
+    const newPauta: Pauta = {
+      id: pautaId, week_id: weekId, publication_date: s.publicationDate,
+      pauta_type: 'weekday' as any, status: 'pesquisa',
+      raw_inputs_json: { standalone: true, wizard_state: s, draft: true } as any,
+      sections_json: {} as any, rendered_markdown: null, rendered_text: '',
+      warnings_json: [], discovered_links_json: [],
+      created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      finalized_at: null, is_standalone: true, standalone_topics: s.topics,
+    } as any;
+    addPauta(newPauta);
+    // Ensure standalone flag is set (addPauta uses generic insert).
+    await supabase.from('pautas' as any).update({
+      is_standalone: true, standalone_topics: s.topics as any,
+    }).eq('id', pautaId);
+
+    const material: EpisodeMaterial = {
+      id: materialId, week_id: weekId, slot_key: slotMap[wd] || 'monday',
+      episode_date: s.publicationDate, source_pauta_id: pautaId,
+      title_options_json: s.titleOptions, selected_title_index: s.selectedTitleIndex,
+      description_html: s.descriptionHtml || null,
+      cover_url: s.coverUrl || null, cover_source_url: s.coverSourceUrl || s.coverUrl || null,
+      spotify_link: null, repository_url: null, repository_file_id: null,
+      repository_provider: null, repository_uploaded_at: null, mentioned_in_episode: null,
+      cover_saved_at: null, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      is_standalone: true,
+    } as any;
+    addMaterial(material);
+
+    pautaIdRef.current = pautaId;
+    materialIdRef.current = materialId;
+    persistedRef.current = true;
+    try { localStorage.setItem(DRAFT_ID_KEY, pautaId); } catch {}
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    return { pautaId, materialId };
+  };
+
+  const syncDraft = async (s: WizardState) => {
+    try {
+      const { pautaId, materialId } = await ensurePersisted(s);
+      const sectionsJson: Record<string, string> = {};
+      for (const t of s.topics) sectionsJson[`standalone_${t.type}`] = plainTextResponseFor(t);
+      const renderedText = aggregatedContent(s.topics);
+      updatePauta(pautaId, {
+        publication_date: s.publicationDate,
+        week_id: standaloneWeekIdFor(s.publicationDate),
+        raw_inputs_json: { standalone: true, wizard_state: s, draft: true } as any,
+        sections_json: sectionsJson as any,
+        rendered_text: renderedText,
+        standalone_topics: s.topics as any,
+        is_standalone: true,
+        updated_at: new Date().toISOString(),
+      } as any);
+      if (materialId) {
+        updateMaterial(materialId, {
+          episode_date: s.publicationDate,
+          week_id: standaloneWeekIdFor(s.publicationDate),
+          title_options_json: s.titleOptions as any,
+          selected_title_index: s.selectedTitleIndex,
+          description_html: s.descriptionHtml || null,
+          cover_url: s.coverUrl || null,
+          cover_source_url: s.coverSourceUrl || s.coverUrl || null,
+          updated_at: new Date().toISOString(),
+        } as any);
+      }
+    } catch (e) {
+      console.warn('draft autosave failed', e);
+    }
+  };
 
   // Step layout: 0 = topics select, 1..N = per-topic, N+1=title, N+2=desc, N+3=cover, N+4=review
   const N = state.topics.length;
@@ -1701,90 +1830,21 @@ export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaP
   const handleSave = async () => {
     setSaving(true);
     try {
-      const weekId = standaloneWeekIdFor(state.publicationDate);
-      const weekStart = standaloneWeekStart(state.publicationDate);
-      // Ensure synthetic week exists
-      await supabase.from('editorial_weeks' as any).upsert({
-        id: weekId,
-        start_date: weekStart,
-        status: 'draft',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      } as any, { onConflict: 'id' });
-
-      const wd = new Date(state.publicationDate + 'T12:00:00').getDay();
-      const slotMap: Record<number, DaySlot> = { 0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday', 4: 'thursday', 5: 'friday', 6: 'saturday' };
-
-      const sectionsJson: Record<string, string> = {};
-      const rawInputs: Record<string, unknown> = {
-        standalone: true,
-        topics: state.topics.map(t => ({
-          type: t.type,
-          release_id: t.release_id || null,
-          url: t.url || null,
-          notes: t.notes,
-        })),
-      };
-      for (const t of state.topics) {
-        sectionsJson[`standalone_${t.type}`] = plainTextResponseFor(t);
-      }
-      const renderedText = aggregatedContent(state.topics);
-
-      const pautaId = crypto.randomUUID();
-      const newPauta: Pauta = {
-        id: pautaId,
-        week_id: weekId,
-        publication_date: state.publicationDate,
-        pauta_type: 'weekday' as any,
-        status: 'pesquisa',
-        raw_inputs_json: rawInputs,
-        sections_json: sectionsJson as any,
-        rendered_markdown: null,
-        rendered_text: renderedText,
-        warnings_json: [],
-        discovered_links_json: [],
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        finalized_at: null,
-        is_standalone: true,
-        standalone_topics: state.topics,
-      } as any;
-
-      // Add to context (also persists)
-      addPauta(newPauta);
-      // Also flag the standalone fields server-side (addPauta may not know them)
+      // Flush latest state to DB and remove "draft" marker.
+      await syncDraft(state);
+      const { pautaId } = await ensurePersisted(state);
       await supabase.from('pautas' as any).update({
-        is_standalone: true,
-        standalone_topics: state.topics as any,
-      }).eq('id', pautaId);
-
-      const material: EpisodeMaterial = {
-        id: crypto.randomUUID(),
-        week_id: weekId,
-        slot_key: slotMap[wd] || 'monday',
-        episode_date: state.publicationDate,
-        source_pauta_id: pautaId,
-        title_options_json: state.titleOptions,
-        selected_title_index: state.selectedTitleIndex,
-        description_html: state.descriptionHtml || null,
-        cover_url: state.coverUrl || null,
-        cover_source_url: state.coverSourceUrl || state.coverUrl || null,
-        spotify_link: null,
-        repository_url: null,
-        repository_file_id: null,
-        repository_provider: null,
-        repository_uploaded_at: null,
-        mentioned_in_episode: null,
-        cover_saved_at: null,
-        created_at: new Date().toISOString(),
+        raw_inputs_json: { standalone: true, wizard_state: state, draft: false } as any,
+        finalized_at: null,
         updated_at: new Date().toISOString(),
-        is_standalone: true,
-      } as any;
-      addMaterial(material);
-
+      }).eq('id', pautaId);
       logActivity('create_standalone_pauta', `Episódio avulso criado para ${state.publicationDate} (${state.topics.length} blocos)`);
       toast.success('Episódio avulso criado!');
-      localStorage.removeItem(DRAFT_KEY);
+      try { localStorage.removeItem(DRAFT_KEY); } catch {}
+      try { localStorage.removeItem(DRAFT_ID_KEY); } catch {}
+      pautaIdRef.current = '';
+      materialIdRef.current = '';
+      persistedRef.current = false;
       dispatch({ kind: 'reset' });
       onCreated?.(pautaId);
       onClose();
@@ -1797,10 +1857,22 @@ export function NovaPautaWizard({ open, onClose, onCreated, initialDate }: NovaP
   };
 
   const handleClose = () => {
+    // Just close — DB has the latest snapshot, so reopening on any device
+    // will resume from where the user left off.
     onClose();
   };
-  const handleDiscard = () => {
-    localStorage.removeItem(DRAFT_KEY);
+  const handleDiscard = async () => {
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    try { localStorage.removeItem(DRAFT_ID_KEY); } catch {}
+    if (pautaIdRef.current) {
+      try {
+        await supabase.from('episode_materials' as any).delete().eq('source_pauta_id', pautaIdRef.current);
+        await supabase.from('pautas' as any).delete().eq('id', pautaIdRef.current);
+      } catch (e) { console.warn('discard delete failed', e); }
+    }
+    pautaIdRef.current = '';
+    materialIdRef.current = '';
+    persistedRef.current = false;
     dispatch({ kind: 'reset' });
     onClose();
   };
