@@ -3,6 +3,9 @@ import { dbToGain } from './dsp';
 import { AudioParams, LogCallback } from './types';
 
 const ANALYSIS_WINDOW_SEC = 0.01; // 10 ms
+/** Micro fade applied at every silence-cut join to remove "cortes secos"
+ *  (clicks/audible jumps caused by joining two non-contiguous samples). */
+const JOIN_FADE_SEC = 0.012; // 12 ms — inaudible but kills clicks
 
 /**
  * Cuts long silences from the master voice buffer.
@@ -91,10 +94,29 @@ export function cutSilencesInMaster(
   // 4. Concatenate the kept ranges into a new buffer.
   const newLength = keep.reduce((sum, r) => sum + (r.end - r.start), 0);
   const out = new Float32Array(newLength);
+  const joinOffsets: number[] = []; // boundary positions in `out`
   let writeOffset = 0;
-  for (const r of keep) {
+  for (let i = 0; i < keep.length; i++) {
+    const r = keep[i];
     out.set(data.subarray(r.start, r.end), writeOffset);
     writeOffset += r.end - r.start;
+    if (i < keep.length - 1) joinOffsets.push(writeOffset);
+  }
+
+  // Apply micro fade-out/fade-in around every cut boundary so the join
+  // is smooth instead of a hard splice.
+  const fadeSamples = Math.max(1, Math.floor(JOIN_FADE_SEC * sampleRate));
+  for (const boundary of joinOffsets) {
+    const fOut = Math.min(fadeSamples, boundary);
+    for (let i = 0; i < fOut; i++) {
+      const t = (fOut - i) / fOut; // 1 → 1/fOut
+      out[boundary - fOut + i] *= t * t; // equal-power-ish curve
+    }
+    const fIn = Math.min(fadeSamples, out.length - boundary);
+    for (let i = 0; i < fIn; i++) {
+      const t = i / fIn; // 0 → 1
+      out[boundary + i] *= t * t;
+    }
   }
 
   const removedSec = totalRemoved / sampleRate;
