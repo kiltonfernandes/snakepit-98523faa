@@ -13,7 +13,7 @@
  * `standalone-YYYY-MM` para satisfazer o NOT NULL de `pautas.week_id` sem
  * poluir o carrossel semanal — a página de Pautas filtra esses IDs.
  */
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -60,7 +60,8 @@ import { MarkdownView } from '@/components/shared/MarkdownView';
 import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { sanitizeMarkdownOutput } from '@/lib/ai/markdown-sanitize';
 
-const DRAFT_KEY = 'nova_pauta_draft_v1';
+const DRAFT_KEY = 'nova_pauta_draft_v1'; // legacy localStorage draft (migrated to DB)
+const DRAFT_ID_KEY = 'nova_pauta_draft_id_v1'; // pauta.id of the current DB-backed draft
 const TOPIC_ORDER: StandaloneTopicType[] = ['anniversary', 'review', 'news', 'interview'];
 
 interface GenerateAllSteps {
