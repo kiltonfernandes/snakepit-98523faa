@@ -1314,7 +1314,12 @@ function TopicStep({
             <Button
               size="sm"
               onClick={generateAll ? () => setGenerateAllOpen(true) : generatePautaWithAI}
-              disabled={generatingPauta || !topic.prompt_text?.trim()}
+              disabled={
+                generatingPauta ||
+                (generateAll
+                  ? !topic.prompt_text?.trim() && !googleQuery && !topic.notes?.trim()
+                  : !topic.prompt_text?.trim())
+              }
               title={
                 generateAll
                   ? 'Roda toda a pipeline: pesquisa web → pauta → títulos → descrição'
