@@ -547,6 +547,7 @@ export type Database = {
           metal_archives_url: string | null
           rating: number | null
           release_date: string
+          shortlist: boolean
           spotify_url: string | null
           updated_at: string
           youtube_url: string | null
@@ -564,6 +565,7 @@ export type Database = {
           metal_archives_url?: string | null
           rating?: number | null
           release_date: string
+          shortlist?: boolean
           spotify_url?: string | null
           updated_at?: string
           youtube_url?: string | null
@@ -581,6 +583,7 @@ export type Database = {
           metal_archives_url?: string | null
           rating?: number | null
           release_date?: string
+          shortlist?: boolean
           spotify_url?: string | null
           updated_at?: string
           youtube_url?: string | null

@@ -24,7 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', country: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '' };
+const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', country: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '', shortlist: false };
 
 interface ImportSummary { valid: number; duplicates: number; invalid: number; errors: string[]; }
 
@@ -168,6 +168,7 @@ export default function Releases() {
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const [countryFilter, setCountryFilter] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [shortlistOnly, setShortlistOnly] = useState(false);
   const [genreDialogOpen, setGenreDialogOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -258,18 +259,19 @@ export default function Releases() {
         ? (r.genres || []).some(g => g.toLowerCase().includes(genreFilter.slice(1).toLowerCase()))
         : (r.genres || []).includes(genreFilter));
       const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : normalizeCountryCode(r.country) === countryFilter;
+      const matchShortlist = !shortlistOnly || !!r.shortlist;
       let matchDate = true;
       if (dateRange) {
         matchDate = r.release_date >= dateRange[0] && r.release_date <= dateRange[1];
       }
-      return matchSearch && matchGenre && matchCountry && matchDate;
+      return matchSearch && matchGenre && matchCountry && matchDate && matchShortlist;
     });
     const effectiveRules: SortRule[] = sortRules.length
       ? sortRules
       : [{ field: 'release_date', dir: 'desc' }];
     result.sort((a, b) => compareWithRules(a, b, effectiveRules));
     return result;
-  }, [releases, search, genreFilter, countryFilter, quickFilter, sortRules]);
+  }, [releases, search, genreFilter, countryFilter, quickFilter, sortRules, shortlistOnly]);
 
   const reviewIds = useMemo(() => new Set(reviewMap.keys()), [reviewMap]);
 
@@ -421,7 +423,7 @@ export default function Releases() {
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (r: Release) => {
-    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', country: r.country || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '' });
+    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', country: r.country || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '', shortlist: r.shortlist ?? false });
     setEditingId(r.id); setDialogOpen(true);
   };
 
@@ -437,6 +439,7 @@ export default function Releases() {
       apple_music_url: form.apple_music_url || null,
       bandcamp_url: form.bandcamp_url || null,
       metal_archives_url: form.metal_archives_url || null,
+      shortlist: form.shortlist,
     };
     if (editingId) updateRelease(editingId, data);
     else addRelease(data);
@@ -718,6 +721,16 @@ export default function Releases() {
           <Filter className="h-4 w-4" /> {genreFilter || 'Gênero'}
         </Button>
         {genreFilter && <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar</Button>}
+
+        <Button
+          variant={shortlistOnly ? 'default' : 'outline'}
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setShortlistOnly(v => !v)}
+          title="Mostrar apenas itens da shortlist"
+        >
+          <Star className={`h-4 w-4 ${shortlistOnly ? 'fill-current' : ''}`} /> Shortlist
+        </Button>
 
         {/* Country filter */}
         <Select value={countryFilter ?? '__all__'} onValueChange={v => setCountryFilter(v === '__all__' ? null : v)}>
@@ -1176,6 +1189,16 @@ export default function Releases() {
                     </button>
                   ))}
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={form.shortlist ? 'default' : 'outline'}
+                  onClick={() => setForm(p => ({ ...p, shortlist: !p.shortlist }))}
+                  className="mt-2 gap-1.5"
+                >
+                  <Star className={`h-3.5 w-3.5 ${form.shortlist ? 'fill-current' : ''}`} />
+                  {form.shortlist ? 'Na shortlist' : 'Add to shortlist'}
+                </Button>
               </div>
               <div className="space-y-1.5"><Label>Comentários</Label><Textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))} rows={3} /></div>
             </TabsContent>
@@ -1198,7 +1221,7 @@ export default function Releases() {
                       )}
                     </div>
                     <Input
-                      value={form[fieldKey]}
+                      value={String(form[fieldKey] ?? '')}
                       onChange={e => setForm(p => ({ ...p, [fieldKey]: e.target.value }))}
                       placeholder={dynamicLink || `https://...`}
                       className="text-xs h-8"

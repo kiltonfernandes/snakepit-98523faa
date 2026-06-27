@@ -201,6 +201,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           apple_music_url: release.apple_music_url || null,
           bandcamp_url: release.bandcamp_url || null,
           metal_archives_url: release.metal_archives_url || null,
+          shortlist: release.shortlist ?? false,
           created_at: release.created_at,
           updated_at: release.updated_at,
         } as any);
