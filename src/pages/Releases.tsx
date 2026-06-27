@@ -421,7 +421,7 @@ export default function Releases() {
 
   const openNew = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(true); };
   const openEdit = (r: Release) => {
-    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', country: r.country || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '' });
+    setForm({ artist: r.artist, album: r.album, release_date: r.release_date, genres: (r.genres || []).join(', '), rating: r.rating || 3, comments: r.comments || '', country: r.country || '', youtube_url: r.youtube_url || '', spotify_url: r.spotify_url || '', deezer_url: r.deezer_url || '', apple_music_url: r.apple_music_url || '', bandcamp_url: r.bandcamp_url || '', metal_archives_url: r.metal_archives_url || '', shortlist: r.shortlist ?? false });
     setEditingId(r.id); setDialogOpen(true);
   };
 
@@ -437,6 +437,7 @@ export default function Releases() {
       apple_music_url: form.apple_music_url || null,
       bandcamp_url: form.bandcamp_url || null,
       metal_archives_url: form.metal_archives_url || null,
+      shortlist: form.shortlist,
     };
     if (editingId) updateRelease(editingId, data);
     else addRelease(data);
