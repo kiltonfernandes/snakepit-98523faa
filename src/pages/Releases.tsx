@@ -1177,6 +1177,16 @@ export default function Releases() {
                     </button>
                   ))}
                 </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={form.shortlist ? 'default' : 'outline'}
+                  onClick={() => setForm(p => ({ ...p, shortlist: !p.shortlist }))}
+                  className="mt-2 gap-1.5"
+                >
+                  <Star className={`h-3.5 w-3.5 ${form.shortlist ? 'fill-current' : ''}`} />
+                  {form.shortlist ? 'Na shortlist' : 'Add to shortlist'}
+                </Button>
               </div>
               <div className="space-y-1.5"><Label>Comentários</Label><Textarea value={form.comments} onChange={e => setForm(p => ({ ...p, comments: e.target.value }))} rows={3} /></div>
             </TabsContent>
