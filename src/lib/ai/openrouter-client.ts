@@ -22,6 +22,8 @@ export interface StreamGeneratePautaOptions {
   label?: string;
   /** Optional progress sink (the AiCallProgress context). */
   progress?: ProgressHandlers;
+  /** When true, do not call progress.start() or progress.finish() — caller owns lifecycle. */
+  silentLifecycle?: boolean;
 }
 
 /**
@@ -30,7 +32,8 @@ export interface StreamGeneratePautaOptions {
  */
 export async function streamGeneratePauta(opts: StreamGeneratePautaOptions): Promise<string> {
   const p = opts.progress;
-  p?.start(opts.label || 'Chamada IA');
+  if (!opts.silentLifecycle) p?.start(opts.label || 'Chamada IA');
+  else if (opts.label) p?.pushAttempt({ model: `▶ ${opts.label}`, status: 'trying' });
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-pauta`;
   const chain = loadModelChain();
@@ -128,11 +131,13 @@ export async function streamGeneratePauta(opts: StreamGeneratePautaOptions): Pro
     }
   } catch (e: any) {
     clearInterval(watchdog);
-    p?.finish(e?.message || 'Falha durante streaming');
+    if (!opts.silentLifecycle) p?.finish(e?.message || 'Falha durante streaming');
     throw e;
   }
   clearInterval(watchdog);
-  p?.setStage('populating');
-  p?.finish(null);
+  if (!opts.silentLifecycle) {
+    p?.setStage('populating');
+    p?.finish(null);
+  }
   return full;
 }
