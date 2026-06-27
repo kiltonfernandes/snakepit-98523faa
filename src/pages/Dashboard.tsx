@@ -38,6 +38,7 @@ export default function Dashboard() {
   const { releases, weeks, pautas, materials } = useApp();
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]));
+  const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(new Set([`${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`]));
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([`${new Date().getFullYear()}-${new Date().getMonth()}`]));
   const [filterStatus, setFilterStatus] = useState<'all' | 'incomplete' | 'complete'>('all');
   const [dashTab, setDashTab] = useState('releases');
