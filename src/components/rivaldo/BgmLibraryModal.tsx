@@ -78,12 +78,12 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
 
   const relatedReleases = useMemo(() => {
     if (!selected || selected.genres.length === 0) return [];
-    // Build set of normalized atomic tokens from selected BGM genres (split composites by /, &, ,)
     const splitTokens = (s: string) => s.split(/[\/,&]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
     const wanted = new Set<string>();
     for (const g of selected.genres) for (const tok of splitTokens(g)) wanted.add(tok);
     if (wanted.size === 0) return [];
-    const scored: Array<{ r: any; score: number }> = [];
+    const wantedArr = Array.from(wanted);
+    const scored: Array<{ r: any; score: number; approx?: boolean }> = [];
     for (const r of releases) {
       const gs = (r.genres || []) as string[];
       if (!gs.length) continue;
@@ -95,7 +95,32 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
       if (score > 0) scored.push({ r, score });
     }
     scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, 5).map(s => s.r);
+    if (scored.length >= 5) return scored.slice(0, 5).map(s => ({ ...s.r, _approx: false }));
+
+    // Fallback: partial/substring matches between wanted tokens and release genre tokens.
+    const exactIds = new Set(scored.map(s => s.r.id));
+    const approx: Array<{ r: any; score: number }> = [];
+    for (const r of releases) {
+      if (exactIds.has(r.id)) continue;
+      const gs = (r.genres || []) as string[];
+      if (!gs.length) continue;
+      let score = 0;
+      for (const g of gs) {
+        for (const t of splitTokens(g)) {
+          for (const w of wantedArr) {
+            if (t === w) continue;
+            if (t.includes(w) || w.includes(t)) { score++; break; }
+          }
+        }
+      }
+      if (score > 0) approx.push({ r, score });
+    }
+    approx.sort((a, b) => b.score - a.score);
+    const out = [
+      ...scored.map(s => ({ ...s.r, _approx: false })),
+      ...approx.map(s => ({ ...s.r, _approx: true })),
+    ];
+    return out.slice(0, 5);
   }, [selected, releases]);
 
   const togglePlay = useCallback(async (track: BgmTrack) => {
