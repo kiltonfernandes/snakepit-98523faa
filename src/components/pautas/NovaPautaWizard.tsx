@@ -812,24 +812,43 @@ function TopicStep({
       // 1. Pesquisa web (best effort — não bloqueia se faltar query)
       let mergedNotes = topic.notes || '';
       if (steps.pesquisa && googleQuery) {
+        aiProgressTopic.start('Pesquisa web (DeepSeek + online)');
         aiProgressTopic.setStage('streaming');
-        aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'trying' });
+        const RESEARCH_LABEL = 'web-research (DeepSeek + online)';
+        aiProgressTopic.pushAttempt({ model: RESEARCH_LABEL, status: 'trying' });
         try {
-          const { data, error } = await supabase.functions.invoke('web-research', {
-            body: { query: googleQuery, context: topic.notes || '' },
-          });
-          if (error) throw error;
+          // Direct fetch with a 60s client-side timeout. `supabase.functions.invoke`
+          // has no abort path, so a slow edge function would hang the whole pipeline.
+          const ac = new AbortController();
+          const timer = setTimeout(() => ac.abort('client_timeout_60s'), 60_000);
+          const resp = await fetch(
+            `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-research`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+              },
+              body: JSON.stringify({ query: googleQuery, context: topic.notes || '' }),
+              signal: ac.signal,
+            },
+          ).finally(() => clearTimeout(timer));
+          if (!resp.ok) throw new Error(`web-research ${resp.status}`);
+          const data = await resp.json();
           const notes = (data as any)?.notes as string | undefined;
           if (notes) {
-            aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'selected' });
+            aiProgressTopic.pushAttempt({ model: RESEARCH_LABEL, status: 'selected' });
             const prev = (topic.notes || '').trim();
             mergedNotes = prev
               ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
               : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
             dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: mergedNotes } });
+          } else {
+            aiProgressTopic.failAttempt(RESEARCH_LABEL, 'sem notas');
           }
         } catch (e: any) {
-          aiProgressTopic.pushAttempt({ model: 'deepseek/deepseek-v4-flash (web search)', status: 'failed', reason: e?.message || 'falha' });
+          const reason = e?.name === 'AbortError' || String(e?.message || '').includes('client_timeout') ? 'timeout 60s' : (e?.message || 'falha');
+          aiProgressTopic.failAttempt(RESEARCH_LABEL, reason);
           // segue mesmo sem pesquisa
         }
       }
@@ -852,6 +871,7 @@ function TopicStep({
       const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
       let pautaFull = topic.response_text || '';
       if (steps.pauta) {
+        aiProgressTopic.start('Gerar pauta');
         onPaste('');
         pautaFull = await streamGeneratePauta({
           prompt: promptToUse,
@@ -884,8 +904,11 @@ function TopicStep({
         // Sub-opção: não gera, apenas formata o texto cru já presente em response_text.
         const raw = (topic.response_text || '').trim();
         if (!raw) {
-          toast.warning('Formatar apenas: cole o conteúdo bruto no campo "Cole aqui a resposta da IA" antes de iniciar.');
+          toast.error('Formatar apenas: cole o conteúdo bruto no campo "Cole aqui a resposta da IA" antes de iniciar.');
+          aiProgressTopic.finish('Sem conteúdo cru para formatar.');
+          return;
         } else {
+          aiProgressTopic.start('Formatar pauta (Markdown)');
           const formatPrompt = getStandaloneFormatPrompt(raw);
           onPaste('');
           let formatted = await streamGeneratePauta({
@@ -917,6 +940,7 @@ function TopicStep({
       // 4. Gerar títulos
       let chosenTitle = state.titleOptions[state.selectedTitleIndex ?? 0]?.text || '';
       if (steps.titulos) {
+        aiProgressTopic.start('Gerar títulos');
         const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
         const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
         dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
@@ -938,6 +962,7 @@ function TopicStep({
 
       // 5. Gerar descrição
       if (steps.descricao) {
+        aiProgressTopic.start('Gerar descrição');
         const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
         const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
         dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });

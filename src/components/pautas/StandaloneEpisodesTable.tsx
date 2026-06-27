@@ -7,9 +7,9 @@
  * plataforma (Insumos, Conteúdo, Management).
  */
 import { useMemo, useState } from 'react';
-import { format } from 'date-fns';
+import { format, getYear, getQuarter, getMonth, startOfISOWeek, endOfISOWeek, getISOWeek } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Pencil, Trash2, Search, Calendar as CalendarIcon, ExternalLink, Eye } from 'lucide-react';
+import { Pencil, Trash2, Search, Calendar as CalendarIcon, ExternalLink, Eye, ChevronDown, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Pauta, EpisodeMaterial, StandaloneTopic, StandaloneTopicType } from '@/lib/types';
@@ -58,6 +58,15 @@ export function StandaloneEpisodesTable({ onCreateNew }: { onCreateNew: () => vo
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
 
+  const now = new Date();
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([now.getFullYear()]));
+  const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(new Set([`${now.getFullYear()}-Q${getQuarter(now)}`]));
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([`${now.getFullYear()}-${now.getMonth()}`]));
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set([`${getYear(startOfISOWeek(now))}-W${getISOWeek(now)}`]));
+  const toggle = <T,>(s: Set<T>, setter: (n: Set<T>) => void, k: T) => {
+    const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); setter(n);
+  };
+
   const standalonePautas = useMemo(
     () => pautas.filter(p => p.is_standalone),
     [pautas],
@@ -76,6 +85,30 @@ export function StandaloneEpisodesTable({ onCreateNew }: { onCreateNew: () => vo
       return true;
     }).sort((a, b) => a.publication_date.localeCompare(b.publication_date));
   }, [standalonePautas, typeFilter, statusFilter, search]);
+
+  // Hierarchy: Year > Quarter > Month > Week (ISO, Mon-Sun).
+  const tree = useMemo(() => {
+    type Row = Pauta;
+    const years = new Map<number, Map<number, Map<number, Map<string, { weekStart: Date; weekEnd: Date; rows: Row[] }>>>>();
+    for (const p of filtered) {
+      const d = new Date(p.publication_date + 'T12:00:00');
+      const y = getYear(d);
+      const q = getQuarter(d);
+      const m = getMonth(d);
+      const ws = startOfISOWeek(d);
+      const we = endOfISOWeek(d);
+      const wkey = `${getYear(ws)}-W${getISOWeek(ws)}`;
+      if (!years.has(y)) years.set(y, new Map());
+      const qm = years.get(y)!;
+      if (!qm.has(q)) qm.set(q, new Map());
+      const mm = qm.get(q)!;
+      if (!mm.has(m)) mm.set(m, new Map());
+      const wm = mm.get(m)!;
+      if (!wm.has(wkey)) wm.set(wkey, { weekStart: ws, weekEnd: we, rows: [] });
+      wm.get(wkey)!.rows.push(p);
+    }
+    return years;
+  }, [filtered]);
 
   const materialFor = (p: Pauta) => materials.find(m => m.source_pauta_id === p.id);
 
@@ -128,83 +161,152 @@ export function StandaloneEpisodesTable({ onCreateNew }: { onCreateNew: () => vo
           <Button className="mt-3" onClick={onCreateNew}>+ Nova Pauta</Button>
         </div>
       ) : (
-        <div className="rounded-md border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-32">Data</TableHead>
-                <TableHead>Blocos</TableHead>
-                <TableHead className="w-36">Status</TableHead>
-                <TableHead className="w-44">Completude</TableHead>
-                <TableHead className="w-28 text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(p => {
-                const topics = (p.standalone_topics || []) as StandaloneTopic[];
-                const mat = materialFor(p);
-                const hasTitle = mat?.selected_title_index != null;
-                const hasDesc = !!mat?.description_html;
-                const hasCover = !!mat?.cover_url;
-                const hasUpload = !!(mat?.repository_url || mat?.repository_file_id);
-                return (
-                  <TableRow
-                    key={p.id}
-                    className="cursor-pointer"
-                    onClick={() => setEditing({ pauta: p, material: mat })}
-                  >
-                    <TableCell className="font-mono text-xs">
-                      <div className="flex items-center gap-1.5">
-                        <CalendarIcon className="h-3 w-3 text-muted-foreground" />
-                        {format(new Date(p.publication_date + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {topics.map(t => (
-                          <Badge key={t.id} variant="secondary" className="font-normal">
-                            {STANDALONE_TOPIC_META[t.type].icon} {STANDALONE_TOPIC_META[t.type].label}
-                          </Badge>
-                        ))}
-                      </div>
-                    </TableCell>
-                    <TableCell><StatusBadge status={p.status as any} /></TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 text-[10px]">
-                        <Indicator on={topics.every(t => !!t.response_text?.trim())} label="P" title="Pauta" />
-                        <Indicator on={hasTitle} label="T" title="Título" />
-                        <Indicator on={hasDesc} label="D" title="Descrição" />
-                        <Indicator on={hasCover} label="C" title="Capa" />
-                        <Indicator on={hasUpload} label="↑" title="Upload" />
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={() => {
-                          if (!mat) {
-                            toast.info('Material ainda não disponível. Recarregue a página.');
-                            return;
-                          }
-                          navigate(`/calendar?material=${mat.id}`);
-                        }}
-                        title="Visualizar (Pacote do episódio)"
-                      >
-                        <Eye className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setEditing({ pauta: p, material: mat })} title="Editar">
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={() => setConfirmDeleteId(p.id)} title="Excluir">
-                        <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+        <div className="space-y-2">
+          {Array.from(tree.entries()).sort(([a], [b]) => b - a).map(([year, qmap]) => {
+            const yearCount = Array.from(qmap.values()).reduce((acc, mm) =>
+              acc + Array.from(mm.values()).reduce((a2, wm) =>
+                a2 + Array.from(wm.values()).reduce((a3, w) => a3 + w.rows.length, 0), 0), 0);
+            const yopen = expandedYears.has(year);
+            return (
+              <div key={year} className="rounded-md border border-border bg-card/30">
+                <button
+                  onClick={() => toggle(expandedYears, setExpandedYears, year)}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/30 rounded-md"
+                >
+                  {yopen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  <span className="font-semibold text-sm">{year}</span>
+                  <Badge variant="secondary" className="ml-auto">{yearCount}</Badge>
+                </button>
+                {yopen && (
+                  <div className="px-3 pb-2 space-y-1">
+                    {Array.from(qmap.entries()).sort(([a],[b]) => b - a).map(([q, mmap]) => {
+                      const qkey = `${year}-Q${q}`;
+                      const qopen = expandedQuarters.has(qkey);
+                      const qcount = Array.from(mmap.values()).reduce((acc, wm) =>
+                        acc + Array.from(wm.values()).reduce((a, w) => a + w.rows.length, 0), 0);
+                      return (
+                        <div key={qkey} className="rounded border border-border/60">
+                          <button
+                            onClick={() => toggle(expandedQuarters, setExpandedQuarters, qkey)}
+                            className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/20 rounded text-sm"
+                          >
+                            {qopen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                            <span className="text-muted-foreground">Q{q}</span>
+                            <Badge variant="outline" className="ml-auto text-[10px]">{qcount}</Badge>
+                          </button>
+                          {qopen && (
+                            <div className="px-2 pb-1 space-y-1">
+                              {Array.from(mmap.entries()).sort(([a],[b]) => b - a).map(([mo, wmap]) => {
+                                const mkey = `${year}-${mo}`;
+                                const mopen = expandedMonths.has(mkey);
+                                const mcount = Array.from(wmap.values()).reduce((a, w) => a + w.rows.length, 0);
+                                const monthLabel = format(new Date(year, mo, 1), 'MMMM', { locale: ptBR });
+                                return (
+                                  <div key={mkey} className="rounded border border-border/40">
+                                    <button
+                                      onClick={() => toggle(expandedMonths, setExpandedMonths, mkey)}
+                                      className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/20 rounded text-sm"
+                                    >
+                                      {mopen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                                      <span className="capitalize">{monthLabel}</span>
+                                      <Badge variant="outline" className="ml-auto text-[10px]">{mcount}</Badge>
+                                    </button>
+                                    {mopen && (
+                                      <div className="px-2 pb-2 space-y-1">
+                                        {Array.from(wmap.entries()).sort(([a],[b]) => a.localeCompare(b)).map(([wkey, w]) => {
+                                          const wopen = expandedWeeks.has(wkey);
+                                          const wlabel = `Semana de ${format(w.weekStart, 'dd/MM', { locale: ptBR })} – ${format(w.weekEnd, 'dd/MM', { locale: ptBR })}`;
+                                          return (
+                                            <div key={wkey} className="rounded border border-border/30 bg-background/40">
+                                              <button
+                                                onClick={() => toggle(expandedWeeks, setExpandedWeeks, wkey)}
+                                                className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/10 rounded text-xs"
+                                              >
+                                                {wopen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                                                <span className="text-muted-foreground">{wlabel}</span>
+                                                <Badge variant="outline" className="ml-auto text-[10px]">{w.rows.length}</Badge>
+                                              </button>
+                                              {wopen && (
+                                                <Table>
+                                                  <TableHeader>
+                                                    <TableRow>
+                                                      <TableHead className="w-32">Data</TableHead>
+                                                      <TableHead>Blocos</TableHead>
+                                                      <TableHead className="w-36">Status</TableHead>
+                                                      <TableHead className="w-44">Completude</TableHead>
+                                                      <TableHead className="w-28 text-right">Ações</TableHead>
+                                                    </TableRow>
+                                                  </TableHeader>
+                                                  <TableBody>
+                                                    {w.rows.map(p => {
+                                                      const topics = (p.standalone_topics || []) as StandaloneTopic[];
+                                                      const mat = materialFor(p);
+                                                      const hasTitle = mat?.selected_title_index != null;
+                                                      const hasDesc = !!mat?.description_html;
+                                                      const hasCover = !!mat?.cover_url;
+                                                      const hasUpload = !!(mat?.repository_url || mat?.repository_file_id);
+                                                      return (
+                                                        <TableRow key={p.id} className="cursor-pointer" onClick={() => setEditing({ pauta: p, material: mat })}>
+                                                          <TableCell className="font-mono text-xs">
+                                                            <div className="flex items-center gap-1.5">
+                                                              <CalendarIcon className="h-3 w-3 text-muted-foreground" />
+                                                              {format(new Date(p.publication_date + 'T12:00:00'), 'dd MMM yyyy', { locale: ptBR })}
+                                                            </div>
+                                                          </TableCell>
+                                                          <TableCell>
+                                                            <div className="flex flex-wrap gap-1">
+                                                              {topics.map(t => (
+                                                                <Badge key={t.id} variant="secondary" className="font-normal">
+                                                                  {STANDALONE_TOPIC_META[t.type].icon} {STANDALONE_TOPIC_META[t.type].label}
+                                                                </Badge>
+                                                              ))}
+                                                            </div>
+                                                          </TableCell>
+                                                          <TableCell><StatusBadge status={p.status as any} /></TableCell>
+                                                          <TableCell>
+                                                            <div className="flex gap-1 text-[10px]">
+                                                              <Indicator on={topics.every(t => !!t.response_text?.trim())} label="P" title="Pauta" />
+                                                              <Indicator on={hasTitle} label="T" title="Título" />
+                                                              <Indicator on={hasDesc} label="D" title="Descrição" />
+                                                              <Indicator on={hasCover} label="C" title="Capa" />
+                                                              <Indicator on={hasUpload} label="↑" title="Upload" />
+                                                            </div>
+                                                          </TableCell>
+                                                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                                            <Button size="icon" variant="ghost" onClick={() => { if (!mat) { toast.info('Material ainda não disponível.'); return; } navigate(`/calendar?material=${mat.id}`); }} title="Visualizar">
+                                                              <Eye className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                            <Button size="icon" variant="ghost" onClick={() => setEditing({ pauta: p, material: mat })} title="Editar">
+                                                              <Pencil className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                            <Button size="icon" variant="ghost" onClick={() => setConfirmDeleteId(p.id)} title="Excluir">
+                                                              <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                                                            </Button>
+                                                          </TableCell>
+                                                        </TableRow>
+                                                      );
+                                                    })}
+                                                  </TableBody>
+                                                </Table>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 
