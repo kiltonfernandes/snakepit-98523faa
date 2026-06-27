@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Search, Upload, Play, Pause, Trash2, Music, X, Loader2, CheckCircle2, FileAudio, Pencil, Check } from 'lucide-react';
 import { listBgm, uploadBgm, deleteBgm, updateBgm, getBgmSignedUrl, downloadBgmAsFile, type BgmTrack } from '@/lib/bgm-library';
 import { useToast } from '@/hooks/use-toast';
+import { useApp } from '@/contexts/AppContext';
 
 interface Props {
   open: boolean;
@@ -24,6 +25,7 @@ function formatDuration(secs: number | null): string {
 
 export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
   const { toast } = useToast();
+  const { releases } = useApp();
   const [tracks, setTracks] = useState<BgmTrack[]>([]);
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState('');
@@ -60,7 +62,11 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return tracks.filter(t => {
-      if (activeGenres.size > 0 && !t.genres.some(g => activeGenres.has(g))) return false;
+      if (activeGenres.size > 0) {
+        const tokens = Array.from(activeGenres).map(s => s.toLowerCase());
+        const hit = tokens.some(tok => t.genres.some(g => g.toLowerCase().includes(tok)));
+        if (!hit) return false;
+      }
       if (!q) return true;
       if (t.name.toLowerCase().includes(q)) return true;
       if (t.genres.some(g => g.toLowerCase().includes(q))) return true;
@@ -69,6 +75,28 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
   }, [tracks, query, activeGenres]);
 
   const selected = useMemo(() => tracks.find(t => t.id === selectedId) ?? null, [tracks, selectedId]);
+
+  const relatedReleases = useMemo(() => {
+    if (!selected || selected.genres.length === 0) return [];
+    // Build set of normalized atomic tokens from selected BGM genres (split composites by /, &, ,)
+    const splitTokens = (s: string) => s.split(/[\/,&]+/).map(x => x.trim().toLowerCase()).filter(Boolean);
+    const wanted = new Set<string>();
+    for (const g of selected.genres) for (const tok of splitTokens(g)) wanted.add(tok);
+    if (wanted.size === 0) return [];
+    const scored: Array<{ r: any; score: number }> = [];
+    for (const r of releases) {
+      const gs = (r.genres || []) as string[];
+      if (!gs.length) continue;
+      let score = 0;
+      for (const g of gs) {
+        const toks = splitTokens(g);
+        for (const t of toks) if (wanted.has(t)) score++;
+      }
+      if (score > 0) scored.push({ r, score });
+    }
+    scored.sort((a, b) => b.score - a.score);
+    return scored.slice(0, 5).map(s => s.r);
+  }, [selected, releases]);
 
   const togglePlay = useCallback(async (track: BgmTrack) => {
     if (playingId === track.id) {
@@ -284,6 +312,24 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                   {selected.genres.length === 0 && <span className="text-xs text-muted-foreground italic">sem gêneros</span>}
                 </div>
                 <div className="text-xs text-muted-foreground font-mono">Duração: {formatDuration(selected.duration_seconds)}</div>
+                <div className="border-t border-border pt-3">
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono mb-2">Use este BGM para os lançamentos</p>
+                  {relatedReleases.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground/70 italic">Nenhum lançamento com gêneros compatíveis.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {relatedReleases.map((r: any) => (
+                        <li key={r.id} className="rounded-md border border-border bg-background/40 px-2 py-1.5">
+                          <p className="text-xs font-medium truncate">{r.artist}</p>
+                          <p className="text-[10px] text-muted-foreground truncate">{r.album}</p>
+                          {(r.genres || []).length > 0 && (
+                            <p className="text-[9px] text-muted-foreground/70 font-mono truncate mt-0.5">{(r.genres || []).slice(0, 2).join(' • ')}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
                 <div className="flex flex-col gap-2 mt-auto">
                   <Button variant="outline" size="sm" onClick={() => togglePlay(selected)}>
                     {playingId === selected.id ? <><Pause className="w-3.5 h-3.5 mr-1" /> Pausar</> : <><Play className="w-3.5 h-3.5 mr-1" /> Preview</>}
