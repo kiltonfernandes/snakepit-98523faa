@@ -259,18 +259,19 @@ export default function Releases() {
         ? (r.genres || []).some(g => g.toLowerCase().includes(genreFilter.slice(1).toLowerCase()))
         : (r.genres || []).includes(genreFilter));
       const matchCountry = countryFilter === null ? true : countryFilter === '__empty__' ? !r.country : normalizeCountryCode(r.country) === countryFilter;
+      const matchShortlist = !shortlistOnly || !!r.shortlist;
       let matchDate = true;
       if (dateRange) {
         matchDate = r.release_date >= dateRange[0] && r.release_date <= dateRange[1];
       }
-      return matchSearch && matchGenre && matchCountry && matchDate;
+      return matchSearch && matchGenre && matchCountry && matchDate && matchShortlist;
     });
     const effectiveRules: SortRule[] = sortRules.length
       ? sortRules
       : [{ field: 'release_date', dir: 'desc' }];
     result.sort((a, b) => compareWithRules(a, b, effectiveRules));
     return result;
-  }, [releases, search, genreFilter, countryFilter, quickFilter, sortRules]);
+  }, [releases, search, genreFilter, countryFilter, quickFilter, sortRules, shortlistOnly]);
 
   const reviewIds = useMemo(() => new Set(reviewMap.keys()), [reviewMap]);
 
