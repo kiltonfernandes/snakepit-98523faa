@@ -344,8 +344,11 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                   ) : (
                     <ul className="space-y-1.5">
                       {relatedReleases.map((r: any) => (
-                        <li key={r.id} className="rounded-md border border-border bg-background/40 px-2 py-1.5">
-                          <p className="text-xs font-medium truncate">{r.artist}</p>
+                        <li key={r.id} className={`rounded-md border px-2 py-1.5 ${r._approx ? 'border-dashed border-border/60 bg-background/20' : 'border-border bg-background/40'}`}>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs font-medium truncate flex-1">{r.artist}</p>
+                            {r._approx && <span className="text-[8px] uppercase tracking-wider font-mono text-muted-foreground/70 shrink-0">~aprox</span>}
+                          </div>
                           <p className="text-[10px] text-muted-foreground truncate">{r.album}</p>
                           {(r.genres || []).length > 0 && (
                             <p className="text-[9px] text-muted-foreground/70 font-mono truncate mt-0.5">{(r.genres || []).slice(0, 2).join(' • ')}</p>
