@@ -18,7 +18,6 @@ import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 export default function PautasStandalone() {
   const [novaPautaOpen, setNovaPautaOpen] = useState(false);
   const [shortlistOpen, setShortlistOpen] = useState(false);
-  const [seedReleaseId, setSeedReleaseId] = useState<string | null>(null);
 
   return (
     <motion.div
@@ -55,14 +54,13 @@ export default function PautasStandalone() {
 
       <NovaPautaWizard
         open={novaPautaOpen}
-        onClose={() => { setNovaPautaOpen(false); setSeedReleaseId(null); }}
-        onCreated={() => { setNovaPautaOpen(false); setSeedReleaseId(null); }}
-        seedReleaseId={seedReleaseId || undefined}
+        onClose={() => setNovaPautaOpen(false)}
+        onCreated={() => setNovaPautaOpen(false)}
       />
       <ShortlistDialog
         open={shortlistOpen}
         onClose={() => setShortlistOpen(false)}
-        onCreatePautaFromRelease={(id) => { setSeedReleaseId(id); setNovaPautaOpen(true); }}
+        onCreatePautaFromRelease={() => setNovaPautaOpen(true)}
       />
     </motion.div>
   );
