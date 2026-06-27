@@ -8,14 +8,17 @@
  */
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FileText, Plus, Sparkles } from 'lucide-react';
+import { FileText, Plus, Sparkles, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { AutosaveBadge } from '@/components/shared/AutosaveBadge';
 import { NovaPautaWizard } from '@/components/pautas/NovaPautaWizard';
 import { StandaloneEpisodesTable } from '@/components/pautas/StandaloneEpisodesTable';
+import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 
 export default function PautasStandalone() {
   const [novaPautaOpen, setNovaPautaOpen] = useState(false);
+  const [shortlistOpen, setShortlistOpen] = useState(false);
+  const [seedReleaseId, setSeedReleaseId] = useState<string | null>(null);
 
   return (
     <motion.div
@@ -36,6 +39,10 @@ export default function PautasStandalone() {
         </div>
         <div className="flex items-center gap-2">
           <AutosaveBadge />
+          <Button size="sm" variant="outline" className="gap-2" onClick={() => setShortlistOpen(true)}>
+            <Star className="h-3.5 w-3.5" />
+            Shortlist
+          </Button>
           <Button size="sm" className="gap-2" onClick={() => setNovaPautaOpen(true)}>
             <Plus className="h-3.5 w-3.5" />
             <Sparkles className="h-3.5 w-3.5" />
@@ -48,8 +55,14 @@ export default function PautasStandalone() {
 
       <NovaPautaWizard
         open={novaPautaOpen}
-        onClose={() => setNovaPautaOpen(false)}
-        onCreated={() => setNovaPautaOpen(false)}
+        onClose={() => { setNovaPautaOpen(false); setSeedReleaseId(null); }}
+        onCreated={() => { setNovaPautaOpen(false); setSeedReleaseId(null); }}
+        seedReleaseId={seedReleaseId || undefined}
+      />
+      <ShortlistDialog
+        open={shortlistOpen}
+        onClose={() => setShortlistOpen(false)}
+        onCreatePautaFromRelease={(id) => { setSeedReleaseId(id); setNovaPautaOpen(true); }}
       />
     </motion.div>
   );
