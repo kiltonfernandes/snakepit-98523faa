@@ -366,6 +366,7 @@ const Rivaldo = () => {
 
       <BulkModal open={bulkOpen} onOpenChange={setBulkOpen} introFile={files.intro} outroFile={files.outro} audioParams={audioParams} processingProfile={processingProfile} desktopMode={desktopMode} desktopState={desktopState} desktopQueueAvailable={queueAvailable} desktopQueueStatusMessage={queueStatusMessage} onDesktopJobQueued={(job) => { setDesktopState((prev) => mergeQueuedJobIntoState(prev, job)); setQueueFeedback({ type: 'success', message: `Job ${job.name} enfileirado.` }); addUiLog(`Job ${job.name} enfileirado.`, 'success'); }} />
       <EpisodePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={setFilename} selected={filename} groups={episodeGroups} />
+      <BgmLibraryModal open={bgmLibraryOpen} onOpenChange={setBgmLibraryOpen} onPick={(file) => handleFileChange('bgm', file)} />
     </div>
   );
 };
