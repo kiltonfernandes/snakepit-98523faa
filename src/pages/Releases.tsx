@@ -722,6 +722,16 @@ export default function Releases() {
         </Button>
         {genreFilter && <Button variant="ghost" size="sm" onClick={() => setGenreFilter(null)}>Limpar</Button>}
 
+        <Button
+          variant={shortlistOnly ? 'default' : 'outline'}
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setShortlistOnly(v => !v)}
+          title="Mostrar apenas itens da shortlist"
+        >
+          <Star className={`h-4 w-4 ${shortlistOnly ? 'fill-current' : ''}`} /> Shortlist
+        </Button>
+
         {/* Country filter */}
         <Select value={countryFilter ?? '__all__'} onValueChange={v => setCountryFilter(v === '__all__' ? null : v)}>
           <SelectTrigger className="w-[150px] h-8 text-xs">
