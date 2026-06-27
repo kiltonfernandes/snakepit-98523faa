@@ -4,8 +4,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Search, Upload, Play, Pause, Trash2, Music, X, Loader2, CheckCircle2, FileAudio } from 'lucide-react';
-import { listBgm, uploadBgm, deleteBgm, getBgmSignedUrl, downloadBgmAsFile, type BgmTrack } from '@/lib/bgm-library';
+import { Search, Upload, Play, Pause, Trash2, Music, X, Loader2, CheckCircle2, FileAudio, Pencil, Check } from 'lucide-react';
+import { listBgm, uploadBgm, deleteBgm, updateBgm, getBgmSignedUrl, downloadBgmAsFile, type BgmTrack } from '@/lib/bgm-library';
 import { useToast } from '@/hooks/use-toast';
 
 interface Props {
@@ -35,8 +35,11 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
   const [picking, setPicking] = useState(false);
 
   // Pending upload
-  const [pending, setPending] = useState<{ file: File; name: string; genresText: string } | null>(null);
+  const [pending, setPending] = useState<Array<{ file: File; name: string; genresText: string }> | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(null);
+  const [editing, setEditing] = useState<{ id: string; name: string; genresText: string } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -86,27 +89,44 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
     }
   }, [playingId, toast]);
 
-  const onDropFile = useCallback((file: File) => {
-    if (!file.type.includes('audio') && !file.name.toLowerCase().endsWith('.mp3')) {
-      toast({ title: 'Arquivo inválido', description: 'Envie um arquivo de áudio (mp3).', variant: 'destructive' });
+  const onDropFiles = useCallback((files: File[] | FileList) => {
+    const arr = Array.from(files).filter(f => f.type.includes('audio') || f.name.toLowerCase().endsWith('.mp3'));
+    if (arr.length === 0) {
+      toast({ title: 'Nenhum arquivo de áudio', description: 'Envie arquivos .mp3 ou de áudio.', variant: 'destructive' });
       return;
     }
-    setPending({ file, name: file.name.replace(/\.[^.]+$/, ''), genresText: '' });
+    setPending(prev => {
+      const next = arr.map(file => ({ file, name: file.name.replace(/\.[^.]+$/, ''), genresText: '' }));
+      return prev ? [...prev, ...next] : next;
+    });
   }, [toast]);
 
   const confirmUpload = useCallback(async () => {
-    if (!pending) return;
+    if (!pending || pending.length === 0) return;
     setUploading(true);
-    try {
-      const genres = pending.genresText.split(',').map(g => g.trim()).filter(Boolean);
-      const track = await uploadBgm({ file: pending.file, name: pending.name, genres });
-      toast({ title: 'BGM adicionado', description: track.name });
-      setPending(null);
-      await refresh();
-      setSelectedId(track.id);
-    } catch (e: any) {
-      toast({ title: 'Falha no upload', description: e?.message ?? String(e), variant: 'destructive' });
-    } finally { setUploading(false); }
+    setUploadProgress({ done: 0, total: pending.length });
+    let lastId: string | null = null;
+    let okCount = 0;
+    const errors: string[] = [];
+    for (let i = 0; i < pending.length; i++) {
+      const item = pending[i];
+      try {
+        const genres = item.genresText.split(',').map(g => g.trim()).filter(Boolean);
+        const track = await uploadBgm({ file: item.file, name: item.name, genres });
+        lastId = track.id;
+        okCount++;
+      } catch (e: any) {
+        errors.push(`${item.name}: ${e?.message ?? String(e)}`);
+      }
+      setUploadProgress({ done: i + 1, total: pending.length });
+    }
+    setUploading(false);
+    setUploadProgress(null);
+    setPending(null);
+    await refresh();
+    if (lastId) setSelectedId(lastId);
+    if (errors.length === 0) toast({ title: `${okCount} BGM(s) adicionado(s)` });
+    else toast({ title: `${okCount} ok, ${errors.length} falharam`, description: errors.join(' • ').slice(0, 300), variant: 'destructive' });
   }, [pending, refresh, toast]);
 
   const doDelete = useCallback(async (track: BgmTrack) => {
@@ -120,6 +140,24 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
       toast({ title: 'Falha ao remover', description: e?.message ?? String(e), variant: 'destructive' });
     }
   }, [selectedId, refresh, toast]);
+
+  const startEdit = useCallback((t: BgmTrack) => {
+    setEditing({ id: t.id, name: t.name, genresText: t.genres.join(', ') });
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editing) return;
+    setSavingEdit(true);
+    try {
+      const genres = editing.genresText.split(',').map(g => g.trim()).filter(Boolean);
+      await updateBgm(editing.id, { name: editing.name.trim(), genres });
+      toast({ title: 'BGM atualizado' });
+      setEditing(null);
+      await refresh();
+    } catch (e: any) {
+      toast({ title: 'Falha ao salvar', description: e?.message ?? String(e), variant: 'destructive' });
+    } finally { setSavingEdit(false); }
+  }, [editing, refresh, toast]);
 
   const pick = useCallback(async () => {
     if (!selected || !onPick) return;
@@ -148,7 +186,7 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
           <div
             className="flex flex-col min-w-0 border-r border-border"
             onDragOver={(e) => { e.preventDefault(); }}
-            onDrop={(e) => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) onDropFile(f); }}
+            onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) onDropFiles(e.dataTransfer.files); }}
           >
             <div className="px-4 pt-3 pb-2 space-y-2 border-b border-border bg-muted/20">
               <div className="flex items-center gap-2">
@@ -162,7 +200,7 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                   />
                 </div>
                 <label>
-                  <input type="file" accept=".mp3,audio/mpeg,audio/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) onDropFile(f); e.currentTarget.value = ''; }} />
+                  <input type="file" multiple accept=".mp3,audio/mpeg,audio/*" className="hidden" onChange={e => { if (e.target.files?.length) onDropFiles(e.target.files); e.currentTarget.value = ''; }} />
                   <Button size="sm" variant="default" asChild>
                     <span className="cursor-pointer"><Upload className="w-3.5 h-3.5 mr-1" /> Upload</span>
                   </Button>
@@ -207,7 +245,7 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                       <li
                         key={t.id}
                         onClick={() => setSelectedId(t.id)}
-                        className={`flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${isSel ? 'bg-primary/10' : 'hover:bg-muted/40'}`}
+                        className={`group flex items-center gap-3 px-4 py-2.5 cursor-pointer transition-colors ${isSel ? 'bg-primary/10' : 'hover:bg-muted/40'}`}
                       >
                         <button onClick={(e) => { e.stopPropagation(); togglePlay(t); }} className="w-8 h-8 rounded-full bg-muted hover:bg-primary/20 flex items-center justify-center shrink-0">
                           {isPlay ? <Pause className="w-3.5 h-3.5 text-primary" /> : <Play className="w-3.5 h-3.5" />}
@@ -220,6 +258,10 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                           </div>
                         </div>
                         <span className="text-[10px] font-mono text-muted-foreground shrink-0">{formatDuration(t.duration_seconds)}</span>
+                        <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={(e) => { e.stopPropagation(); startEdit(t); }} title="Editar" className="p-1 rounded hover:bg-primary/20 text-muted-foreground hover:text-primary"><Pencil className="w-3.5 h-3.5" /></button>
+                          <button onClick={(e) => { e.stopPropagation(); setConfirmDelete(t); }} title="Excluir" className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
                         {isSel && <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />}
                       </li>
                     );
@@ -246,6 +288,9 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                   <Button variant="outline" size="sm" onClick={() => togglePlay(selected)}>
                     {playingId === selected.id ? <><Pause className="w-3.5 h-3.5 mr-1" /> Pausar</> : <><Play className="w-3.5 h-3.5 mr-1" /> Preview</>}
                   </Button>
+                  <Button variant="outline" size="sm" onClick={() => startEdit(selected)}>
+                    <Pencil className="w-3.5 h-3.5 mr-1" /> Editar
+                  </Button>
                   {onPick && (
                     <Button onClick={pick} disabled={picking}>
                       {picking ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Carregando…</> : <>Usar este BGM</>}
@@ -265,32 +310,67 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
           </div>
         </div>
 
-        {/* Pending upload sheet */}
-        {pending && (
+        {/* Pending upload sheet (multi) */}
+        {pending && pending.length > 0 && (
+          <div className="absolute inset-0 bg-background/95 backdrop-blur flex items-center justify-center p-6">
+            <div className="w-full max-w-2xl rounded-lg border border-border bg-card p-5 shadow-xl space-y-3 max-h-[85vh] flex flex-col">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Upload className="w-4 h-4 text-primary" /> {pending.length} arquivo(s) para enviar
+                </h4>
+                <button onClick={() => !uploading && setPending(null)} disabled={uploading} className="p-1 rounded hover:bg-muted"><X className="w-3.5 h-3.5" /></button>
+              </div>
+              <label className="text-[11px] text-muted-foreground cursor-pointer inline-flex items-center gap-1 hover:text-foreground self-start">
+                <input type="file" multiple accept=".mp3,audio/mpeg,audio/*" className="hidden" onChange={e => { if (e.target.files?.length) onDropFiles(e.target.files); e.currentTarget.value = ''; }} />
+                <Upload className="w-3 h-3" /> adicionar mais
+              </label>
+              <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+                {pending.map((item, idx) => (
+                  <div key={idx} className="rounded-md border border-border bg-background/40 p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="text-[11px] font-mono text-muted-foreground truncate flex-1">{item.file.name} • {(item.file.size / 1024 / 1024).toFixed(1)} MB</p>
+                      <button disabled={uploading} onClick={() => setPending(p => p ? p.filter((_, i) => i !== idx) : p)} className="p-0.5 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive shrink-0"><X className="w-3.5 h-3.5" /></button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Input value={item.name} disabled={uploading} onChange={e => setPending(p => p ? p.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) : p)} placeholder="Nome" className="h-8 text-sm" />
+                      <Input value={item.genresText} disabled={uploading} onChange={e => setPending(p => p ? p.map((x, i) => i === idx ? { ...x, genresText: e.target.value } : x) : p)} placeholder="Gêneros (vírgula)" className="h-8 text-sm" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {uploadProgress && (
+                <p className="text-[11px] font-mono text-muted-foreground text-center">Enviando {uploadProgress.done}/{uploadProgress.total}…</p>
+              )}
+              <div className="flex justify-end gap-2 pt-1 border-t border-border">
+                <Button variant="ghost" size="sm" onClick={() => setPending(null)} disabled={uploading}>Cancelar</Button>
+                <Button size="sm" onClick={confirmUpload} disabled={uploading}>
+                  {uploading ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Enviando…</> : `Enviar ${pending.length}`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Edit sheet */}
+        {editing && (
           <div className="absolute inset-0 bg-background/95 backdrop-blur flex items-center justify-center p-6">
             <div className="w-full max-w-md rounded-lg border border-border bg-card p-5 shadow-xl space-y-3">
               <div className="flex items-center justify-between">
-                <h4 className="text-sm font-semibold flex items-center gap-2"><Upload className="w-4 h-4 text-primary" /> Novo BGM</h4>
-                <button onClick={() => setPending(null)} disabled={uploading} className="p-1 rounded hover:bg-muted"><X className="w-3.5 h-3.5" /></button>
+                <h4 className="text-sm font-semibold flex items-center gap-2"><Pencil className="w-4 h-4 text-primary" /> Editar BGM</h4>
+                <button onClick={() => setEditing(null)} disabled={savingEdit} className="p-1 rounded hover:bg-muted"><X className="w-3.5 h-3.5" /></button>
               </div>
-              <p className="text-[11px] font-mono text-muted-foreground truncate">{pending.file.name} • {(pending.file.size / 1024 / 1024).toFixed(1)} MB</p>
               <div>
                 <label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Nome</label>
-                <Input value={pending.name} onChange={e => setPending(p => p ? { ...p, name: e.target.value } : p)} className="mt-1 h-8 text-sm" />
+                <Input value={editing.name} onChange={e => setEditing(p => p ? { ...p, name: e.target.value } : p)} className="mt-1 h-8 text-sm" />
               </div>
               <div>
                 <label className="text-[10px] font-mono uppercase tracking-wider text-muted-foreground">Gêneros (separados por vírgula)</label>
-                <Input
-                  value={pending.genresText}
-                  onChange={e => setPending(p => p ? { ...p, genresText: e.target.value } : p)}
-                  placeholder="ex.: heavy metal, doom, melancólico"
-                  className="mt-1 h-8 text-sm"
-                />
+                <Input value={editing.genresText} onChange={e => setEditing(p => p ? { ...p, genresText: e.target.value } : p)} placeholder="ex.: heavy metal, doom" className="mt-1 h-8 text-sm" />
               </div>
               <div className="flex justify-end gap-2 pt-1">
-                <Button variant="ghost" size="sm" onClick={() => setPending(null)} disabled={uploading}>Cancelar</Button>
-                <Button size="sm" onClick={confirmUpload} disabled={uploading}>
-                  {uploading ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Enviando…</> : 'Salvar'}
+                <Button variant="ghost" size="sm" onClick={() => setEditing(null)} disabled={savingEdit}>Cancelar</Button>
+                <Button size="sm" onClick={saveEdit} disabled={savingEdit}>
+                  {savingEdit ? <><Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" /> Salvando…</> : <><Check className="w-3.5 h-3.5 mr-1" /> Salvar</>}
                 </Button>
               </div>
             </div>
