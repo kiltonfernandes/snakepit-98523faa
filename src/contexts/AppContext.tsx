@@ -4,6 +4,7 @@ import { DAY_SLOTS } from '@/lib/constants';
 import { supabase } from '@/integrations/supabase/client';
 import { enqueueUpdate, recoverAutosaveSnapshots } from '@/lib/autosave-queue';
 import { setQueryTemplateOverrides } from '@/lib/google-query-templates';
+import { fetchAllRows } from '@/lib/supabase-paginate';
 
 interface ActivityEntry {
   id: string;
@@ -74,18 +75,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [dataReady, setDataReady] = useState(false);
 
   const loadReleases = useCallback(async () => {
-    const { data: relData } = await supabase.from('releases' as any).select('*').order('release_date', { ascending: false });
-    if (relData) {
-      const { data: genreData } = await supabase.from('release_genres' as any).select('*');
-      const genreMap: Record<string, string[]> = {};
-      if (genreData) {
-        (genreData as any[]).forEach((g: any) => {
-          if (!genreMap[g.release_id]) genreMap[g.release_id] = [];
-          genreMap[g.release_id].push(g.genre);
-        });
-      }
-      setReleases((relData as any[]).map((r: any) => ({ ...r, genres: genreMap[r.id] || [] })));
+    // Paginate both tables in parallel — bypasses PostgREST's 1000-row default cap.
+    const [relData, genreData] = await Promise.all([
+      fetchAllRows<any>('releases', '*', { column: 'release_date', ascending: false }),
+      fetchAllRows<any>('release_genres', '*'),
+    ]);
+    const genreMap: Record<string, string[]> = {};
+    for (const g of genreData) {
+      if (!genreMap[g.release_id]) genreMap[g.release_id] = [];
+      genreMap[g.release_id].push(g.genre);
     }
+    setReleases(relData.map((r: any) => ({ ...r, genres: genreMap[r.id] || [] })));
   }, []);
 
   const persistReleaseGenres = useCallback(async (releaseId: string, genres?: string[]) => {
@@ -107,22 +107,24 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loadPautas = useCallback(async () => {
-    const { data } = await supabase.from('pautas' as any).select('*');
-    if (data) setPautas(data as any[]);
+    const data = await fetchAllRows<any>('pautas', '*');
+    setPautas(data);
   }, []);
 
   const loadMaterials = useCallback(async () => {
     // Exclude cover_url from initial load — it can be multi-MB base64 and causes timeouts
-    const { data, error } = await supabase
-      .from('episode_materials' as any)
-      .select('id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,repository_url,repository_file_id,repository_provider,repository_uploaded_at,mentioned_in_episode,cover_saved_at,created_at,updated_at');
-    if (error) console.error('[loadMaterials] error:', error.message);
-    if (data) {
+    try {
+      const data = await fetchAllRows<any>(
+        'episode_materials',
+        'id,week_id,slot_key,episode_date,source_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,repository_url,repository_file_id,repository_provider,repository_uploaded_at,mentioned_in_episode,cover_saved_at,created_at,updated_at',
+      );
       // Preserve any cover_url already in local state (loaded on demand)
       setMaterials(prev => {
         const coverMap = new Map(prev.filter(m => m.cover_url).map(m => [m.id, m.cover_url]));
-        return (data as any[]).map((m: any) => ({ ...m, cover_url: coverMap.get(m.id) || null }));
+        return data.map((m: any) => ({ ...m, cover_url: coverMap.get(m.id) || null }));
       });
+    } catch (e: any) {
+      console.error('[loadMaterials] error:', e?.message ?? e);
     }
   }, []);
 
