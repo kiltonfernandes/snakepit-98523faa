@@ -38,6 +38,7 @@ export default function Dashboard() {
   const { releases, weeks, pautas, materials } = useApp();
   const [expandedWeek, setExpandedWeek] = useState<string | null>(null);
   const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set([new Date().getFullYear()]));
+  const [expandedQuarters, setExpandedQuarters] = useState<Set<string>>(new Set([`${new Date().getFullYear()}-Q${Math.floor(new Date().getMonth() / 3) + 1}`]));
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set([`${new Date().getFullYear()}-${new Date().getMonth()}`]));
   const [filterStatus, setFilterStatus] = useState<'all' | 'incomplete' | 'complete'>('all');
   const [dashTab, setDashTab] = useState('releases');
@@ -137,24 +138,31 @@ export default function Dashboard() {
 
   // Group weeks by year > month
   const tree = useMemo(() => {
-    const yearMap: Record<number, Record<number, EditorialWeek[]>> = {};
+    const yearMap: Record<number, Record<number, Record<number, EditorialWeek[]>>> = {};
     weeks.forEach(w => {
       const d = new Date(w.start_date + 'T12:00:00');
       const y = d.getFullYear();
       const m = d.getMonth();
+      const q = Math.floor(m / 3) + 1;
       if (!yearMap[y]) yearMap[y] = {};
-      if (!yearMap[y][m]) yearMap[y][m] = [];
-      yearMap[y][m].push(w);
+      if (!yearMap[y][q]) yearMap[y][q] = {};
+      if (!yearMap[y][q][m]) yearMap[y][q][m] = [];
+      yearMap[y][q][m].push(w);
     });
     return Object.entries(yearMap)
       .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([year, months]) => ({
+      .map(([year, quarters]) => ({
         year: Number(year),
-        months: Object.entries(months)
+        quarters: Object.entries(quarters)
           .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([month, wks]) => ({
-            month: Number(month),
-            weeks: wks.sort((a, b) => a.start_date.localeCompare(b.start_date)),
+          .map(([quarter, months]) => ({
+            quarter: Number(quarter),
+            months: Object.entries(months)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([month, wks]) => ({
+                month: Number(month),
+                weeks: wks.sort((a, b) => a.start_date.localeCompare(b.start_date)),
+              })),
           })),
       }));
   }, [weeks]);
@@ -180,6 +188,9 @@ export default function Dashboard() {
   };
   const toggleMonth = (key: string) => {
     setExpandedMonths(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  };
+  const toggleQuarter = (key: string) => {
+    setExpandedQuarters(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   };
 
   const yearProgress = (wks: EditorialWeek[]): number => {
@@ -413,8 +424,8 @@ export default function Dashboard() {
             <span className="text-xs text-muted-foreground">{weeks.length} semanas no total</span>
           </div>
 
-          {tree.map(({ year: y, months }) => {
-            const allYearWeeks = filteredWeeksForTree(months.flatMap(m => m.weeks));
+          {tree.map(({ year: y, quarters }) => {
+            const allYearWeeks = filteredWeeksForTree(quarters.flatMap(q => q.months.flatMap(m => m.weeks)));
             if (allYearWeeks.length === 0 && filterStatus !== 'all') return null;
             const yPct = yearProgress(allYearWeeks);
             const isYearOpen = expandedYears.has(y);
@@ -434,6 +445,26 @@ export default function Dashboard() {
                   {isYearOpen && (
                     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
                       <div className="px-4 pb-4 space-y-2">
+                        {quarters.map(({ quarter: q, months }) => {
+                          const allQWeeks = filteredWeeksForTree(months.flatMap(m => m.weeks));
+                          if (allQWeeks.length === 0 && filterStatus !== 'all') return null;
+                          const qKey = `${y}-Q${q}`;
+                          const qPct = monthProgressFn(allQWeeks);
+                          const isQOpen = expandedQuarters.has(qKey);
+                          return (
+                            <div key={qKey} className="rounded-lg border border-border/40 overflow-hidden">
+                              <button className="w-full flex items-center gap-3 p-3 hover:bg-muted/20 transition-colors text-left" onClick={() => toggleQuarter(qKey)}>
+                                {isQOpen ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" /> : <ChevronRightIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                                <span className={cn("h-2.5 w-2.5 rounded-full", trafficLight(qPct))} />
+                                <span className="text-sm font-semibold">Q{q}</span>
+                                <Badge variant="secondary" className="text-[10px]">{allQWeeks.length} sem</Badge>
+                                <div className="flex-1 mx-3"><Progress value={qPct} className="h-1" /></div>
+                                <span className="text-xs font-mono text-muted-foreground">{qPct}%</span>
+                              </button>
+                              <AnimatePresence>
+                                {isQOpen && (
+                                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                                    <div className="px-3 pb-3 space-y-2">
                         {months.map(({ month: m, weeks: mWeeks }) => {
                           const filtered = filteredWeeksForTree(mWeeks);
                           if (filtered.length === 0 && filterStatus !== 'all') return null;
@@ -504,6 +535,13 @@ export default function Dashboard() {
                                           </div>
                                         );
                                       })}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+                          );
+                        })}
                                     </div>
                                   </motion.div>
                                 )}
