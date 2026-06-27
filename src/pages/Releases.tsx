@@ -24,7 +24,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 
-const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', country: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '' };
+const emptyForm = { artist: '', album: '', release_date: '', genres: '', rating: 3, comments: '', country: '', youtube_url: '', spotify_url: '', deezer_url: '', apple_music_url: '', bandcamp_url: '', metal_archives_url: '', shortlist: false };
 
 interface ImportSummary { valid: number; duplicates: number; invalid: number; errors: string[]; }
 
