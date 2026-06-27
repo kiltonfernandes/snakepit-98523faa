@@ -138,24 +138,31 @@ export default function Dashboard() {
 
   // Group weeks by year > month
   const tree = useMemo(() => {
-    const yearMap: Record<number, Record<number, EditorialWeek[]>> = {};
+    const yearMap: Record<number, Record<number, Record<number, EditorialWeek[]>>> = {};
     weeks.forEach(w => {
       const d = new Date(w.start_date + 'T12:00:00');
       const y = d.getFullYear();
       const m = d.getMonth();
+      const q = Math.floor(m / 3) + 1;
       if (!yearMap[y]) yearMap[y] = {};
-      if (!yearMap[y][m]) yearMap[y][m] = [];
-      yearMap[y][m].push(w);
+      if (!yearMap[y][q]) yearMap[y][q] = {};
+      if (!yearMap[y][q][m]) yearMap[y][q][m] = [];
+      yearMap[y][q][m].push(w);
     });
     return Object.entries(yearMap)
       .sort(([a], [b]) => Number(a) - Number(b))
-      .map(([year, months]) => ({
+      .map(([year, quarters]) => ({
         year: Number(year),
-        months: Object.entries(months)
+        quarters: Object.entries(quarters)
           .sort(([a], [b]) => Number(a) - Number(b))
-          .map(([month, wks]) => ({
-            month: Number(month),
-            weeks: wks.sort((a, b) => a.start_date.localeCompare(b.start_date)),
+          .map(([quarter, months]) => ({
+            quarter: Number(quarter),
+            months: Object.entries(months)
+              .sort(([a], [b]) => Number(a) - Number(b))
+              .map(([month, wks]) => ({
+                month: Number(month),
+                weeks: wks.sort((a, b) => a.start_date.localeCompare(b.start_date)),
+              })),
           })),
       }));
   }, [weeks]);
@@ -181,6 +188,9 @@ export default function Dashboard() {
   };
   const toggleMonth = (key: string) => {
     setExpandedMonths(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  };
+  const toggleQuarter = (key: string) => {
+    setExpandedQuarters(prev => { const n = new Set(prev); if (n.has(key)) n.delete(key); else n.add(key); return n; });
   };
 
   const yearProgress = (wks: EditorialWeek[]): number => {
