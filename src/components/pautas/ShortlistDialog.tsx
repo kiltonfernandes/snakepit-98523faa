@@ -64,7 +64,7 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
               </div>
             ) : shortlisted.map((r) => {
               const links = resolveAllLinks(r);
-              const ma = links.find(l => l.platform === 'metal-archives')?.url || r.metal_archives_url;
+              const ma = links.metal_archives || r.metal_archives_url;
               return (
                 <div key={r.id} className="flex items-start gap-3 px-6 py-3 hover:bg-muted/30">
                   <Disc className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
