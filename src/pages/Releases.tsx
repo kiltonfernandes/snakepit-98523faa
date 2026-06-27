@@ -168,6 +168,7 @@ export default function Releases() {
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
   const [countryFilter, setCountryFilter] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [shortlistOnly, setShortlistOnly] = useState(false);
   const [genreDialogOpen, setGenreDialogOpen] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
