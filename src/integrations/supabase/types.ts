@@ -119,6 +119,36 @@ export type Database = {
         }
         Relationships: []
       }
+      bgm_tracks: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          genres: string[]
+          id: string
+          name: string
+          storage_path: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          genres?: string[]
+          id?: string
+          name: string
+          storage_path: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          genres?: string[]
+          id?: string
+          name?: string
+          storage_path?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       editorial_weeks: {
         Row: {
           created_at: string

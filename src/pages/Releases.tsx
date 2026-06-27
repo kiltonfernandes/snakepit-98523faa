@@ -836,9 +836,21 @@ export default function Releases() {
                 {(r.genres || []).slice(0, 3).map(g => <Badge key={g} variant="secondary" className="text-[10px]">{g}</Badge>)}
               </div>
             </TableCell>
-            <TableCell onClick={() => openEdit(r)}>
-              <div className="flex gap-0.5">
-                {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
+            <TableCell onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2">
+                <a
+                  href={resolveAllLinks(r).metal_archives}
+                  target="_blank"
+                  rel="noreferrer"
+                  title="Abrir no Metal Archives"
+                  className="inline-flex items-center justify-center h-6 px-1.5 rounded border border-border bg-background hover:border-primary hover:text-primary text-[10px] font-mono uppercase tracking-wider text-muted-foreground transition-colors"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  MA
+                </a>
+                <button type="button" onClick={() => openEdit(r)} className="flex gap-0.5" title="Editar">
+                  {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
+                </button>
               </div>
             </TableCell>
             <TableCell>
