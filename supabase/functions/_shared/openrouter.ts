@@ -63,10 +63,15 @@ function buildRequestBody(model: string, opts: CallOpenRouterOptions) {
   const messages: { role: string; content: string }[] = [];
   if (systemContent) messages.push({ role: "system", content: systemContent });
   messages.push({ role: "user", content: opts.user });
-  const body: Record<string, unknown> = { model, messages, stream: !!opts.stream };
+  // OpenRouter web search: append ":online" suffix to the model id. This is
+  // the simplest/most reliable way to enable native web search per
+  // https://openrouter.ai/docs/features/web-search and works for any model.
+  const effectiveModel = opts.webSearch && !model.endsWith(":online")
+    ? `${model}:online`
+    : model;
+  const body: Record<string, unknown> = { model: effectiveModel, messages, stream: !!opts.stream };
   if (typeof opts.temperature === "number") body.temperature = opts.temperature;
   if (typeof opts.maxTokens === "number") body.max_tokens = opts.maxTokens;
-  if (opts.webSearch) body.tools = [{ type: "openrouter:web_search" }];
   return body;
 }
 
