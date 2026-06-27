@@ -808,17 +808,17 @@ function TopicStep({
     }
     setGeneratingPauta(true);
     aiProgressTopic.start('Gerar tudo — pipeline completa');
+    const log = (...args: any[]) => console.info('[gerar-tudo]', ...args);
+    const stepResults: Record<string, 'ok' | 'skip' | 'fail'> = {};
     try {
-      // 1. Pesquisa web (best effort — não bloqueia se faltar query)
+      // ── 1. Pesquisa web (best effort) ────────────────────────────────
       let mergedNotes = topic.notes || '';
       if (steps.pesquisa && googleQuery) {
-        aiProgressTopic.start('Pesquisa web (DeepSeek + online)');
-        aiProgressTopic.setStage('streaming');
         const RESEARCH_LABEL = 'web-research (DeepSeek + online)';
+        log('pesquisa:start', { query: googleQuery });
+        aiProgressTopic.setStage('streaming');
         aiProgressTopic.pushAttempt({ model: RESEARCH_LABEL, status: 'trying' });
         try {
-          // Direct fetch with a 60s client-side timeout. `supabase.functions.invoke`
-          // has no abort path, so a slow edge function would hang the whole pipeline.
           const ac = new AbortController();
           const timer = setTimeout(() => ac.abort('client_timeout_60s'), 60_000);
           const resp = await fetch(
@@ -843,17 +843,26 @@ function TopicStep({
               ? `${prev}\n\n---\n## Pesquisa automática (DeepSeek + web search)\n${notes}`
               : `## Pesquisa automática (DeepSeek + web search)\n${notes}`;
             dispatch({ kind: 'patchTopic', id: topic.id, patch: { notes: mergedNotes } });
+            stepResults.pesquisa = 'ok';
+            log('pesquisa:ok', { chars: notes.length });
+            toast.success('✓ Pesquisa web concluída');
           } else {
             aiProgressTopic.failAttempt(RESEARCH_LABEL, 'sem notas');
+            stepResults.pesquisa = 'fail';
+            log('pesquisa:empty');
           }
         } catch (e: any) {
           const reason = e?.name === 'AbortError' || String(e?.message || '').includes('client_timeout') ? 'timeout 60s' : (e?.message || 'falha');
           aiProgressTopic.failAttempt(RESEARCH_LABEL, reason);
-          // segue mesmo sem pesquisa
+          stepResults.pesquisa = 'fail';
+          log('pesquisa:fail', reason);
+          toast.warning(`Pesquisa web falhou (${reason}) — seguindo sem ela`);
         }
+      } else {
+        stepResults.pesquisa = 'skip';
       }
 
-      // 2. Atualiza prompt anexando as notas (se houver)
+      // ── 2. Atualiza prompt anexando as notas (se houver) ─────────────
       let promptToUse = topic.prompt_text || '';
       const notesTrim = mergedNotes.trim();
       if (notesTrim) {
@@ -866,67 +875,85 @@ function TopicStep({
         dispatch({ kind: 'patchTopic', id: topic.id, patch: { prompt_text: promptToUse } });
       }
 
-      // 3. Gerar pauta
+      // ── 3. Gerar pauta (ou formatar apenas) ──────────────────────────
       const bannedTerms = settings.banned_terms_text ? settings.banned_terms_text.split('\n').filter(Boolean) : [];
       const temperature = typeof settings.brand_tone_temperature === 'number' ? settings.brand_tone_temperature / 100 : undefined;
       let pautaFull = topic.response_text || '';
       if (steps.pauta) {
-        aiProgressTopic.start('Gerar pauta');
-        onPaste('');
-        pautaFull = await streamGeneratePauta({
-          prompt: promptToUse,
-          bannedTerms,
-          temperature,
-          webSearch: false,
-          label: 'Gerar tudo — pauta',
-          progress: aiProgressTopic,
-          onChunk: (full) => onPaste(full),
-        });
-        const target = topic.target_words ?? 0;
-        if (target > 0) {
-          pautaFull = await enforceLengthOnce({
-            text: pautaFull,
-            targetWords: target,
-            basePrompt: promptToUse,
-            bannedTerms,
-            temperature,
-            progress: aiProgressTopic,
-            onChunk: (txt) => onPaste(txt),
-          });
-        }
-        // Guardrail: garante SEGWAY intro/outro mesmo se o LLM ignorar.
-        const wrapped = wrapWithSegways(pautaFull);
-        if (wrapped !== pautaFull) {
-          pautaFull = wrapped;
-          onPaste(wrapped);
-        }
-      } else if (steps.formatarApenas) {
-        // Sub-opção: não gera, apenas formata o texto cru já presente em response_text.
-        const raw = (topic.response_text || '').trim();
-        if (!raw) {
-          toast.error('Formatar apenas: cole o conteúdo bruto no campo "Cole aqui a resposta da IA" antes de iniciar.');
-          aiProgressTopic.finish('Sem conteúdo cru para formatar.');
-          return;
-        } else {
-          aiProgressTopic.start('Formatar pauta (Markdown)');
-          const formatPrompt = getStandaloneFormatPrompt(raw);
+        try {
+          log('pauta:start');
+          aiProgressTopic.pushAttempt({ model: '▶ Etapa: Pauta', status: 'trying' });
           onPaste('');
-          let formatted = await streamGeneratePauta({
-            prompt: formatPrompt,
+          pautaFull = await streamGeneratePauta({
+            prompt: promptToUse,
             bannedTerms,
             temperature,
             webSearch: false,
-            label: 'Gerar tudo — formatar apenas',
+            label: 'Pauta',
             progress: aiProgressTopic,
+            silentLifecycle: true,
             onChunk: (full) => onPaste(full),
           });
-          const wrapped = wrapWithSegways(formatted);
-          if (wrapped !== formatted) {
-            formatted = wrapped;
-            onPaste(wrapped);
+          const target = topic.target_words ?? 0;
+          if (target > 0) {
+            pautaFull = await enforceLengthOnce({
+              text: pautaFull,
+              targetWords: target,
+              basePrompt: promptToUse,
+              bannedTerms,
+              temperature,
+              progress: aiProgressTopic,
+              onChunk: (txt) => onPaste(txt),
+            });
           }
-          pautaFull = formatted;
+          const wrapped = wrapWithSegways(pautaFull);
+          if (wrapped !== pautaFull) { pautaFull = wrapped; onPaste(wrapped); }
+          stepResults.pauta = 'ok';
+          log('pauta:ok', { words: countWords(pautaFull) });
+          toast.success('✓ Pauta gerada');
+        } catch (e: any) {
+          stepResults.pauta = 'fail';
+          log('pauta:fail', e?.message);
+          toast.warning(`Pauta falhou (${e?.message || 'erro'}) — seguindo`);
+          pautaFull = topic.response_text || '';
         }
+      } else if (steps.formatarApenas) {
+        const raw = (topic.response_text || '').trim();
+        if (!raw) {
+          toast.warning('Formatar apenas: campo "Cole aqui a resposta da IA" vazio — pulando.');
+          stepResults.pauta = 'skip';
+          log('formatar:skip-empty');
+        } else {
+          try {
+            log('formatar:start');
+            aiProgressTopic.pushAttempt({ model: '▶ Etapa: Formatar', status: 'trying' });
+            const formatPrompt = getStandaloneFormatPrompt(raw);
+            onPaste('');
+            let formatted = await streamGeneratePauta({
+              prompt: formatPrompt,
+              bannedTerms,
+              temperature,
+              webSearch: false,
+              label: 'Formatar',
+              progress: aiProgressTopic,
+              silentLifecycle: true,
+              onChunk: (full) => onPaste(full),
+            });
+            const wrapped = wrapWithSegways(formatted);
+            if (wrapped !== formatted) { formatted = wrapped; onPaste(wrapped); }
+            pautaFull = formatted;
+            stepResults.pauta = 'ok';
+            log('formatar:ok');
+            toast.success('✓ Conteúdo formatado');
+          } catch (e: any) {
+            stepResults.pauta = 'fail';
+            log('formatar:fail', e?.message);
+            toast.warning(`Formatar falhou (${e?.message || 'erro'}) — seguindo`);
+            pautaFull = raw;
+          }
+        }
+      } else {
+        stepResults.pauta = 'skip';
       }
 
       // Build aggregated content with the freshly-generated pauta for this topic.
@@ -937,54 +964,83 @@ function TopicStep({
       );
       const content = aggregatedContent(updatedTopics, releases);
 
-      // 4. Gerar títulos
+      // ── 4. Gerar títulos ─────────────────────────────────────────────
       let chosenTitle = state.titleOptions[state.selectedTitleIndex ?? 0]?.text || '';
       if (steps.titulos) {
-        aiProgressTopic.start('Gerar títulos');
-        const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
-        const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
-        dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
-        dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
-        const titleFull = await streamGeneratePauta({
-          prompt: titlePrompt,
-          bannedTerms,
-          temperature,
-          webSearch: false,
-          label: 'Gerar tudo — títulos',
-          progress: aiProgressTopic,
-          onChunk: (full) => dispatch({ kind: 'setField', field: 'titleResponse', value: full }),
-        });
-        const opts = parseTitleOptionsFromText(titleFull);
-        dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
-        if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
-        chosenTitle = opts[0]?.text || '';
+        try {
+          log('titulos:start');
+          aiProgressTopic.pushAttempt({ model: '▶ Etapa: Títulos', status: 'trying' });
+          const titleOverride = getComponentPrompt(selectedTemplate, 'titulo');
+          const titlePrompt = getStandaloneTitlePrompt(content, settings, titleOverride);
+          dispatch({ kind: 'setField', field: 'titleResponse', value: '' });
+          dispatch({ kind: 'setField', field: 'titleOptions', value: [] });
+          const titleFull = await streamGeneratePauta({
+            prompt: titlePrompt,
+            bannedTerms,
+            temperature,
+            webSearch: false,
+            label: 'Títulos',
+            progress: aiProgressTopic,
+            silentLifecycle: true,
+            onChunk: (full) => dispatch({ kind: 'setField', field: 'titleResponse', value: full }),
+          });
+          const opts = parseTitleOptionsFromText(titleFull);
+          dispatch({ kind: 'setField', field: 'titleOptions', value: opts });
+          if (opts.length) dispatch({ kind: 'setField', field: 'selectedTitleIndex', value: 0 });
+          chosenTitle = opts[0]?.text || '';
+          stepResults.titulos = 'ok';
+          log('titulos:ok', { count: opts.length });
+          toast.success(`✓ ${opts.length} títulos gerados`);
+        } catch (e: any) {
+          stepResults.titulos = 'fail';
+          log('titulos:fail', e?.message);
+          toast.warning(`Títulos falharam (${e?.message || 'erro'}) — seguindo`);
+        }
+      } else {
+        stepResults.titulos = 'skip';
       }
 
-      // 5. Gerar descrição
+      // ── 5. Gerar descrição ───────────────────────────────────────────
       if (steps.descricao) {
-        aiProgressTopic.start('Gerar descrição');
-        const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
-        const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
-        dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
-        dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
-        const descFull = await streamGeneratePauta({
-          prompt: descPrompt,
-          bannedTerms,
-          temperature,
-          webSearch: false,
-          label: 'Gerar tudo — descrição',
-          progress: aiProgressTopic,
-          onChunk: (full) => {
-            dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
-            dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
-          },
-        });
-        dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(descFull) });
+        try {
+          log('descricao:start');
+          aiProgressTopic.pushAttempt({ model: '▶ Etapa: Descrição', status: 'trying' });
+          const descOverride = getComponentPrompt(selectedTemplate, 'descricao');
+          const descPrompt = getStandaloneDescriptionPrompt(chosenTitle, content, settings, descOverride);
+          dispatch({ kind: 'setField', field: 'descriptionResponse', value: '' });
+          dispatch({ kind: 'setField', field: 'descriptionHtml', value: '' });
+          const descFull = await streamGeneratePauta({
+            prompt: descPrompt,
+            bannedTerms,
+            temperature,
+            webSearch: false,
+            label: 'Descrição',
+            progress: aiProgressTopic,
+            silentLifecycle: true,
+            onChunk: (full) => {
+              dispatch({ kind: 'setField', field: 'descriptionResponse', value: full });
+              dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(full) });
+            },
+          });
+          dispatch({ kind: 'setField', field: 'descriptionHtml', value: descriptionHtmlFromResponse(descFull) });
+          stepResults.descricao = 'ok';
+          log('descricao:ok', { chars: descFull.length });
+          toast.success('✓ Descrição gerada');
+        } catch (e: any) {
+          stepResults.descricao = 'fail';
+          log('descricao:fail', e?.message);
+          toast.warning(`Descrição falhou (${e?.message || 'erro'})`);
+        }
+      } else {
+        stepResults.descricao = 'skip';
       }
 
       aiProgressTopic.finish(null);
-      toast.success('Pipeline completa: pauta + títulos + descrição gerados');
+      const summary = Object.entries(stepResults).map(([k, v]) => `${v === 'ok' ? '✓' : v === 'fail' ? '✗' : '○'} ${k}`).join(' · ');
+      log('pipeline:done', stepResults);
+      toast.success(`Pipeline concluída — ${summary}`);
     } catch (e: any) {
+      log('pipeline:fatal', e?.message);
       aiProgressTopic.finish(e?.message || 'Falha na pipeline');
       toast.error(e?.message || 'Falha ao gerar tudo');
     } finally {
