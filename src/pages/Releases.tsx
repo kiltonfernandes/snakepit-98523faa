@@ -856,11 +856,23 @@ export default function Releases() {
                   target="_blank"
                   rel="noreferrer"
                   title="Abrir no Metal Archives"
-                  className="inline-flex items-center justify-center h-6 px-1.5 rounded border border-border bg-background hover:border-primary hover:text-primary text-[10px] font-mono uppercase tracking-wider text-muted-foreground transition-colors"
+                  className="inline-flex items-center justify-center h-6 px-2 rounded border border-foreground/30 bg-foreground/10 hover:bg-primary hover:text-primary-foreground hover:border-primary text-[10px] font-mono font-bold uppercase tracking-wider text-foreground transition-colors"
                   onClick={(e) => e.stopPropagation()}
                 >
                   MA
                 </a>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); updateRelease(r.id, { shortlist: !r.shortlist }); }}
+                  title={r.shortlist ? 'Remover da shortlist' : 'Adicionar à shortlist'}
+                  className={`inline-flex items-center justify-center h-6 px-2 rounded border text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                    r.shortlist
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-foreground/10 text-foreground border-foreground/30 hover:bg-primary/20 hover:border-primary hover:text-primary'
+                  }`}
+                >
+                  <Star className={`h-3 w-3 ${r.shortlist ? 'fill-current' : ''}`} />
+                </button>
                 <button type="button" onClick={() => openEdit(r)} className="flex gap-0.5" title="Editar">
                   {[1,2,3,4,5].map(i => <Star key={i} className={`h-3 w-3 ${i <= (r.rating || 0) ? 'text-primary fill-primary' : 'text-muted-foreground/30'}`} />)}
                 </button>
