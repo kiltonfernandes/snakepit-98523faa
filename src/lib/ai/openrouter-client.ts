@@ -69,10 +69,22 @@ export async function streamGeneratePauta(opts: StreamGeneratePautaOptions): Pro
   const decoder = new TextDecoder();
   let buffer = '';
   let full = '';
+  // Inactivity watchdog: if no bytes arrive for INACTIVITY_MS, abort the
+  // stream so the UI doesn't hang forever when the edge function dies mid-stream.
+  const INACTIVITY_MS = 45_000;
+  let lastActivity = Date.now();
+  const ac = new AbortController();
+  const watchdog = setInterval(() => {
+    if (Date.now() - lastActivity > INACTIVITY_MS) {
+      try { ac.abort(); } catch {}
+      try { reader.cancel(); } catch {}
+    }
+  }, 2000);
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      lastActivity = Date.now();
       buffer += decoder.decode(value, { stream: true });
       let nlIdx: number;
       while ((nlIdx = buffer.indexOf('\n')) !== -1) {
@@ -115,9 +127,11 @@ export async function streamGeneratePauta(opts: StreamGeneratePautaOptions): Pro
       }
     }
   } catch (e: any) {
+    clearInterval(watchdog);
     p?.finish(e?.message || 'Falha durante streaming');
     throw e;
   }
+  clearInterval(watchdog);
   p?.setStage('populating');
   p?.finish(null);
   return full;
