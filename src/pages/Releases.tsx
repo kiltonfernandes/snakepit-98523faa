@@ -1198,7 +1198,7 @@ export default function Releases() {
                       )}
                     </div>
                     <Input
-                      value={form[fieldKey]}
+                      value={String(form[fieldKey] ?? '')}
                       onChange={e => setForm(p => ({ ...p, [fieldKey]: e.target.value }))}
                       placeholder={dynamicLink || `https://...`}
                       className="text-xs h-8"
