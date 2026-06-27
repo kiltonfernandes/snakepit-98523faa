@@ -9,6 +9,7 @@ import { useRivaldo } from '@/contexts/RivaldoContext';
 import { useRivaldoBulk } from '@/contexts/RivaldoBulkContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
+import { BgmLibraryModal } from '@/components/rivaldo/BgmLibraryModal';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
 import { ParametersSidebar } from '@/components/rivaldo/ParametersSidebar';
 import { MultiTrackMaster } from '@/components/rivaldo/MultiTrackMaster';
@@ -32,19 +33,8 @@ import { DesktopState } from '@/lib/desktop/types';
 
 const INTRO_PRESETS = [{ label: 'Heavynauta', url: '/presets/Heavynauta_Intro.mp3' }];
 const OUTRO_PRESETS = [{ label: 'Heavynauta', url: '/presets/heavynaura_outro.mp3' }];
-const BGM_PRESETS = [
-  { label: 'BGM 1', url: '/presets/zzzzaaaaBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 2', url: '/presets/zzzzbbbbBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 3', url: '/presets/zzzzccccBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 4', url: '/presets/zzzzddddBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 5', url: '/presets/zzzzeeeeBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 6', url: '/presets/zzzzffffBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 7', url: '/presets/zzzzggggBGM_Heavynauta_2.0.mp3' },
-  { label: 'BGM 8', url: '/presets/zzzzhhhhBGM_Heavynauta_2.0.mp3' },
-];
 
 const NON_MASTER_SLOTS = [
-  { key: 'bgm' as const, label: 'BGM', sublabel: 'A Trilha', presets: BGM_PRESETS },
   { key: 'intro' as const, label: 'Intro', sublabel: 'A Abertura', presets: INTRO_PRESETS },
   { key: 'outro' as const, label: 'Outro', sublabel: 'O Encerramento', presets: OUTRO_PRESETS },
 ];
@@ -123,6 +113,7 @@ const Rivaldo = () => {
   const bulk = useRivaldoBulk();
   const [bulkOpen, setBulkOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [bgmLibraryOpen, setBgmLibraryOpen] = useState(false);
   const [uploadToCloud, setUploadToCloud] = useState(true); // default ON per user preference
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
   const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>({ ...DEFAULT_PROCESSING_PROFILE });
@@ -262,8 +253,52 @@ const Rivaldo = () => {
           <MultiTrackMaster mode={masterMode} onModeChange={setMasterMode} singleFile={masterFile} onSingleFileChange={setMasterFile} multiFiles={masterTracks} onMultiFilesChange={setMasterTracks} processingProfile={processingProfile} disabled={isProcessing} />
 
           <div className="grid grid-cols-3 gap-4">
+            {/* BGM slot — backed by the library */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.1, duration: 0.4 }}
+              className={`relative group rounded-lg p-6 transition-all duration-200 bg-card hover:bg-accent/10 ${files.bgm ? 'ring-1 ring-primary/30' : ''}`}
+              style={{ boxShadow: '0 4px 20px -4px hsl(220 15% 0% / 0.5)' }}
+            >
+              <div className="absolute top-2 left-3">
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">BGM</span>
+              </div>
+              <div className="flex flex-col items-center gap-3 justify-center min-h-[80px]">
+                {files.bgm ? (
+                  <>
+                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center"><Sparkles className="w-4 h-4 text-primary" /></div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground truncate max-w-[180px]">{files.bgm.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono mt-1">{(files.bgm.size / (1024 * 1024)).toFixed(1)} MB</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-foreground">BGM</p>
+                      <p className="text-xs text-muted-foreground">A Trilha</p>
+                    </div>
+                  </>
+                )}
+                <Button size="sm" variant={files.bgm ? 'outline' : 'default'} onClick={() => setBgmLibraryOpen(true)}>
+                  {files.bgm ? 'Trocar BGM' : 'Selecionar BGM'}
+                </Button>
+              </div>
+              {files.bgm && (
+                <button
+                  onClick={() => handleFileChange('bgm', null)}
+                  className="absolute top-2 right-2 p-1 rounded-full bg-secondary hover:bg-destructive/20 transition-colors"
+                  aria-label="Remover BGM"
+                >
+                  <span className="text-xs">×</span>
+                </button>
+              )}
+            </motion.div>
+
             {NON_MASTER_SLOTS.map((slot, index) => (
-              <UploadSlot key={slot.key} label={slot.label} sublabel={slot.sublabel} file={files[slot.key]} onFileChange={(file) => handleFileChange(slot.key, file)} index={index + 1} presets={slot.presets} />
+              <UploadSlot key={slot.key} label={slot.label} sublabel={slot.sublabel} file={files[slot.key]} onFileChange={(file) => handleFileChange(slot.key, file)} index={index + 2} presets={slot.presets} />
             ))}
           </div>
 
