@@ -106,6 +106,21 @@ export default function PreProducao() {
   useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
 
   useEffect(() => {
+    const channel = supabase
+      .channel('preprod-pautas-calendar-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'preprod_pautas' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as any)?.id;
+          if (id) setPreprodPautas((prev) => prev.filter((p) => p.id !== id));
+          return;
+        }
+        if (payload.new) upsertPreprodPauta(payload.new);
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [upsertPreprodPauta]);
+
+  useEffect(() => {
     const id = searchParams.get('preprod');
     if (!id || preprodPautas.length === 0) return;
     const found = preprodPautas.find((p) => p.id === id);
