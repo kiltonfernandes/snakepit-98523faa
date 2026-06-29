@@ -709,6 +709,11 @@ function NewPautaDialog({
     persistData({ research_query: researchQuery, research_mode: 'manual', step: 'insumo' });
   };
 
+  const goToStep = (nextStep: Step, patch: Record<string, any> = {}) => {
+    setStep(nextStep);
+    void persistData({ ...patch, step: nextStep });
+  };
+
   const runAiSearch = async () => {
     setAiLoading(true);
     try {
