@@ -548,6 +548,121 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
     }
   };
 
+  // ── Títulos ────────────────────────────────────────────────────────────
+  const runGenerateTitles = async () => {
+    if (!result.trim()) { toast.error('Gere a pauta primeiro.'); return; }
+    setTitlesLoading(true);
+    progress.start('Gerando títulos');
+    try {
+      const banned = (settings?.banned_terms_text || '')
+        .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+      const raw = await streamGeneratePauta({
+        prompt: buildTitlesPrompt({ release: selectedRelease || null, pautaMarkdown: result, insumo }),
+        bannedTerms: banned,
+        temperature: 0.85,
+        system: 'Você gera 3 opções de título seguindo um contrato JSON estrito.',
+        label: 'Títulos',
+        progress,
+        silentLifecycle: true,
+        onChunk: () => {},
+      });
+      const parsed = parseTitlesJson(raw);
+      if (parsed.length === 0) {
+        toast.error('Não consegui interpretar as opções de título. Tente regenerar.');
+      } else {
+        setTitles(parsed);
+        await persistData({ titles: parsed });
+      }
+      progress.finish(null);
+    } catch (e: any) {
+      progress.finish(e?.message || 'erro');
+      toast.error('Falha ao gerar títulos: ' + (e?.message || 'erro'));
+    } finally {
+      setTitlesLoading(false);
+    }
+  };
+
+  const pickTitle = async (text: string) => {
+    setSelectedTitle(text);
+    await persistData({ selected_title: text, titles });
+  };
+
+  // ── Descrição ──────────────────────────────────────────────────────────
+  const runGenerateDescription = async () => {
+    if (!selectedTitle.trim()) { toast.error('Escolha um título primeiro.'); return; }
+    setDescLoading(true);
+    progress.start('Gerando descrição');
+    try {
+      const banned = (settings?.banned_terms_text || '')
+        .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+      let acc = '';
+      const raw = await streamGeneratePauta({
+        prompt: buildDescriptionPrompt({
+          selectedTitle,
+          pautaMarkdown: result,
+          mentioned,
+          release: selectedRelease || null,
+        }),
+        bannedTerms: banned,
+        temperature: 0.6,
+        system: 'Você gera APENAS a descrição editorial HTML do episódio. Sem markdown. Sem bloco institucional. Sem CTAs.',
+        label: 'Descrição',
+        progress,
+        silentLifecycle: true,
+        onChunk: (full) => { acc = full; },
+      });
+      const editorial = sanitizeDescriptionHtml(raw || acc);
+      const composed = composeFinalDescriptionHtml(editorial);
+      setDescriptionHtml(composed);
+      await persistData({
+        selected_title: selectedTitle,
+        mentioned,
+        description_html: composed,
+      });
+      progress.finish(null);
+      toast.success('Descrição gerada.');
+    } catch (e: any) {
+      progress.finish(e?.message || 'erro');
+      toast.error('Falha ao gerar descrição: ' + (e?.message || 'erro'));
+    } finally {
+      setDescLoading(false);
+    }
+  };
+
+  // ── Capa ───────────────────────────────────────────────────────────────
+  const runGenerateCover = () => {
+    if (!coverImageUrl.trim()) { toast.error('Cole a URL de uma imagem.'); return; }
+    const title = selectedTitle || (selectedRelease ? `${selectedRelease.artist} — ${selectedRelease.album}` : '');
+    setCoverGenerating(true);
+    generateCoverImage({
+      imageUrl: coverImageUrl,
+      title,
+      onComplete: async (dataUrl) => {
+        setCoverDataUrl(dataUrl);
+        setCoverGenerating(false);
+        await persistData({ cover_url: dataUrl, cover_source_url: coverImageUrl });
+        toast.success('Capa gerada!');
+      },
+      onError: (err) => {
+        setCoverGenerating(false);
+        toast.error(err);
+      },
+    });
+  };
+
+  const downloadCover = () => {
+    if (!coverDataUrl) return;
+    const a = document.createElement('a');
+    a.href = coverDataUrl;
+    a.download = `capa-${(selectedTitle || 'episodio').slice(0, 60).replace(/[^\w-]+/g, '-')}.png`;
+    a.click();
+  };
+
+  const copy = async (text: string, msg = 'Copiado.') => {
+    await navigator.clipboard.writeText(text);
+    toast.success(msg);
+  };
+
   const handleOpenChange = (open: boolean) => {
     if (!open) onClose(); // closing keeps the draft saved
   };
