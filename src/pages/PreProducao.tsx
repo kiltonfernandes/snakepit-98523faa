@@ -595,17 +595,18 @@ function NewPautaDialog({
     if (!pautaId) return;
     setKind(k);
     setStep('release');
-    const nextData = { ...persistedData, step: 'release' };
+    const nextData = { ...latestDataRef.current, step: 'release' };
     setPersistedData(nextData);
     latestDataRef.current = nextData;
     const { data, error } = await supabase
       .from('preprod_pautas')
       .update({ kind: k, data: nextData as any, status: inferPreprodStatus({ status: 'draft', data: nextData }) })
-      .eq('id', pautaId);
+      .eq('id', pautaId)
+      .select('*')
+      .single();
     if (error) toast.error('Falha ao salvar tipo: ' + error.message);
     else {
-      const saved = { ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind: k, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta;
-      onSaved?.(saved);
+      onSaved?.(data ? normalizePreprodPauta(data) : ({ ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind: k, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta));
       void onChanged();
     }
   };
@@ -615,7 +616,7 @@ function NewPautaDialog({
     setReleaseId(id);
     const r = releases.find(x => x.id === id);
     const nextData = {
-      ...persistedData,
+      ...latestDataRef.current,
       release_id: id,
       artist: r?.artist,
       album: r?.album,
@@ -623,14 +624,15 @@ function NewPautaDialog({
     };
     setPersistedData(nextData);
     latestDataRef.current = nextData;
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('preprod_pautas')
       .update({ data: nextData as any, status: inferPreprodStatus({ status: 'draft', data: nextData }) })
-      .eq('id', pautaId);
+      .eq('id', pautaId)
+      .select('*')
+      .single();
     if (error) toast.error('Falha ao salvar disco: ' + error.message);
     else {
-      const saved = { ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta;
-      onSaved?.(saved);
+      onSaved?.(data ? normalizePreprodPauta(data) : ({ ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta));
       void onChanged();
     }
   };
