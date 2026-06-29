@@ -42,6 +42,7 @@ import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
