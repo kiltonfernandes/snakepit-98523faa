@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -23,7 +23,21 @@ import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 import { resolveAllLinks } from '@/lib/dynamic-links';
 import { Textarea } from '@/components/ui/textarea';
 import { renderQueryTemplate } from '@/lib/google-query-templates';
-import { buildKiltonReviewPrompt, buildLengthAdjustPrompt, countWords, SENTIMENT_LABEL, type ReviewSentiment } from '@/lib/preprod-prompts';
+import {
+  buildKiltonReviewPrompt,
+  buildLengthAdjustPrompt,
+  countWords,
+  SENTIMENT_LABEL,
+  buildTitlesPrompt,
+  parseTitlesJson,
+  buildDescriptionPrompt,
+  sanitizeDescriptionHtml,
+  composeFinalDescriptionHtml,
+  type ReviewSentiment,
+  type GeneratedTitle,
+  type TitleStyle,
+} from '@/lib/preprod-prompts';
+import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
@@ -274,7 +288,13 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
 
 // ---------- New Pauta Dialog ----------
 type PreprodKind = 'review' | 'news';
-type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result';
+type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
+
+const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
+  clickbait: 'Clickbait',
+  curiosidade: 'Curiosidade',
+  impacto: 'Impacto',
+};
 
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
   const navigate = useNavigate();
