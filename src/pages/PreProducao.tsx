@@ -346,6 +346,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setGenerating(false);
       setTitles([]); setSelectedTitle(''); setMentioned('');
       setDescriptionHtml(''); setCoverImageUrl(''); setCoverDataUrl('');
+      setTitleLabelOn(false);
       return;
     }
     let cancelled = false;
