@@ -14,6 +14,7 @@ import Releases from "@/pages/Releases";
 import Pautas from "@/pages/Pautas";
 import PautasStandalone from "@/pages/PautasStandalone";
 import Materials from "@/pages/Materials";
+import PreProducao from "@/pages/PreProducao";
 import Rivaldo from "@/pages/Rivaldo";
 import CalendarView from "@/pages/CalendarView";
 import Settings from "@/pages/Settings";
@@ -38,6 +39,7 @@ const App = () => (
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/releases" element={<Releases />} />
+            <Route path="/pre-producao" element={<PreProducao />} />
             <Route path="/pautas" element={<PautasStandalone />} />
             <Route path="/pautas-legacy" element={<Pautas />} />
             <Route path="/materials" element={<Materials />} />
