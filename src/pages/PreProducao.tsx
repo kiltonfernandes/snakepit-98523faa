@@ -321,6 +321,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [titles, setTitles] = useState<GeneratedTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<string>('');
   const [titlesLoading, setTitlesLoading] = useState(false);
+  const [titleLabelOn, setTitleLabelOn] = useState<boolean>(false);
   const [mentioned, setMentioned] = useState<string>('');
   const [descriptionHtml, setDescriptionHtml] = useState<string>('');
   const [descLoading, setDescLoading] = useState(false);
