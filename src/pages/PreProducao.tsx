@@ -1022,7 +1022,17 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   checked={titleLabelOn}
                   onCheckedChange={(v) => {
                     setTitleLabelOn(v);
-                    persistData({ title_label_on: v });
+                    // Re-sync the selected title with/without the prefix.
+                    if (selectedTitle) {
+                      const stripped = titleLabelPrefix && selectedTitle.startsWith(titleLabelPrefix)
+                        ? selectedTitle.slice(titleLabelPrefix.length)
+                        : selectedTitle;
+                      const next = v && titleLabelPrefix ? `${titleLabelPrefix}${stripped}` : stripped;
+                      setSelectedTitle(next);
+                      persistData({ title_label_on: v, selected_title: next });
+                    } else {
+                      persistData({ title_label_on: v });
+                    }
                   }}
                 />
               </div>
