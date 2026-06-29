@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -21,6 +21,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useApp } from '@/contexts/AppContext';
 import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 import { resolveAllLinks } from '@/lib/dynamic-links';
+import { Textarea } from '@/components/ui/textarea';
+import { renderQueryTemplate } from '@/lib/google-query-templates';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -267,6 +269,7 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
 
 // ---------- New Pauta Dialog ----------
 type PreprodKind = 'review' | 'news';
+type Step = 'kind' | 'release' | 'research' | 'insumo';
 
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
   const navigate = useNavigate();
@@ -278,6 +281,10 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [releaseId, setReleaseId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [shortlistOpen, setShortlistOpen] = useState(false);
+  const [step, setStep] = useState<Step>('kind');
+  const [researchQuery, setResearchQuery] = useState('');
+  const [insumo, setInsumo] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
@@ -286,6 +293,9 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setKind(null);
       setReleaseId(null);
       setQuery('');
+      setStep('kind');
+      setResearchQuery('');
+      setInsumo('');
       return;
     }
     let cancelled = false;
@@ -316,6 +326,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const pickKind = async (k: PreprodKind) => {
     if (!pautaId) return;
     setKind(k);
+    setStep('release');
     const { error } = await supabase
       .from('preprod_pautas')
       .update({ kind: k })
@@ -344,6 +355,73 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
 
   const selectedRelease = releaseId ? releases.find(r => r.id === releaseId) : null;
 
+  // Build the default research query whenever we enter the research step
+  useEffect(() => {
+    if (step !== 'research') return;
+    if (researchQuery.trim()) return;
+    const r = selectedRelease;
+    const year = r?.release_date ? String(r.release_date).slice(0, 4) : '';
+    const key = kind === 'news' ? 'standalone.news.with_release' : 'standalone.review.with_release';
+    const q = renderQueryTemplate(key, {
+      artist: r?.artist || '',
+      album: r?.album || '',
+      year,
+      notes: '',
+    });
+    setResearchQuery(q);
+  }, [step, selectedRelease, kind, researchQuery]);
+
+  const persistData = async (patch: Record<string, any>) => {
+    if (!pautaId) return;
+    const base: Record<string, any> = {
+      release_id: releaseId,
+      artist: selectedRelease?.artist,
+      album: selectedRelease?.album,
+      research_query: researchQuery,
+      insumo,
+    };
+    const { error } = await supabase
+      .from('preprod_pautas')
+      .update({ data: { ...base, ...patch } as any })
+      .eq('id', pautaId);
+    if (error) toast.error('Falha ao salvar: ' + error.message);
+  };
+
+  const openManualSearch = () => {
+    const url = `https://www.google.com/search?q=${encodeURIComponent(researchQuery)}`;
+    window.open(url, '_blank', 'noopener');
+    setStep('insumo');
+    persistData({ research_query: researchQuery, research_mode: 'manual' });
+  };
+
+  const runAiSearch = async () => {
+    setAiLoading(true);
+    try {
+      const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/web-research`;
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+        },
+        body: JSON.stringify({ query: researchQuery }),
+      });
+      if (!resp.ok) {
+        const e = await resp.json().catch(() => ({}));
+        throw new Error(e.error || `Erro ${resp.status}`);
+      }
+      const { notes } = await resp.json();
+      setInsumo(notes || '');
+      setStep('insumo');
+      await persistData({ insumo: notes || '', research_mode: 'ai', research_query: researchQuery });
+      toast.success('Pesquisa IA concluída.');
+    } catch (e: any) {
+      toast.error('Falha na busca IA: ' + (e?.message || 'erro'));
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const discard = async () => {
     if (pautaId) {
       const { error } = await supabase.from('preprod_pautas').delete().eq('id', pautaId);
@@ -370,7 +448,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
             </DialogDescription>
           </DialogHeader>
 
-          {!kind && (
+          {step === 'kind' && (
             <div className="py-6">
               <p className="text-sm text-muted-foreground mb-4">Que tipo de pauta você quer criar?</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -406,26 +484,15 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
             </div>
           )}
 
-          {kind === 'news' && (
-            <div className="py-10 text-center">
-              <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-3">
-                <Newspaper className="h-7 w-7 text-primary" />
-              </div>
-              <div className="text-base font-semibold">Notícia</div>
-              <div className="text-xs text-muted-foreground mt-1">Em construção — próximos passos serão definidos.</div>
-              <Button variant="ghost" size="sm" className="mt-4" onClick={() => pickKind('review')}>
-                Trocar para Review
-              </Button>
-            </div>
-          )}
-
-          {kind === 'review' && (
+          {step === 'release' && kind && (
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm">
-                  <Star className="h-4 w-4 text-primary" />
-                  <span className="font-medium">Review</span>
-                  <button onClick={() => pickKind('news')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">trocar para Notícia</button>
+                  {kind === 'review' ? <Star className="h-4 w-4 text-primary" /> : <Newspaper className="h-4 w-4 text-primary" />}
+                  <span className="font-medium">{kind === 'review' ? 'Review' : 'Notícia'}</span>
+                  <button onClick={() => pickKind(kind === 'review' ? 'news' : 'review')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                    trocar para {kind === 'review' ? 'Notícia' : 'Review'}
+                  </button>
                 </div>
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShortlistOpen(true)}>
                   <Star className="h-3.5 w-3.5" /> Shortlist
@@ -443,7 +510,6 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                       ))}
                       {selectedRelease.country && <Badge variant="outline" className="font-normal text-[10px]">{selectedRelease.country}</Badge>}
                     </div>
-                    <div className="text-[11px] text-muted-foreground mt-2">Em construção — próximos passos serão definidos.</div>
                   </div>
                   <Button size="icon" variant="ghost" title="Trocar disco" onClick={() => { setReleaseId(null); setQuery(''); }}>
                     <X className="h-4 w-4" />
@@ -507,6 +573,87 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   </div>
                 </>
               )}
+
+              {selectedRelease && (
+                <div className="flex justify-end pt-2">
+                  <Button size="sm" className="gap-2" onClick={() => setStep('research')}>
+                    Seguir <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'research' && (
+            <div className="py-2 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Pesquisa</div>
+                <button onClick={() => setStep('release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar
+                </button>
+              </div>
+              <div>
+                <label className="text-[11px] uppercase text-muted-foreground">Query</label>
+                <Textarea
+                  value={researchQuery}
+                  onChange={(e) => setResearchQuery(e.target.value)}
+                  rows={3}
+                  className="mt-1 text-xs font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={!researchQuery.trim() || aiLoading}
+                  onClick={openManualSearch}
+                  className="rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-4 text-left flex items-start gap-3 disabled:opacity-50"
+                >
+                  <Globe className="h-5 w-5 text-primary mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-sm">Busca manual</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Abre o Google em nova aba com a query montada.</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  disabled={!researchQuery.trim() || aiLoading}
+                  onClick={runAiSearch}
+                  className="rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-4 text-left flex items-start gap-3 disabled:opacity-50"
+                >
+                  {aiLoading ? <Loader2 className="h-5 w-5 text-primary mt-0.5 animate-spin" /> : <Sparkles className="h-5 w-5 text-primary mt-0.5" />}
+                  <div>
+                    <div className="font-semibold text-sm">Busca automática (IA)</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">DeepSeek V4 Flash + web search via OpenRouter. Popula o insumo.</div>
+                  </div>
+                </button>
+              </div>
+              <div className="flex justify-end pt-1">
+                <Button size="sm" variant="ghost" onClick={() => setStep('insumo')}>Pular para insumo</Button>
+              </div>
+            </div>
+          )}
+
+          {step === 'insumo' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Insumo</div>
+                <button onClick={() => setStep('research')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar à pesquisa
+                </button>
+              </div>
+              <Textarea
+                value={insumo}
+                onChange={(e) => setInsumo(e.target.value)}
+                onBlur={() => persistData({ insumo })}
+                rows={14}
+                placeholder="Cole aqui as notas da pesquisa (manual ou IA). Pode editar livremente."
+                className="text-sm"
+              />
+              <div className="flex justify-end pt-1">
+                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => { persistData({ insumo }); toast.info('Próximo passo em construção.'); }}>
+                  Seguir <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
 
