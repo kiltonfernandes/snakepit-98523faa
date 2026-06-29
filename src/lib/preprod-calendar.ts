@@ -109,7 +109,7 @@ export function inferPreprodStep(data: Record<string, any>, kind: PreprodKind | 
   if (data.result_markdown) inferred = 'titles';
   if (data.selected_title || (Array.isArray(data.titles) && data.titles.length > 0)) inferred = 'description';
   if (data.description_html || data.cover_source_url) inferred = 'cover';
-  if (data.cover_url) inferred = 'package';
+  if (data.cover_url || data.packaged_at || data.step === 'package') inferred = 'package';
 
   const explicit = data.step ? String(data.step) : inferred;
   return order.indexOf(explicit) > order.indexOf(inferred) ? explicit : inferred;
