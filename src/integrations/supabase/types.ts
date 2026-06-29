@@ -417,6 +417,36 @@ export type Database = {
           },
         ]
       }
+      preprod_pautas: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          kind: string | null
+          publication_date: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          data?: Json
+          id?: string
+          kind?: string | null
+          publication_date: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          kind?: string | null
+          publication_date?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       prompt_sessions: {
         Row: {
           applied_at: string | null
