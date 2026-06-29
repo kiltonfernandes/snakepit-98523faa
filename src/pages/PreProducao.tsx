@@ -23,6 +23,11 @@ import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 import { resolveAllLinks } from '@/lib/dynamic-links';
 import { Textarea } from '@/components/ui/textarea';
 import { renderQueryTemplate } from '@/lib/google-query-templates';
+import { buildKiltonReviewPrompt, buildLengthAdjustPrompt, countWords, SENTIMENT_LABEL, type ReviewSentiment } from '@/lib/preprod-prompts';
+import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
+import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
+import { MarkdownView } from '@/components/shared/MarkdownView';
+import { Label } from '@/components/ui/label';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -269,11 +274,12 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
 
 // ---------- New Pauta Dialog ----------
 type PreprodKind = 'review' | 'news';
-type Step = 'kind' | 'release' | 'research' | 'insumo';
+type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result';
 
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
   const navigate = useNavigate();
-  const { releases } = useApp();
+  const { releases, settings } = useApp();
+  const progress = useAiCallProgress();
   const [pautaId, setPautaId] = useState<string | null>(null);
   const [kind, setKind] = useState<PreprodKind | null>(null);
   const [creating, setCreating] = useState(false);
@@ -285,6 +291,11 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [lengthWords, setLengthWords] = useState<number>(500);
+  const [sentiment, setSentiment] = useState<ReviewSentiment>('neutral');
+  const [result, setResult] = useState<string>('');
+  const [generating, setGenerating] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
@@ -296,6 +307,11 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setStep('kind');
       setResearchQuery('');
       setInsumo('');
+      setLengthWords(500);
+      setSentiment('neutral');
+      setResult('');
+      setManualMode(false);
+      setGenerating(false);
       return;
     }
     let cancelled = false;
@@ -430,6 +446,74 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
     }
     setConfirmDiscard(false);
     onClose();
+  };
+
+  const runGenerateAll = async () => {
+    if (kind !== 'review') {
+      toast.info('Fluxo automático disponível apenas para Review por enquanto.');
+      return;
+    }
+    const release = selectedRelease || null;
+    if (!release) { toast.error('Selecione um disco antes.'); return; }
+    if (!insumo.trim()) { toast.error('Preencha o insumo da pesquisa.'); return; }
+    setManualMode(false);
+    setGenerating(true);
+    setStep('result');
+    setResult('');
+    progress.start('Gerando review Kilton');
+    const banned = (settings?.banned_terms_text || '')
+      .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    const temperature = typeof settings?.brand_tone_temperature === 'number'
+      ? Math.max(0, Math.min(1, settings.brand_tone_temperature / 100))
+      : 0.7;
+    try {
+      const prompt = buildKiltonReviewPrompt(
+        { release, insumo, lengthWords, sentiment },
+        settings,
+      );
+      let text = await streamGeneratePauta({
+        prompt,
+        bannedTerms: banned,
+        temperature,
+        system: 'Você é o redator-chefe do podcast Heavynauta. Saída em Markdown puro.',
+        label: 'Review Kilton',
+        progress,
+        silentLifecycle: true,
+        onChunk: (full) => setResult(full),
+      });
+      // Length adjustment loop — single retry if outside ±15%.
+      const actual = countWords(text);
+      const lo = Math.floor(lengthWords * 0.85);
+      const hi = Math.ceil(lengthWords * 1.15);
+      if (actual < lo || actual > hi) {
+        progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWords})`, status: 'trying' });
+        const adjusted = await streamGeneratePauta({
+          prompt: buildLengthAdjustPrompt(text, lengthWords),
+          bannedTerms: banned,
+          temperature: 0.4,
+          system: 'Você ajusta o tamanho de textos editoriais sem perder estrutura.',
+          label: 'Ajuste de tamanho',
+          progress,
+          silentLifecycle: true,
+          onChunk: (full) => setResult(full),
+        });
+        text = adjusted || text;
+      }
+      await persistData({
+        length_words: lengthWords,
+        sentiment,
+        mode: 'generate_all',
+        result_markdown: text,
+        word_count: countWords(text),
+      });
+      progress.finish(null);
+      toast.success(`Pauta gerada (${countWords(text)} palavras).`);
+    } catch (e: any) {
+      progress.finish(e?.message || 'erro');
+      toast.error('Falha ao gerar: ' + (e?.message || 'erro'));
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -650,8 +734,106 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                 className="text-sm"
               />
               <div className="flex justify-end pt-1">
-                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => { persistData({ insumo }); toast.info('Próximo passo em construção.'); }}>
+                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => { persistData({ insumo }); setStep('config'); }}>
                   Seguir <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 'config' && (
+            <div className="py-2 space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Configuração da pauta</div>
+                <button onClick={() => setStep('insumo')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar ao insumo
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-[11px] uppercase text-muted-foreground">Tamanho (palavras)</Label>
+                  <Input
+                    type="number"
+                    min={50}
+                    step={50}
+                    value={lengthWords}
+                    onChange={(e) => setLengthWords(Math.max(50, Number(e.target.value) || 0))}
+                    className="mt-1 h-9"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Padrão 500. Tolerância ±15% — se ultrapassar, a IA ajusta automaticamente.</p>
+                </div>
+                <div>
+                  <Label className="text-[11px] uppercase text-muted-foreground">Sentimento</Label>
+                  <div className="mt-1 grid grid-cols-3 gap-1">
+                    {(['positive','neutral','negative'] as ReviewSentiment[]).map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSentiment(s)}
+                        className={cn(
+                          'h-9 text-xs rounded-md border transition',
+                          sentiment === s ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-border hover:bg-accent',
+                        )}
+                      >{SENTIMENT_LABEL[s]}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setManualMode(true); persistData({ length_words: lengthWords, sentiment, mode: 'manual' }); toast.info('Modo manual — próximos passos em construção.'); }}
+                  className="rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-4 text-left flex items-start gap-3"
+                >
+                  <Hammer className="h-5 w-5 text-primary mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-sm">Criação manual</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Cada passo você decide — com botões de IA para preencher um a um.</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runGenerateAll()}
+                  disabled={generating}
+                  className="rounded-xl border-2 border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 transition p-4 text-left flex items-start gap-3 disabled:opacity-50"
+                >
+                  {generating ? <Loader2 className="h-5 w-5 text-primary mt-0.5 animate-spin" /> : <Sparkles className="h-5 w-5 text-primary mt-0.5" />}
+                  <div>
+                    <div className="font-semibold text-sm">Gerar tudo com IA</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Encadeia chamadas no OpenRouter (DeepSeek V4 Flash) com prompt Kilton + ajuste de tamanho.</div>
+                  </div>
+                </button>
+              </div>
+
+              {manualMode && (
+                <div className="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">
+                  Fluxo manual em construção — os próximos passos virão por aqui, cada um com botão "preencher com IA".
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'result' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">
+                  Resultado · <span className="text-muted-foreground">{countWords(result)} palavras</span>
+                  <span className="text-muted-foreground"> / alvo {lengthWords}</span>
+                </div>
+                <button onClick={() => setStep('config')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-auto rounded-md border border-border bg-card/40 p-4">
+                <MarkdownView text={result} />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(result); toast.success('Copiado.'); }}>Copiar</Button>
+                <Button size="sm" disabled={generating} onClick={() => runGenerateAll()} className="gap-2">
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Regenerar
                 </Button>
               </div>
             </div>
