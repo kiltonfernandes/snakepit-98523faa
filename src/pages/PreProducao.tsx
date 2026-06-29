@@ -311,7 +311,8 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [lengthWords, setLengthWords] = useState<number>(500);
+  const [lengthWords, setLengthWords] = useState<string>('500');
+  const lengthWordsNum = parseInt(lengthWords, 10) || 500;
   const [sentiment, setSentiment] = useState<ReviewSentiment>('neutral');
   const [result, setResult] = useState<string>('');
   const [generating, setGenerating] = useState(false);
@@ -337,7 +338,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setStep('kind');
       setResearchQuery('');
       setInsumo('');
-      setLengthWords(500);
+      setLengthWords('500');
       setSentiment('neutral');
       setResult('');
       setManualMode(false);
@@ -500,7 +501,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       : 0.7;
     try {
       const prompt = buildKiltonReviewPrompt(
-        { release, insumo, lengthWords, sentiment },
+        { release, insumo, lengthWords: lengthWordsNum, sentiment },
         settings,
       );
       let text = await streamGeneratePauta({
@@ -515,12 +516,12 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       });
       // Length adjustment loop — single retry if outside ±15%.
       const actual = countWords(text);
-      const lo = Math.floor(lengthWords * 0.85);
-      const hi = Math.ceil(lengthWords * 1.15);
+      const lo = Math.floor(lengthWordsNum * 0.85);
+      const hi = Math.ceil(lengthWordsNum * 1.15);
       if (actual < lo || actual > hi) {
-        progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWords})`, status: 'trying' });
+        progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWordsNum})`, status: 'trying' });
         const adjusted = await streamGeneratePauta({
-          prompt: buildLengthAdjustPrompt(text, lengthWords),
+          prompt: buildLengthAdjustPrompt(text, lengthWordsNum),
           bannedTerms: banned,
           temperature: 0.4,
           system: 'Você ajusta o tamanho de textos editoriais sem perder estrutura.',
@@ -532,7 +533,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
         text = adjusted || text;
       }
       await persistData({
-        length_words: lengthWords,
+        length_words: lengthWordsNum,
         sentiment,
         mode: 'generate_all',
         result_markdown: text,
@@ -901,11 +902,9 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                 <div>
                   <Label className="text-[11px] uppercase text-muted-foreground">Tamanho (palavras)</Label>
                   <Input
-                    type="number"
-                    min={50}
-                    step={50}
+                    type="text"
                     value={lengthWords}
-                    onChange={(e) => setLengthWords(Math.max(50, Number(e.target.value) || 0))}
+                    onChange={(e) => setLengthWords(e.target.value)}
                     className="mt-1 h-9"
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">Padrão 500. Tolerância ±15% — se ultrapassar, a IA ajusta automaticamente.</p>
