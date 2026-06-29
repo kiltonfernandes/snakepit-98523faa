@@ -448,6 +448,74 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
     onClose();
   };
 
+  const runGenerateAll = async () => {
+    if (kind !== 'review') {
+      toast.info('Fluxo automático disponível apenas para Review por enquanto.');
+      return;
+    }
+    const release = selectedRelease || null;
+    if (!release) { toast.error('Selecione um disco antes.'); return; }
+    if (!insumo.trim()) { toast.error('Preencha o insumo da pesquisa.'); return; }
+    setManualMode(false);
+    setGenerating(true);
+    setStep('result');
+    setResult('');
+    progress.start('Gerando review Kilton');
+    const banned = (settings?.banned_terms_text || '')
+      .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+    const temperature = typeof settings?.brand_tone_temperature === 'number'
+      ? Math.max(0, Math.min(1, settings.brand_tone_temperature / 100))
+      : 0.7;
+    try {
+      const prompt = buildKiltonReviewPrompt(
+        { release, insumo, lengthWords, sentiment },
+        settings,
+      );
+      let text = await streamGeneratePauta({
+        prompt,
+        bannedTerms: banned,
+        temperature,
+        system: 'Você é o redator-chefe do podcast Heavynauta. Saída em Markdown puro.',
+        label: 'Review Kilton',
+        progress,
+        silentLifecycle: true,
+        onChunk: (full) => setResult(full),
+      });
+      // Length adjustment loop — single retry if outside ±15%.
+      const actual = countWords(text);
+      const lo = Math.floor(lengthWords * 0.85);
+      const hi = Math.ceil(lengthWords * 1.15);
+      if (actual < lo || actual > hi) {
+        progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWords})`, status: 'trying' });
+        const adjusted = await streamGeneratePauta({
+          prompt: buildLengthAdjustPrompt(text, lengthWords),
+          bannedTerms: banned,
+          temperature: 0.4,
+          system: 'Você ajusta o tamanho de textos editoriais sem perder estrutura.',
+          label: 'Ajuste de tamanho',
+          progress,
+          silentLifecycle: true,
+          onChunk: (full) => setResult(full),
+        });
+        text = adjusted || text;
+      }
+      await persistData({
+        length_words: lengthWords,
+        sentiment,
+        mode: 'generate_all',
+        result_markdown: text,
+        word_count: countWords(text),
+      });
+      progress.finish(null);
+      toast.success(`Pauta gerada (${countWords(text)} palavras).`);
+    } catch (e: any) {
+      progress.finish(e?.message || 'erro');
+      toast.error('Falha ao gerar: ' + (e?.message || 'erro'));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const handleOpenChange = (open: boolean) => {
     if (!open) onClose(); // closing keeps the draft saved
   };
