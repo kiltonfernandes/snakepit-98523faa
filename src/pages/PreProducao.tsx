@@ -42,6 +42,7 @@ import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -321,6 +322,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [titles, setTitles] = useState<GeneratedTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<string>('');
   const [titlesLoading, setTitlesLoading] = useState(false);
+  const [titleLabelOn, setTitleLabelOn] = useState<boolean>(false);
   const [mentioned, setMentioned] = useState<string>('');
   const [descriptionHtml, setDescriptionHtml] = useState<string>('');
   const [descLoading, setDescLoading] = useState(false);
@@ -345,6 +347,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setGenerating(false);
       setTitles([]); setSelectedTitle(''); setMentioned('');
       setDescriptionHtml(''); setCoverImageUrl(''); setCoverDataUrl('');
+      setTitleLabelOn(false);
       return;
     }
     let cancelled = false;
@@ -584,9 +587,16 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   };
 
   const pickTitle = async (text: string) => {
-    setSelectedTitle(text);
-    await persistData({ selected_title: text, titles });
+    const finalText = applyTitleLabel(text);
+    setSelectedTitle(finalText);
+    await persistData({ selected_title: finalText, titles, title_label_on: titleLabelOn });
   };
+
+  const titleLabelPrefix = selectedRelease
+    ? `Resenha: ${selectedRelease.artist} - ${selectedRelease.album} `
+    : '';
+  const applyTitleLabel = (text: string) =>
+    titleLabelOn && titleLabelPrefix ? `${titleLabelPrefix}${text}` : text;
 
   // ── Descrição ──────────────────────────────────────────────────────────
   const runGenerateDescription = async () => {
@@ -996,6 +1006,36 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   <ArrowLeft className="h-3 w-3" /> voltar à pauta
                 </button>
               </div>
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div className="space-y-0.5">
+                  <Label htmlFor="title-label-toggle" className="text-xs font-medium cursor-pointer">
+                    Label "Resenha: [Banda] - [Álbum]"
+                  </Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    {titleLabelOn && titleLabelPrefix
+                      ? `Prefixo aplicado: ${titleLabelPrefix.trim()}`
+                      : 'Off — título usa apenas a resposta da IA.'}
+                  </p>
+                </div>
+                <Switch
+                  id="title-label-toggle"
+                  checked={titleLabelOn}
+                  onCheckedChange={(v) => {
+                    setTitleLabelOn(v);
+                    // Re-sync the selected title with/without the prefix.
+                    if (selectedTitle) {
+                      const stripped = titleLabelPrefix && selectedTitle.startsWith(titleLabelPrefix)
+                        ? selectedTitle.slice(titleLabelPrefix.length)
+                        : selectedTitle;
+                      const next = v && titleLabelPrefix ? `${titleLabelPrefix}${stripped}` : stripped;
+                      setSelectedTitle(next);
+                      persistData({ title_label_on: v, selected_title: next });
+                    } else {
+                      persistData({ title_label_on: v });
+                    }
+                  }}
+                />
+              </div>
               {titles.length === 0 ? (
                 <div className="rounded-md border border-dashed border-border p-6 text-center">
                   <p className="text-xs text-muted-foreground mb-3">Clickbait · Curiosidade · Impacto — até 70 caracteres, máx 2 emojis, sem clickbait enganoso.</p>
@@ -1007,7 +1047,8 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
               ) : (
                 <div className="space-y-2">
                   {titles.map((t) => {
-                    const isSel = t.text === selectedTitle;
+                    const displayText = applyTitleLabel(t.text);
+                    const isSel = displayText === selectedTitle;
                     return (
                       <div key={t.kind}
                         className={cn(
@@ -1018,9 +1059,9 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                       >
                         <div className="flex items-center justify-between gap-2">
                           <Badge variant="secondary" className="text-[10px]">{TITLE_STYLE_LABEL[t.kind]}</Badge>
-                          <span className="text-[10px] text-muted-foreground">{t.text.length} caracteres</span>
+                          <span className="text-[10px] text-muted-foreground">{displayText.length} caracteres</span>
                         </div>
-                        <div className="text-sm font-medium mt-1.5">{t.text}</div>
+                        <div className="text-sm font-medium mt-1.5">{displayText}</div>
                       </div>
                     );
                   })}
