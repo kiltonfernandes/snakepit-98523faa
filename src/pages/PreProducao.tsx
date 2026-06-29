@@ -685,7 +685,8 @@ function NewPautaDialog({
       cover_url: coverDataUrl,
       step: nextStep,
     };
-    const nextData = { ...latestDataRef.current, ...base, ...patch };
+    const rawNextData = { ...latestDataRef.current, ...base, ...patch };
+    const nextData = Object.fromEntries(Object.entries(rawNextData).filter(([, value]) => value !== undefined));
     setPersistedData(nextData);
     latestDataRef.current = nextData;
     const status = explicitStatus || inferPreprodStatus({ status: 'draft', data: nextData });
@@ -701,6 +702,39 @@ function NewPautaDialog({
       if (seq === saveSeqRef.current) void onChanged();
     }
   };
+
+  useEffect(() => {
+    if (!pautaId) return;
+    const patch: Record<string, any> = {
+      research_query: researchQuery,
+      insumo,
+      length_words: lengthWords,
+      sentiment,
+      result_markdown: result,
+      titles,
+      selected_title: selectedTitle,
+      title_label_on: titleLabelOn,
+      mentioned,
+      description_html: descriptionHtml,
+      cover_source_url: coverImageUrl,
+      cover_url: coverDataUrl,
+      step,
+    };
+    if (releaseId) patch.release_id = releaseId;
+    if (selectedRelease?.artist) patch.artist = selectedRelease.artist;
+    if (selectedRelease?.album) patch.album = selectedRelease.album;
+
+    const isDirty = Object.entries(patch).some(([key, value]) => (
+      JSON.stringify(latestDataRef.current[key] ?? null) !== JSON.stringify(value ?? null)
+    ));
+    if (!isDirty) return;
+
+    const timer = window.setTimeout(() => {
+      void persistData(patch);
+    }, 650);
+    return () => window.clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, researchQuery, insumo, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
 
   const openManualSearch = () => {
     const url = `https://www.google.com/search?q=${encodeURIComponent(researchQuery)}`;
