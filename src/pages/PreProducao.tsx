@@ -901,11 +901,9 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                 <div>
                   <Label className="text-[11px] uppercase text-muted-foreground">Tamanho (palavras)</Label>
                   <Input
-                    type="number"
-                    min={50}
-                    step={50}
+                    type="text"
                     value={lengthWords}
-                    onChange={(e) => setLengthWords(Math.max(50, Number(e.target.value) || 0))}
+                    onChange={(e) => setLengthWords(e.target.value as unknown as number)}
                     className="mt-1 h-9"
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">Padrão 500. Tolerância ±15% — se ultrapassar, a IA ajusta automaticamente.</p>
