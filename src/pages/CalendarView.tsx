@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -64,6 +64,7 @@ import {
   getPreprodStatusClass,
   getPreprodStatusLabel,
   inferPreprodStatus,
+  normalizePreprodPauta,
   preprodDate,
   type PreprodPauta,
 } from '@/lib/preprod-calendar';
@@ -128,7 +129,7 @@ export default function CalendarView() {
   // Create-pauta wizard (opened from "+" on a calendar day)
   const [createDate, setCreateDate] = useState<string | null>(null);
 
-  const loadPreprodPautas = async () => {
+  const loadPreprodPautas = useCallback(async () => {
     const { data, error } = await supabase
       .from('preprod_pautas')
       .select('*')
@@ -138,14 +139,34 @@ export default function CalendarView() {
       toast.error('Falha ao carregar pré-produção: ' + error.message);
       return;
     }
-    setPreprodPautas(((data || []) as any[]).map((p) => ({
-      ...p,
-      publication_date: preprodDate(p.publication_date),
-      data: p.data || {},
-    })) as PreprodPauta[]);
-  };
+    setPreprodPautas(((data || []) as any[]).map(normalizePreprodPauta));
+  }, []);
 
-  useEffect(() => { void loadPreprodPautas(); }, []);
+  useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('calendar-preprod-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'preprod_pautas' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as any)?.id;
+          if (id) setPreprodPautas((prev) => prev.filter((p) => p.id !== id));
+          return;
+        }
+        if (payload.new) {
+          const normalized = normalizePreprodPauta(payload.new);
+          setPreprodPautas((prev) => {
+            const idx = prev.findIndex((p) => p.id === normalized.id);
+            if (idx === -1) return [...prev, normalized].sort((a, b) => `${a.publication_date}${a.created_at}`.localeCompare(`${b.publication_date}${b.created_at}`));
+            const next = [...prev];
+            next[idx] = normalized;
+            return next;
+          });
+        }
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, []);
 
   // Cover generation inline state
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
