@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -23,7 +23,21 @@ import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 import { resolveAllLinks } from '@/lib/dynamic-links';
 import { Textarea } from '@/components/ui/textarea';
 import { renderQueryTemplate } from '@/lib/google-query-templates';
-import { buildKiltonReviewPrompt, buildLengthAdjustPrompt, countWords, SENTIMENT_LABEL, type ReviewSentiment } from '@/lib/preprod-prompts';
+import {
+  buildKiltonReviewPrompt,
+  buildLengthAdjustPrompt,
+  countWords,
+  SENTIMENT_LABEL,
+  buildTitlesPrompt,
+  parseTitlesJson,
+  buildDescriptionPrompt,
+  sanitizeDescriptionHtml,
+  composeFinalDescriptionHtml,
+  type ReviewSentiment,
+  type GeneratedTitle,
+  type TitleStyle,
+} from '@/lib/preprod-prompts';
+import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
@@ -274,7 +288,13 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
 
 // ---------- New Pauta Dialog ----------
 type PreprodKind = 'review' | 'news';
-type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result';
+type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
+
+const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
+  clickbait: 'Clickbait',
+  curiosidade: 'Curiosidade',
+  impacto: 'Impacto',
+};
 
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
   const navigate = useNavigate();
@@ -296,6 +316,16 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [result, setResult] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  // Títulos / descrição / capa
+  const [titles, setTitles] = useState<GeneratedTitle[]>([]);
+  const [selectedTitle, setSelectedTitle] = useState<string>('');
+  const [titlesLoading, setTitlesLoading] = useState(false);
+  const [mentioned, setMentioned] = useState<string>('');
+  const [descriptionHtml, setDescriptionHtml] = useState<string>('');
+  const [descLoading, setDescLoading] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState<string>('');
+  const [coverDataUrl, setCoverDataUrl] = useState<string>('');
+  const [coverGenerating, setCoverGenerating] = useState(false);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
@@ -312,6 +342,8 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setResult('');
       setManualMode(false);
       setGenerating(false);
+      setTitles([]); setSelectedTitle(''); setMentioned('');
+      setDescriptionHtml(''); setCoverImageUrl(''); setCoverDataUrl('');
       return;
     }
     let cancelled = false;
@@ -516,6 +548,121 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
     }
   };
 
+  // ── Títulos ────────────────────────────────────────────────────────────
+  const runGenerateTitles = async () => {
+    if (!result.trim()) { toast.error('Gere a pauta primeiro.'); return; }
+    setTitlesLoading(true);
+    progress.start('Gerando títulos');
+    try {
+      const banned = (settings?.banned_terms_text || '')
+        .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+      const raw = await streamGeneratePauta({
+        prompt: buildTitlesPrompt({ release: selectedRelease || null, pautaMarkdown: result, insumo }),
+        bannedTerms: banned,
+        temperature: 0.85,
+        system: 'Você gera 3 opções de título seguindo um contrato JSON estrito.',
+        label: 'Títulos',
+        progress,
+        silentLifecycle: true,
+        onChunk: () => {},
+      });
+      const parsed = parseTitlesJson(raw);
+      if (parsed.length === 0) {
+        toast.error('Não consegui interpretar as opções de título. Tente regenerar.');
+      } else {
+        setTitles(parsed);
+        await persistData({ titles: parsed });
+      }
+      progress.finish(null);
+    } catch (e: any) {
+      progress.finish(e?.message || 'erro');
+      toast.error('Falha ao gerar títulos: ' + (e?.message || 'erro'));
+    } finally {
+      setTitlesLoading(false);
+    }
+  };
+
+  const pickTitle = async (text: string) => {
+    setSelectedTitle(text);
+    await persistData({ selected_title: text, titles });
+  };
+
+  // ── Descrição ──────────────────────────────────────────────────────────
+  const runGenerateDescription = async () => {
+    if (!selectedTitle.trim()) { toast.error('Escolha um título primeiro.'); return; }
+    setDescLoading(true);
+    progress.start('Gerando descrição');
+    try {
+      const banned = (settings?.banned_terms_text || '')
+        .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
+      let acc = '';
+      const raw = await streamGeneratePauta({
+        prompt: buildDescriptionPrompt({
+          selectedTitle,
+          pautaMarkdown: result,
+          mentioned,
+          release: selectedRelease || null,
+        }),
+        bannedTerms: banned,
+        temperature: 0.6,
+        system: 'Você gera APENAS a descrição editorial HTML do episódio. Sem markdown. Sem bloco institucional. Sem CTAs.',
+        label: 'Descrição',
+        progress,
+        silentLifecycle: true,
+        onChunk: (full) => { acc = full; },
+      });
+      const editorial = sanitizeDescriptionHtml(raw || acc);
+      const composed = composeFinalDescriptionHtml(editorial);
+      setDescriptionHtml(composed);
+      await persistData({
+        selected_title: selectedTitle,
+        mentioned,
+        description_html: composed,
+      });
+      progress.finish(null);
+      toast.success('Descrição gerada.');
+    } catch (e: any) {
+      progress.finish(e?.message || 'erro');
+      toast.error('Falha ao gerar descrição: ' + (e?.message || 'erro'));
+    } finally {
+      setDescLoading(false);
+    }
+  };
+
+  // ── Capa ───────────────────────────────────────────────────────────────
+  const runGenerateCover = () => {
+    if (!coverImageUrl.trim()) { toast.error('Cole a URL de uma imagem.'); return; }
+    const title = selectedTitle || (selectedRelease ? `${selectedRelease.artist} — ${selectedRelease.album}` : '');
+    setCoverGenerating(true);
+    generateCoverImage({
+      imageUrl: coverImageUrl,
+      title,
+      onComplete: async (dataUrl) => {
+        setCoverDataUrl(dataUrl);
+        setCoverGenerating(false);
+        await persistData({ cover_url: dataUrl, cover_source_url: coverImageUrl });
+        toast.success('Capa gerada!');
+      },
+      onError: (err) => {
+        setCoverGenerating(false);
+        toast.error(err);
+      },
+    });
+  };
+
+  const downloadCover = () => {
+    if (!coverDataUrl) return;
+    const a = document.createElement('a');
+    a.href = coverDataUrl;
+    a.download = `capa-${(selectedTitle || 'episodio').slice(0, 60).replace(/[^\w-]+/g, '-')}.png`;
+    a.click();
+  };
+
+  const copy = async (text: string, msg = 'Copiado.') => {
+    await navigator.clipboard.writeText(text);
+    toast.success(msg);
+  };
+
   const handleOpenChange = (open: boolean) => {
     if (!open) onClose(); // closing keeps the draft saved
   };
@@ -523,7 +670,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   return (
     <>
       <Dialog open={!!date} onOpenChange={handleOpenChange}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className={cn(step === 'package' ? 'max-w-5xl' : 'max-w-2xl', 'max-h-[92vh] overflow-y-auto')}>
           <DialogHeader>
             <DialogTitle>Nova pauta</DialogTitle>
             <DialogDescription className="capitalize">
@@ -835,6 +982,254 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   Regenerar
                 </Button>
+                <Button size="sm" disabled={generating || !result.trim()} onClick={() => setStep('titles')} className="gap-2">
+                  Próximo: títulos <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 'titles' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Títulos · 3 opções</div>
+                <button onClick={() => setStep('result')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar à pauta
+                </button>
+              </div>
+              {titles.length === 0 ? (
+                <div className="rounded-md border border-dashed border-border p-6 text-center">
+                  <p className="text-xs text-muted-foreground mb-3">Clickbait · Curiosidade · Impacto — até 70 caracteres, máx 2 emojis, sem clickbait enganoso.</p>
+                  <Button size="sm" disabled={titlesLoading} onClick={runGenerateTitles} className="gap-2">
+                    {titlesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Gerar títulos
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {titles.map((t) => {
+                    const isSel = t.text === selectedTitle;
+                    return (
+                      <div key={t.kind}
+                        className={cn(
+                          'rounded-lg border p-3 transition cursor-pointer',
+                          isSel ? 'border-primary bg-primary/10' : 'border-border hover:border-primary/50',
+                        )}
+                        onClick={() => pickTitle(t.text)}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <Badge variant="secondary" className="text-[10px]">{TITLE_STYLE_LABEL[t.kind]}</Badge>
+                          <span className="text-[10px] text-muted-foreground">{t.text.length} caracteres</span>
+                        </div>
+                        <div className="text-sm font-medium mt-1.5">{t.text}</div>
+                      </div>
+                    );
+                  })}
+                  <div className="flex items-center justify-between pt-2">
+                    <Button size="sm" variant="ghost" disabled={titlesLoading} onClick={runGenerateTitles} className="gap-2">
+                      {titlesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                      Regenerar
+                    </Button>
+                    <Button size="sm" disabled={!selectedTitle} onClick={() => setStep('description')} className="gap-2">
+                      Próximo: descrição <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'description' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Descrição HTML</div>
+                <button onClick={() => setStep('titles')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar a títulos
+                </button>
+              </div>
+              {selectedTitle && (
+                <div className="rounded-md border border-border bg-card/40 p-3">
+                  <div className="text-[10px] uppercase text-muted-foreground">Título selecionado</div>
+                  <div className="text-sm font-medium">{selectedTitle}</div>
+                </div>
+              )}
+              <div>
+                <Label className="text-[11px] uppercase text-muted-foreground">Mencionado no Episódio</Label>
+                <Textarea
+                  value={mentioned}
+                  onChange={(e) => setMentioned(e.target.value)}
+                  onBlur={() => persistData({ mentioned })}
+                  rows={4}
+                  placeholder="Cole links, vídeos ou assuntos que você mencionou no episódio (um por linha)…"
+                  className="mt-1 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">A IA gera a seção "🎙️ Mencionado neste episódio" no topo da descrição.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" disabled={descLoading} onClick={runGenerateDescription} className="gap-2">
+                  {descLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Gerar descrição (IA)
+                </Button>
+                {descriptionHtml && (
+                  <Button size="sm" variant="outline" onClick={() => copy(descriptionHtml, 'HTML copiado.')} className="gap-2">
+                    <Copy className="h-4 w-4" /> Copiar HTML
+                  </Button>
+                )}
+              </div>
+              {descriptionHtml && (
+                <>
+                  <div>
+                    <Label className="text-[11px] uppercase text-muted-foreground">Preview</Label>
+                    <div className="mt-1 rounded-md border border-border bg-card/40 p-3 max-h-[40vh] overflow-auto text-sm prose prose-sm prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: descriptionHtml }} />
+                  </div>
+                  <div>
+                    <Label className="text-[11px] uppercase text-muted-foreground">HTML (editável)</Label>
+                    <Textarea
+                      value={descriptionHtml}
+                      onChange={(e) => setDescriptionHtml(e.target.value)}
+                      onBlur={() => persistData({ description_html: descriptionHtml })}
+                      rows={10}
+                      className="mt-1 text-xs font-mono"
+                    />
+                  </div>
+                  <div className="flex items-center justify-end">
+                    <Button size="sm" onClick={() => setStep('cover')} className="gap-2">
+                      Próximo: capa <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {step === 'cover' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Capa do episódio</div>
+                <button onClick={() => setStep('description')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar à descrição
+                </button>
+              </div>
+              <div>
+                <Label className="text-[11px] uppercase text-muted-foreground">URL da imagem</Label>
+                <Input
+                  value={coverImageUrl}
+                  onChange={(e) => setCoverImageUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="mt-1 h-9 text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => {
+                  const q = selectedRelease ? `${selectedRelease.artist} ${selectedRelease.album} band photo` : selectedTitle;
+                  window.open(`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(q)}`, '_blank');
+                }} className="gap-2">
+                  <Search className="h-4 w-4" /> Buscar imagens
+                </Button>
+                <Button size="sm" disabled={coverGenerating || !coverImageUrl.trim()} onClick={runGenerateCover} className="gap-2">
+                  {coverGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Gerar capa
+                </Button>
+              </div>
+              {coverDataUrl && (
+                <div className="space-y-2">
+                  <img src={coverDataUrl} alt="Preview da capa" className="w-full max-w-sm mx-auto rounded-md border border-border" />
+                  <div className="flex items-center justify-between">
+                    <Button size="sm" variant="outline" onClick={downloadCover} className="gap-2">
+                      <Download className="h-4 w-4" /> Baixar capa
+                    </Button>
+                    <Button size="sm" onClick={() => setStep('package')} className="gap-2">
+                      Próximo: pacote <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              {!coverDataUrl && (
+                <div className="flex items-center justify-end">
+                  <Button size="sm" variant="ghost" onClick={() => setStep('package')}>Pular capa</Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'package' && (
+            <div className="py-2">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-base font-semibold">Pacote do episódio</div>
+                  <div className="text-xs text-muted-foreground">Copie título e HTML, baixe a capa e atualize o link do Spotify.</div>
+                </div>
+                <button onClick={() => setStep('cover')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-1.5 mb-4">
+                {date && <Badge variant="secondary" className="text-[10px] capitalize">{format(date, 'EEEE', { locale: ptBR })}</Badge>}
+                {date && <Badge variant="secondary" className="text-[10px]">{format(date, 'yyyy-MM-dd')}</Badge>}
+                {coverDataUrl && <Badge variant="secondary" className="text-[10px] gap-1"><Check className="h-3 w-3" /> Capa pronta</Badge>}
+                {descriptionHtml && <Badge variant="secondary" className="text-[10px] gap-1"><Check className="h-3 w-3" /> Descrição pronta</Badge>}
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="rounded-lg border border-border bg-card/40 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-[11px] uppercase text-muted-foreground">Título selecionado</Label>
+                      <Button size="sm" variant="ghost" className="h-7 gap-1.5" onClick={() => copy(selectedTitle)}>
+                        <Copy className="h-3.5 w-3.5" /> Copiar
+                      </Button>
+                    </div>
+                    <Textarea value={selectedTitle} onChange={(e) => setSelectedTitle(e.target.value)} onBlur={() => persistData({ selected_title: selectedTitle })} rows={2} className="text-sm" />
+                  </div>
+                  <div className="rounded-lg border border-border bg-card/40 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-[11px] uppercase text-muted-foreground gap-1.5 inline-flex items-center">🎙️ Mencionado no Episódio</Label>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="ghost" className="h-7" onClick={() => persistData({ mentioned })}>Salvar</Button>
+                        <Button size="sm" variant="ghost" className="h-7" onClick={() => { setMentioned(''); persistData({ mentioned: '' }); }}>Limpar</Button>
+                      </div>
+                    </div>
+                    <Textarea value={mentioned} onChange={(e) => setMentioned(e.target.value)} rows={4} placeholder="Cole links, vídeos ou assuntos…" className="text-sm" />
+                  </div>
+                  <div className="rounded-lg border border-border bg-card/40 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <Label className="text-[11px] uppercase text-muted-foreground">Descrição em HTML</Label>
+                      <Button size="sm" variant="ghost" className="h-7 gap-1.5" onClick={() => copy(descriptionHtml, 'HTML copiado.')}>
+                        <Copy className="h-3.5 w-3.5" /> Copiar
+                      </Button>
+                    </div>
+                    <Textarea value={descriptionHtml} onChange={(e) => setDescriptionHtml(e.target.value)} onBlur={() => persistData({ description_html: descriptionHtml })} rows={12} className="text-xs font-mono" />
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <div className="rounded-lg border border-border bg-card/40 p-3">
+                    <Label className="text-[11px] uppercase text-muted-foreground">Capa do episódio</Label>
+                    {coverDataUrl ? (
+                      <img src={coverDataUrl} alt="Capa" className="mt-2 w-full rounded-md border border-border" />
+                    ) : (
+                      <div className="mt-2 aspect-square rounded-md border border-dashed border-border flex items-center justify-center text-xs text-muted-foreground">
+                        <ImageIcon className="h-6 w-6 opacity-50" />
+                      </div>
+                    )}
+                    <div className="grid grid-cols-2 gap-2 mt-2">
+                      <Button size="sm" variant="outline" className="gap-1.5" disabled={!coverDataUrl} onClick={downloadCover}>
+                        <Download className="h-3.5 w-3.5" /> Baixar
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setStep('cover')}>
+                        <Sparkles className="h-3.5 w-3.5" /> Gerar
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card/40 p-3 space-y-1.5">
+                    <Label className="text-[11px] uppercase text-muted-foreground">Ações rápidas</Label>
+                    <Button size="sm" variant="ghost" className="w-full justify-start gap-2" onClick={() => copy(`${selectedTitle}\n\n${descriptionHtml}`, 'Pacote copiado.')}>
+                      <Package className="h-4 w-4" /> Copiar título + HTML
+                    </Button>
+                    <Button size="sm" variant="ghost" className="w-full justify-start gap-2" onClick={() => window.open('https://creators.spotify.com/', '_blank', 'noopener')}>
+                      <ExternalLink className="h-4 w-4" /> Spotify for Creators
+                    </Button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
