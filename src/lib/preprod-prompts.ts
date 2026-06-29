@@ -216,3 +216,151 @@ export function buildLengthAdjustPrompt(currentText: string, targetWords: number
 export function countWords(text: string): number {
   return (text || '').trim().split(/\s+/).filter(Boolean).length;
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Títulos (3 opções: clickbait / curiosidade / impacto)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type TitleStyle = 'clickbait' | 'curiosidade' | 'impacto';
+export interface GeneratedTitle { kind: TitleStyle; text: string }
+
+const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
+  clickbait: 'Clickbait (gancho emocional, sem enganar)',
+  curiosidade: 'Curiosidade (pergunta ou fato pouco conhecido)',
+  impacto: 'Impacto (afirmação forte, conclusiva)',
+};
+
+export function buildTitlesPrompt(args: {
+  release: Release | null;
+  pautaMarkdown: string;
+  insumo?: string;
+}): string {
+  const { release, pautaMarkdown, insumo } = args;
+  const band = release?.artist || '(banda)';
+  const album = release?.album || '(álbum)';
+  return [
+    'Você é o redator-chefe do podcast Heavynauta. Gere 3 opções de TÍTULO para o episódio.',
+    '',
+    'REGRAS OBRIGATÓRIAS:',
+    '- 3 opções, uma de cada estilo:',
+    `  1) ${TITLE_STYLE_LABEL.clickbait}`,
+    `  2) ${TITLE_STYLE_LABEL.curiosidade}`,
+    `  3) ${TITLE_STYLE_LABEL.impacto}`,
+    '- Máximo 60-70 caracteres por título.',
+    '- CAPS LOCK em no máximo 1-2 palavras por título (use com parcimônia).',
+    '- Inclua o nome da banda quando fizer sentido.',
+    '- No máximo 2 emojis por título.',
+    '- NUNCA clickbait enganoso — o gancho precisa ser real.',
+    '- Português brasileiro.',
+    '',
+    'CONTRATO DE RESPOSTA — RESPONDA APENAS COM JSON VÁLIDO, SEM CODE FENCES, SEM TEXTO EXTRA:',
+    '{"titles":[{"kind":"clickbait","text":"..."},{"kind":"curiosidade","text":"..."},{"kind":"impacto","text":"..."}]}',
+    '',
+    `BANDA: ${band}`,
+    `ÁLBUM: ${album}`,
+    '',
+    'PAUTA (markdown) — fonte principal:',
+    '<<<',
+    (pautaMarkdown || '').slice(0, 12000),
+    '>>>',
+    insumo && insumo.trim() ? `\nNOTAS DA PESQUISA:\n${insumo.slice(0, 4000)}` : '',
+  ].join('\n');
+}
+
+/** Parse the strict JSON contract above, tolerando code fences e texto extra. */
+export function parseTitlesJson(raw: string): GeneratedTitle[] {
+  if (!raw) return [];
+  let s = raw.trim();
+  s = s.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  // pegar o primeiro objeto JSON balanceado
+  const start = s.indexOf('{');
+  const end = s.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return [];
+  const candidate = s.slice(start, end + 1);
+  try {
+    const obj = JSON.parse(candidate);
+    const arr = Array.isArray(obj?.titles) ? obj.titles : [];
+    const valid: TitleStyle[] = ['clickbait', 'curiosidade', 'impacto'];
+    return arr
+      .filter((t: any) => t && valid.includes(t.kind) && typeof t.text === 'string' && t.text.trim())
+      .map((t: any) => ({ kind: t.kind as TitleStyle, text: String(t.text).trim() }))
+      .slice(0, 3);
+  } catch {
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Descrição HTML do episódio
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Bloco institucional fixo + CTAs adicionados pelo template (não pela IA). */
+export const HEAVYNAUTA_INSTITUTIONAL_HTML = `<p><b>Heavynauta — Papo Sério Sobre Música Pesada</b></p>
+<p>Diariamente, o Heavynauta traz notícias, reviews e análises do universo do heavy metal. De clássicos atemporais a lançamentos frescos, nosso compromisso é com informação de qualidade e paixão pela música pesada.</p>`;
+
+export function buildDescriptionPrompt(args: {
+  selectedTitle: string;
+  pautaMarkdown: string;
+  mentioned?: string;
+  release: Release | null;
+}): string {
+  const { selectedTitle, pautaMarkdown, mentioned, release } = args;
+  const mentionedBlock = (mentioned || '').trim();
+  return [
+    'Você é o redator-chefe do podcast Heavynauta. Gere APENAS a descrição editorial HTML do episódio.',
+    '',
+    'REGRAS OBRIGATÓRIAS DE DESCRIÇÃO:',
+    '- Saída APENAS em HTML válido, sem markdown, sem code fences, sem comentários.',
+    '- Tags permitidas: <p>, <b>, <i>, <a>, <br>, <ul>, <li>, <h3>.',
+    '- Use o TÍTULO SELECIONADO como âncora editorial (gancho), mas NÃO repita o título como H1.',
+    '- Priorize fatos vindos da pauta como base factual. Não invente seções ausentes.',
+    '- NÃO inclua o bloco institucional "Heavynauta — Papo Sério Sobre Música Pesada".',
+    '- NÃO inclua CTAs nem links para YouTube, Spotify, Apple Podcasts, Deezer, Pod.link, Discord, WhatsApp — o template adiciona depois.',
+    '- Estrutura sugerida: 1 parágrafo de introdução com o gancho do título; lista <ul><li> de tópicos do episódio; 1 parágrafo de fechamento opcional.',
+    '',
+    'REGRA "MENCIONADO NESTE EPISÓDIO":',
+    '- Se houver conteúdo em MENCIONADO abaixo (cada linha/parágrafo é um item), insira NO TOPO da descrição uma seção:',
+    '  <h3>🎙️ Mencionado neste episódio</h3>',
+    '  <ul>',
+    '    <li>EMOJI + 1-2 frases curtas em PT-BR + (se houver URL) <a href="URL" target="_blank" rel="noopener">texto descritivo</a></li>',
+    '    ... um <li> por item ...',
+    '  </ul>',
+    '- Use 1 emoji relevante por item (🎵 música, 🎬 vídeo, 📰 notícia, 📺 canal, 🎸 banda, 🔗 link, 📖 leitura, 🎙️ podcast, 🛒 produto, 📅 evento etc.).',
+    '- Se houver URL, embuta como <a href target=_blank rel=noopener>; se não houver, apenas descreva.',
+    '- Nunca invente URLs nem fatos. Parafraseie em 1-2 frases.',
+    '- Se MENCIONADO estiver vazio, IGNORE essa seção (não adicione nada).',
+    '',
+    `TÍTULO SELECIONADO: ${selectedTitle}`,
+    release ? `BANDA: ${release.artist}` : '',
+    release ? `ÁLBUM: ${release.album}` : '',
+    '',
+    'PAUTA (markdown) — base factual:',
+    '<<<',
+    (pautaMarkdown || '').slice(0, 16000),
+    '>>>',
+    '',
+    'MENCIONADO:',
+    mentionedBlock || '(vazio — não gere a seção)',
+    '',
+    'Devolva SOMENTE o HTML.',
+  ].filter(Boolean).join('\n');
+}
+
+/** Strip code fences e tags fora da whitelist mínima do contrato. */
+export function sanitizeDescriptionHtml(raw: string): string {
+  if (!raw) return '';
+  let s = raw.trim();
+  s = s.replace(/^```(?:html)?\s*/i, '').replace(/```\s*$/i, '').trim();
+  // remove blocos institucionais que a IA tenha gerado mesmo proibida
+  s = s.replace(
+    /<p[^>]*>[\s\S]*?Heavynauta[^<]*Papo\s+Sério[\s\S]*?<\/p>/gi,
+    '',
+  );
+  return s.trim();
+}
+
+/** Junta a descrição editorial da IA com o bloco institucional fixo. */
+export function composeFinalDescriptionHtml(editorialHtml: string): string {
+  const editorial = sanitizeDescriptionHtml(editorialHtml);
+  return `${editorial}\n\n${HEAVYNAUTA_INSTITUTIONAL_HTML}`.trim();
+}
