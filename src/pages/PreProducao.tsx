@@ -23,6 +23,11 @@ import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
 import { resolveAllLinks } from '@/lib/dynamic-links';
 import { Textarea } from '@/components/ui/textarea';
 import { renderQueryTemplate } from '@/lib/google-query-templates';
+import { buildKiltonReviewPrompt, buildLengthAdjustPrompt, countWords, SENTIMENT_LABEL, type ReviewSentiment } from '@/lib/preprod-prompts';
+import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
+import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
+import { MarkdownView } from '@/components/shared/MarkdownView';
+import { Label } from '@/components/ui/label';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -269,11 +274,12 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
 
 // ---------- New Pauta Dialog ----------
 type PreprodKind = 'review' | 'news';
-type Step = 'kind' | 'release' | 'research' | 'insumo';
+type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result';
 
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
   const navigate = useNavigate();
-  const { releases } = useApp();
+  const { releases, settings } = useApp();
+  const progress = useAiCallProgress();
   const [pautaId, setPautaId] = useState<string | null>(null);
   const [kind, setKind] = useState<PreprodKind | null>(null);
   const [creating, setCreating] = useState(false);
@@ -285,6 +291,11 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [lengthWords, setLengthWords] = useState<number>(500);
+  const [sentiment, setSentiment] = useState<ReviewSentiment>('neutral');
+  const [result, setResult] = useState<string>('');
+  const [generating, setGenerating] = useState(false);
+  const [manualMode, setManualMode] = useState(false);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
@@ -296,6 +307,11 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setStep('kind');
       setResearchQuery('');
       setInsumo('');
+      setLengthWords(500);
+      setSentiment('neutral');
+      setResult('');
+      setManualMode(false);
+      setGenerating(false);
       return;
     }
     let cancelled = false;
