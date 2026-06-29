@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2 } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -14,6 +15,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { useApp } from '@/contexts/AppContext';
+import { ShortlistDialog } from '@/components/pautas/ShortlistDialog';
+import { resolveAllLinks } from '@/lib/dynamic-links';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -262,16 +269,23 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
 type PreprodKind = 'review' | 'news';
 
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
+  const navigate = useNavigate();
+  const { releases } = useApp();
   const [pautaId, setPautaId] = useState<string | null>(null);
   const [kind, setKind] = useState<PreprodKind | null>(null);
   const [creating, setCreating] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [releaseId, setReleaseId] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
+  const [shortlistOpen, setShortlistOpen] = useState(false);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
     if (!date) {
       setPautaId(null);
       setKind(null);
+      setReleaseId(null);
+      setQuery('');
       return;
     }
     let cancelled = false;
@@ -308,6 +322,27 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       .eq('id', pautaId);
     if (error) toast.error('Falha ao salvar tipo: ' + error.message);
   };
+
+  const pickRelease = async (id: string) => {
+    if (!pautaId) return;
+    setReleaseId(id);
+    const r = releases.find(x => x.id === id);
+    const { error } = await supabase
+      .from('preprod_pautas')
+      .update({ data: { release_id: id, artist: r?.artist, album: r?.album } as any })
+      .eq('id', pautaId);
+    if (error) toast.error('Falha ao salvar disco: ' + error.message);
+  };
+
+  const filteredReleases = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return [] as typeof releases;
+    return releases
+      .filter(r => `${r.artist} ${r.album} ${(r.genres || []).join(' ')}`.toLowerCase().includes(term))
+      .slice(0, 25);
+  }, [releases, query]);
+
+  const selectedRelease = releaseId ? releases.find(r => r.id === releaseId) : null;
 
   const discard = async () => {
     if (pautaId) {
@@ -371,16 +406,107 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
             </div>
           )}
 
-          {kind && (
+          {kind === 'news' && (
             <div className="py-10 text-center">
               <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-3">
-                {kind === 'review' ? <Star className="h-7 w-7 text-primary" /> : <Newspaper className="h-7 w-7 text-primary" />}
+                <Newspaper className="h-7 w-7 text-primary" />
               </div>
-              <div className="text-base font-semibold capitalize">{kind === 'review' ? 'Review' : 'Notícia'}</div>
+              <div className="text-base font-semibold">Notícia</div>
               <div className="text-xs text-muted-foreground mt-1">Em construção — próximos passos serão definidos.</div>
-              <Button variant="ghost" size="sm" className="mt-4" onClick={() => pickKind(kind === 'review' ? 'news' : 'review')}>
-                Trocar para {kind === 'review' ? 'Notícia' : 'Review'}
+              <Button variant="ghost" size="sm" className="mt-4" onClick={() => pickKind('review')}>
+                Trocar para Review
               </Button>
+            </div>
+          )}
+
+          {kind === 'review' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <Star className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Review</span>
+                  <button onClick={() => pickKind('news')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">trocar para Notícia</button>
+                </div>
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShortlistOpen(true)}>
+                  <Star className="h-3.5 w-3.5" /> Shortlist
+                </Button>
+              </div>
+
+              {selectedRelease ? (
+                <div className="rounded-lg border-2 border-primary/40 bg-primary/5 p-4 flex items-start gap-3">
+                  <Disc className="h-5 w-5 text-primary mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold text-sm truncate">{selectedRelease.artist} — {selectedRelease.album}</div>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {(selectedRelease.genres || []).slice(0, 4).map(g => (
+                        <Badge key={g} variant="secondary" className="font-normal text-[10px]">{g}</Badge>
+                      ))}
+                      {selectedRelease.country && <Badge variant="outline" className="font-normal text-[10px]">{selectedRelease.country}</Badge>}
+                    </div>
+                    <div className="text-[11px] text-muted-foreground mt-2">Em construção — próximos passos serão definidos.</div>
+                  </div>
+                  <Button size="icon" variant="ghost" title="Trocar disco" onClick={() => { setReleaseId(null); setQuery(''); }}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="relative">
+                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      autoFocus
+                      placeholder="Buscar disco por artista, álbum ou gênero..."
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      className="pl-7 h-9"
+                    />
+                  </div>
+
+                  {query.trim() && (
+                    <ScrollArea className="h-[260px] rounded-md border border-border">
+                      {filteredReleases.length === 0 ? (
+                        <div className="p-6 text-center text-xs text-muted-foreground">
+                          Nenhum lançamento encontrado.
+                        </div>
+                      ) : (
+                        <ul className="divide-y divide-border">
+                          {filteredReleases.map(r => {
+                            const ma = resolveAllLinks(r).metal_archives || r.metal_archives_url;
+                            return (
+                              <li key={r.id} className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40">
+                                <button
+                                  type="button"
+                                  onClick={() => pickRelease(r.id)}
+                                  className="flex-1 text-left min-w-0"
+                                >
+                                  <div className="text-sm font-medium truncate">{r.artist} — {r.album}</div>
+                                  <div className="flex flex-wrap gap-1 mt-0.5">
+                                    {(r.genres || []).slice(0, 3).map(g => (
+                                      <span key={g} className="text-[10px] text-muted-foreground">{g}</span>
+                                    ))}
+                                  </div>
+                                </button>
+                                {ma && (
+                                  <a href={ma} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} className="text-muted-foreground hover:text-primary" title="Metal Archives">
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </a>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </ScrollArea>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-muted-foreground">Não encontrou? Cadastre um novo lançamento.</span>
+                    <Button size="sm" variant="secondary" className="gap-1.5" onClick={() => navigate('/releases?new=1')}>
+                      <Plus className="h-3.5 w-3.5" /> Adicionar lançamento
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -392,6 +518,12 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ShortlistDialog
+        open={shortlistOpen}
+        onClose={() => setShortlistOpen(false)}
+        onCreatePautaFromRelease={(id) => { pickRelease(id); setShortlistOpen(false); }}
+      />
 
       <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
         <AlertDialogContent>

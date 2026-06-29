@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, Fragment } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -163,6 +163,7 @@ function parseStructuredReleases(text: string, currentYear: number): { artist: s
 
 export default function Releases() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { releases, addRelease, updateRelease, deleteRelease, importReleases, loadReleases, pautas } = useApp();
   const [search, setSearch] = useState('');
   const [genreFilter, setGenreFilter] = useState<string | null>(null);
@@ -173,6 +174,19 @@ export default function Releases() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+
+  // Auto-open the "Novo Lançamento" modal when navigated with ?new=1
+  useEffect(() => {
+    if (searchParams.get('new') === '1') {
+      setForm(emptyForm);
+      setEditingId(null);
+      setDialogOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete('new');
+      setSearchParams(next, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [sortField, setSortField] = useState<SortField>('release_date');
