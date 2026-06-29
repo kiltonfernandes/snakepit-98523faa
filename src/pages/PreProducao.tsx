@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package } from 'lucide-react';
 import {
@@ -43,6 +43,18 @@ import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import {
+  PREPROD_KIND_LABEL,
+  getPreprodLabel,
+  getPreprodStatusClass,
+  getPreprodStatusLabel,
+  inferPreprodStatus,
+  inferPreprodStep,
+  normalizePreprodPauta,
+  preprodDate,
+  type PreprodKind,
+  type PreprodPauta,
+} from '@/lib/preprod-calendar';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -57,9 +69,72 @@ const VIEW_LABELS: Record<View, string> = {
 const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
 export default function PreProducao() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<View>('month');
   const [anchor, setAnchor] = useState<Date>(startOfDay(new Date()));
   const [newPautaDate, setNewPautaDate] = useState<Date | null>(null);
+  const [editingPauta, setEditingPauta] = useState<PreprodPauta | null>(null);
+  const [preprodPautas, setPreprodPautas] = useState<PreprodPauta[]>([]);
+  const [loadingPautas, setLoadingPautas] = useState(false);
+
+  const loadPreprodPautas = useCallback(async () => {
+    setLoadingPautas(true);
+    const { data, error } = await supabase
+      .from('preprod_pautas')
+      .select('*')
+      .order('publication_date', { ascending: true })
+      .order('created_at', { ascending: true });
+    setLoadingPautas(false);
+    if (error) {
+      toast.error('Falha ao carregar pré-produção: ' + error.message);
+      return;
+    }
+    setPreprodPautas(((data || []) as any[]).map(normalizePreprodPauta));
+  }, []);
+
+  const upsertPreprodPauta = useCallback((row: any) => {
+    const normalized = normalizePreprodPauta(row);
+    setPreprodPautas((prev) => {
+      const idx = prev.findIndex((p) => p.id === normalized.id);
+      if (idx === -1) return [...prev, normalized].sort((a, b) => `${a.publication_date}${a.created_at}`.localeCompare(`${b.publication_date}${b.created_at}`));
+      const next = [...prev];
+      next[idx] = normalized;
+      return next;
+    });
+  }, []);
+
+  useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
+
+  useEffect(() => {
+    const id = searchParams.get('preprod');
+    if (!id || preprodPautas.length === 0) return;
+    const found = preprodPautas.find((p) => p.id === id);
+    if (!found) return;
+    setEditingPauta(found);
+    setAnchor(new Date(`${preprodDate(found.publication_date)}T12:00:00`));
+    const next = new URLSearchParams(searchParams);
+    next.delete('preprod');
+    setSearchParams(next, { replace: true });
+  }, [preprodPautas, searchParams, setSearchParams]);
+
+  const pautasByDate = useMemo(() => {
+    return preprodPautas.reduce<Record<string, PreprodPauta[]>>((acc, item) => {
+      const key = preprodDate(item.publication_date);
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(item);
+      return acc;
+    }, {});
+  }, [preprodPautas]);
+
+  const closeDialog = () => {
+    setNewPautaDate(null);
+    setEditingPauta(null);
+  };
+
+  const refreshAndClose = async () => {
+    await loadPreprodPautas();
+    closeDialog();
+  };
 
   const title = useMemo(() => {
     switch (view) {
@@ -130,81 +205,133 @@ export default function PreProducao() {
       </div>
 
       <div className="rounded-lg border border-border bg-card p-4">
-        {view === 'year' && <YearGrid anchor={anchor} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'quarter' && <QuarterGrid anchor={anchor} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'month' && <MonthGrid anchor={anchor} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
-        {view === 'week' && <WeekGrid anchor={anchor} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
-        {view === 'day' && <DayView anchor={anchor} onAdd={setNewPautaDate} />}
+        {loadingPautas && <div className="mb-3 text-xs text-muted-foreground">Carregando pautas salvas…</div>}
+        {view === 'year' && <YearGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
+        {view === 'quarter' && <QuarterGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
+        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
+        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
+        {view === 'day' && <DayView anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onAdd={setNewPautaDate} />}
       </div>
 
-      <NewPautaDialog date={newPautaDate} onClose={() => setNewPautaDate(null)} />
+      <NewPautaDialog
+        date={newPautaDate}
+        item={editingPauta}
+        onClose={() => { void refreshAndClose(); }}
+        onChanged={loadPreprodPautas}
+        onSaved={upsertPreprodPauta}
+      />
     </motion.div>
   );
 }
 
 // ---------- Year ----------
-function YearGrid({ anchor, onPickMonth }: { anchor: Date; onPickMonth: (d: Date) => void }) {
+function YearGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onPickMonth: (d: Date) => void }) {
   const yearStart = startOfYear(anchor);
   const months = Array.from({ length: 12 }, (_, i) => addMonths(yearStart, i));
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {months.map((m) => (
-        <button
-          key={m.toISOString()}
-          onClick={() => onPickMonth(m)}
-          className="text-left rounded-md border border-border p-3 hover:bg-accent transition"
-        >
-          <div className="text-xs font-semibold capitalize mb-2">{format(m, 'MMMM', { locale: ptBR })}</div>
-          <MiniMonth month={m} />
-        </button>
-      ))}
+      {months.map((m) => {
+        const count = countItemsInMonth(m, itemsByDate);
+        return (
+          <button
+            key={m.toISOString()}
+            onClick={() => onPickMonth(m)}
+            className="text-left rounded-md border border-border p-3 hover:bg-accent transition"
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs font-semibold capitalize">{format(m, 'MMMM', { locale: ptBR })}</div>
+              {count > 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{count}</Badge>}
+            </div>
+            <MiniMonth month={m} itemsByDate={itemsByDate} />
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function QuarterGrid({ anchor, onPickMonth }: { anchor: Date; onPickMonth: (d: Date) => void }) {
+function QuarterGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onPickMonth: (d: Date) => void }) {
   const qs = startOfQuarter(anchor);
   const months = [qs, addMonths(qs, 1), addMonths(qs, 2)];
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      {months.map((m) => (
-        <button
-          key={m.toISOString()}
-          onClick={() => onPickMonth(m)}
-          className="text-left rounded-md border border-border p-3 hover:bg-accent transition"
-        >
-          <div className="text-xs font-semibold capitalize mb-2">{format(m, 'MMMM yyyy', { locale: ptBR })}</div>
-          <MiniMonth month={m} />
-        </button>
-      ))}
+      {months.map((m) => {
+        const count = countItemsInMonth(m, itemsByDate);
+        return (
+          <button
+            key={m.toISOString()}
+            onClick={() => onPickMonth(m)}
+            className="text-left rounded-md border border-border p-3 hover:bg-accent transition"
+          >
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <div className="text-xs font-semibold capitalize">{format(m, 'MMMM yyyy', { locale: ptBR })}</div>
+              {count > 0 && <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{count}</Badge>}
+            </div>
+            <MiniMonth month={m} itemsByDate={itemsByDate} />
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function MiniMonth({ month }: { month: Date }) {
+function MiniMonth({ month, itemsByDate = {} }: { month: Date; itemsByDate?: Record<string, PreprodPauta[]> }) {
   const start = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
     <div className="grid grid-cols-7 gap-0.5 text-[10px]">
       {WEEKDAYS_SHORT.map(d => <div key={d} className="text-center text-muted-foreground">{d[0]}</div>)}
-      {days.map((d) => (
-        <div
-          key={d.toISOString()}
-          className={cn(
-            'text-center py-0.5 rounded',
-            !isSameMonth(d, month) && 'text-muted-foreground/40',
-            isToday(d) && 'bg-primary text-primary-foreground font-semibold',
-          )}
-        >
-          {format(d, 'd')}
-        </div>
-      ))}
+      {days.map((d) => {
+        const hasItems = (itemsByDate[preprodDate(d)] || []).length > 0;
+        return (
+          <div
+            key={d.toISOString()}
+            className={cn(
+              'relative text-center py-0.5 rounded',
+              !isSameMonth(d, month) && 'text-muted-foreground/40',
+              isToday(d) && 'bg-primary text-primary-foreground font-semibold',
+            )}
+          >
+            {format(d, 'd')}
+            {hasItems && <span className="absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 rounded-full bg-accent" />}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
+function countItemsInMonth(month: Date, itemsByDate: Record<string, PreprodPauta[]>) {
+  return Object.entries(itemsByDate).reduce((total, [dateKey, items]) => {
+    const d = new Date(`${dateKey}T12:00:00`);
+    return isSameMonth(d, month) ? total + items.length : total;
+  }, 0);
+}
+
+function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (item: PreprodPauta) => void }) {
+  const status = inferPreprodStatus(item);
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onOpen(item); }}
+      className="w-full rounded-md border border-border bg-muted/50 px-2 py-1.5 text-left hover:border-primary/50 hover:bg-muted transition"
+      title="Abrir pauta salva"
+    >
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className={cn('h-2 w-2 rounded-full shrink-0', getPreprodStatusClass(status))} />
+        <span className="truncate text-[10px] font-semibold text-foreground">{getPreprodLabel(item)}</span>
+      </div>
+      <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-muted-foreground">
+        <span>{PREPROD_KIND_LABEL[String(item.kind || '')] || 'Pauta'}</span>
+        <span>·</span>
+        <span>{getPreprodStatusLabel(status)}</span>
+      </div>
+    </button>
+  );
+}
+
 // ---------- Month ----------
-function MonthGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
+function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
   const start = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
@@ -215,11 +342,13 @@ function MonthGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: 
         ))}
       </div>
       <div className="grid grid-cols-7 gap-1">
-        {days.map((d) => (
+        {days.map((d) => {
+          const items = itemsByDate[preprodDate(d)] || [];
+          return (
           <div
             key={d.toISOString()}
             className={cn(
-              'group relative aspect-square rounded-md border border-border p-2 text-left text-xs hover:bg-accent transition flex flex-col cursor-pointer',
+              'group relative min-h-[132px] rounded-md border border-border p-2 text-left text-xs hover:bg-accent transition flex flex-col cursor-pointer',
               !isSameMonth(d, anchor) && 'opacity-40',
               isToday(d) && 'border-primary',
             )}
@@ -234,20 +363,27 @@ function MonthGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: 
             >
               <Plus className="h-3 w-3" />
             </button>
+            <div className="mt-2 space-y-1 overflow-hidden">
+              {items.slice(0, 3).map((item) => <PreprodCalendarItem key={item.id} item={item} onOpen={onOpen} />)}
+              {items.length > 3 && <div className="text-[9px] text-muted-foreground">+{items.length - 3} pautas</div>}
+            </div>
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
 // ---------- Week ----------
-function WeekGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
+function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
   const start = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   return (
     <div className="grid grid-cols-7 gap-2">
-      {days.map((d) => (
+      {days.map((d) => {
+        const items = itemsByDate[preprodDate(d)] || [];
+        return (
         <div
           key={d.toISOString()}
           onClick={() => onPickDay(d)}
@@ -266,29 +402,44 @@ function WeekGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: D
           >
             <Plus className="h-3.5 w-3.5" />
           </button>
+          <div className="mt-3 space-y-1.5 overflow-hidden">
+            {items.map((item) => <PreprodCalendarItem key={item.id} item={item} onOpen={onOpen} />)}
+            {items.length === 0 && <div className="text-[10px] text-muted-foreground">Sem pautas.</div>}
+          </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
 // ---------- Day ----------
-function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) {
+function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onAdd: (d: Date) => void }) {
+  const items = itemsByDate[preprodDate(anchor)] || [];
   return (
-    <div className="min-h-[400px] flex flex-col items-center justify-center text-center text-sm text-muted-foreground">
-      <div className="text-5xl font-bold text-foreground mb-2">{format(anchor, 'dd')}</div>
-      <div className="capitalize">{format(anchor, "EEEE, MMMM yyyy", { locale: ptBR })}</div>
-      <div className="mt-6 text-xs">Sem itens.</div>
-      <Button size="sm" variant="outline" className="mt-4 gap-2" onClick={() => onAdd(anchor)}>
-        <Plus className="h-3.5 w-3.5" />
-        Nova pauta neste dia
-      </Button>
+    <div className="min-h-[400px] text-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-border pb-4">
+        <div>
+          <div className="text-5xl font-bold text-foreground mb-2">{format(anchor, 'dd')}</div>
+          <div className="capitalize text-muted-foreground">{format(anchor, "EEEE, MMMM yyyy", { locale: ptBR })}</div>
+        </div>
+        <Button size="sm" variant="outline" className="gap-2" onClick={() => onAdd(anchor)}>
+          <Plus className="h-3.5 w-3.5" />
+          Nova pauta neste dia
+        </Button>
+      </div>
+      <div className="mt-4 space-y-2">
+        {items.length === 0 ? (
+          <div className="rounded-md border border-dashed border-border p-6 text-center text-xs text-muted-foreground">Sem pautas salvas.</div>
+        ) : (
+          items.map((item) => <PreprodCalendarItem key={item.id} item={item} onOpen={onOpen} />)
+        )}
+      </div>
     </div>
   );
 }
 
 // ---------- New Pauta Dialog ----------
-type PreprodKind = 'review' | 'news';
 type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
 
 const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
@@ -297,10 +448,23 @@ const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
   impacto: 'Impacto',
 };
 
-function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
+function NewPautaDialog({
+  date,
+  item,
+  onClose,
+  onChanged,
+  onSaved,
+}: {
+  date: Date | null;
+  item: PreprodPauta | null;
+  onClose: () => void;
+  onChanged: () => void | Promise<void>;
+  onSaved?: (row: PreprodPauta) => void;
+}) {
   const navigate = useNavigate();
   const { releases, settings } = useApp();
   const progress = useAiCallProgress();
+  const effectiveDate = item ? new Date(`${preprodDate(item.publication_date)}T12:00:00`) : date;
   const [pautaId, setPautaId] = useState<string | null>(null);
   const [kind, setKind] = useState<PreprodKind | null>(null);
   const [creating, setCreating] = useState(false);
@@ -329,10 +493,13 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [coverImageUrl, setCoverImageUrl] = useState<string>('');
   const [coverDataUrl, setCoverDataUrl] = useState<string>('');
   const [coverGenerating, setCoverGenerating] = useState(false);
+  const [persistedData, setPersistedData] = useState<Record<string, any>>({});
+  const latestDataRef = useRef<Record<string, any>>({});
+  const saveSeqRef = useRef(0);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
-    if (!date) {
+    if (!date && !item) {
       setPautaId(null);
       setKind(null);
       setReleaseId(null);
@@ -348,19 +515,49 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setTitles([]); setSelectedTitle(''); setMentioned('');
       setDescriptionHtml(''); setCoverImageUrl(''); setCoverDataUrl('');
       setTitleLabelOn(false);
+      setPersistedData({});
+      latestDataRef.current = {};
       return;
     }
+
+    if (item) {
+      const data = item.data || {};
+      setPautaId(item.id);
+      setKind((item.kind as PreprodKind | null) || null);
+      setReleaseId(data.release_id || null);
+      setQuery('');
+      setResearchQuery(data.research_query || '');
+      setInsumo(data.insumo || '');
+      setLengthWords(String(data.length_words || '500'));
+      setSentiment((data.sentiment as ReviewSentiment) || 'neutral');
+      setResult(data.result_markdown || '');
+      setManualMode(data.mode === 'manual');
+      setGenerating(false);
+      setTitles(Array.isArray(data.titles) ? data.titles : []);
+      setSelectedTitle(data.selected_title || '');
+      setMentioned(data.mentioned || '');
+      setDescriptionHtml(data.description_html || '');
+      setCoverImageUrl(data.cover_source_url || '');
+      setCoverDataUrl(data.cover_url || '');
+      setTitleLabelOn(!!data.title_label_on);
+      setStep(inferPreprodStep(data, item.kind) as Step);
+      setPersistedData(data);
+      latestDataRef.current = data;
+      setCreating(false);
+      return;
+    }
+
     let cancelled = false;
     setCreating(true);
     (async () => {
       const { data, error } = await supabase
         .from('preprod_pautas')
         .insert({
-          publication_date: format(date, 'yyyy-MM-dd'),
+          publication_date: preprodDate(date!),
           status: 'draft',
           data: {},
         })
-        .select('id')
+        .select('*')
         .single();
       if (cancelled) return;
       setCreating(false);
@@ -370,31 +567,57 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
         return;
       }
       setPautaId(data.id);
+      setPersistedData({});
+      latestDataRef.current = {};
+      onSaved?.(normalizePreprodPauta(data));
+      void onChanged();
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date?.toISOString()]);
+  }, [date?.toISOString(), item?.id]);
 
   const pickKind = async (k: PreprodKind) => {
     if (!pautaId) return;
     setKind(k);
     setStep('release');
-    const { error } = await supabase
+    const nextData = { ...persistedData, step: 'release' };
+    setPersistedData(nextData);
+    latestDataRef.current = nextData;
+    const { data, error } = await supabase
       .from('preprod_pautas')
-      .update({ kind: k })
+      .update({ kind: k, data: nextData as any, status: inferPreprodStatus({ status: 'draft', data: nextData }) })
       .eq('id', pautaId);
     if (error) toast.error('Falha ao salvar tipo: ' + error.message);
+    else {
+      const saved = { ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind: k, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta;
+      onSaved?.(saved);
+      void onChanged();
+    }
   };
 
   const pickRelease = async (id: string) => {
     if (!pautaId) return;
     setReleaseId(id);
     const r = releases.find(x => x.id === id);
+    const nextData = {
+      ...persistedData,
+      release_id: id,
+      artist: r?.artist,
+      album: r?.album,
+      step: 'research',
+    };
+    setPersistedData(nextData);
+    latestDataRef.current = nextData;
     const { error } = await supabase
       .from('preprod_pautas')
-      .update({ data: { release_id: id, artist: r?.artist, album: r?.album } as any })
+      .update({ data: nextData as any, status: inferPreprodStatus({ status: 'draft', data: nextData }) })
       .eq('id', pautaId);
     if (error) toast.error('Falha ao salvar disco: ' + error.message);
+    else {
+      const saved = { ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta;
+      onSaved?.(saved);
+      void onChanged();
+    }
   };
 
   const filteredReleases = useMemo(() => {
@@ -423,27 +646,50 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
     setResearchQuery(q);
   }, [step, selectedRelease, kind, researchQuery]);
 
-  const persistData = async (patch: Record<string, any>) => {
+  const persistData = async (patch: Record<string, any>, explicitStatus?: string) => {
     if (!pautaId) return;
+    const nextStep = (patch.step || step) as Step;
+    const seq = ++saveSeqRef.current;
     const base: Record<string, any> = {
-      release_id: releaseId,
-      artist: selectedRelease?.artist,
-      album: selectedRelease?.album,
+      release_id: releaseId ?? latestDataRef.current.release_id,
+      artist: selectedRelease?.artist ?? latestDataRef.current.artist,
+      album: selectedRelease?.album ?? latestDataRef.current.album,
       research_query: researchQuery,
       insumo,
+      length_words: lengthWords,
+      sentiment,
+      result_markdown: result,
+      titles,
+      selected_title: selectedTitle,
+      title_label_on: titleLabelOn,
+      mentioned,
+      description_html: descriptionHtml,
+      cover_source_url: coverImageUrl,
+      cover_url: coverDataUrl,
+      step: nextStep,
     };
-    const { error } = await supabase
+    const nextData = { ...latestDataRef.current, ...base, ...patch };
+    setPersistedData(nextData);
+    latestDataRef.current = nextData;
+    const status = explicitStatus || inferPreprodStatus({ status: 'draft', data: nextData });
+    const { data, error } = await supabase
       .from('preprod_pautas')
-      .update({ data: { ...base, ...patch } as any })
-      .eq('id', pautaId);
+      .update({ data: nextData as any, status })
+      .eq('id', pautaId)
+      .select('*')
+      .single();
     if (error) toast.error('Falha ao salvar: ' + error.message);
+    else {
+      if (data) onSaved?.(normalizePreprodPauta(data));
+      if (seq === saveSeqRef.current) void onChanged();
+    }
   };
 
   const openManualSearch = () => {
     const url = `https://www.google.com/search?q=${encodeURIComponent(researchQuery)}`;
     window.open(url, '_blank', 'noopener');
     setStep('insumo');
-    persistData({ research_query: researchQuery, research_mode: 'manual' });
+    persistData({ research_query: researchQuery, research_mode: 'manual', step: 'insumo' });
   };
 
   const runAiSearch = async () => {
@@ -465,7 +711,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       const { notes } = await resp.json();
       setInsumo(notes || '');
       setStep('insumo');
-      await persistData({ insumo: notes || '', research_mode: 'ai', research_query: researchQuery });
+      await persistData({ insumo: notes || '', research_mode: 'ai', research_query: researchQuery, step: 'insumo' });
       toast.success('Pesquisa IA concluída.');
     } catch (e: any) {
       toast.error('Falha na busca IA: ' + (e?.message || 'erro'));
@@ -674,18 +920,23 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
     toast.success(msg);
   };
 
+  const closeKeepingDraft = async () => {
+    if (pautaId) await persistData({ step });
+    onClose();
+  };
+
   const handleOpenChange = (open: boolean) => {
-    if (!open) onClose(); // closing keeps the draft saved
+    if (!open) void closeKeepingDraft(); // closing keeps the draft saved
   };
 
   return (
     <>
-      <Dialog open={!!date} onOpenChange={handleOpenChange}>
+      <Dialog open={!!effectiveDate} onOpenChange={handleOpenChange}>
         <DialogContent className={cn(step === 'package' ? 'max-w-5xl' : 'max-w-2xl', 'max-h-[92vh] overflow-y-auto')}>
           <DialogHeader>
-            <DialogTitle>Nova pauta</DialogTitle>
+            <DialogTitle>{item ? 'Editar pauta' : 'Nova pauta'}</DialogTitle>
             <DialogDescription className="capitalize">
-              {date ? format(date, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR }) : ''}
+              {effectiveDate ? format(effectiveDate, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR }) : ''}
               {creating && <span className="ml-2 inline-flex items-center gap-1 text-xs"><Loader2 className="h-3 w-3 animate-spin" /> salvando rascunho…</span>}
             </DialogDescription>
           </DialogHeader>
@@ -1217,8 +1468,8 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                 </button>
               </div>
               <div className="flex flex-wrap gap-1.5 mb-4">
-                {date && <Badge variant="secondary" className="text-[10px] capitalize">{format(date, 'EEEE', { locale: ptBR })}</Badge>}
-                {date && <Badge variant="secondary" className="text-[10px]">{format(date, 'yyyy-MM-dd')}</Badge>}
+                {effectiveDate && <Badge variant="secondary" className="text-[10px] capitalize">{format(effectiveDate, 'EEEE', { locale: ptBR })}</Badge>}
+                {effectiveDate && <Badge variant="secondary" className="text-[10px]">{format(effectiveDate, 'yyyy-MM-dd')}</Badge>}
                 {coverDataUrl && <Badge variant="secondary" className="text-[10px] gap-1"><Check className="h-3 w-3" /> Capa pronta</Badge>}
                 {descriptionHtml && <Badge variant="secondary" className="text-[10px] gap-1"><Check className="h-3 w-3" /> Descrição pronta</Badge>}
               </div>
@@ -1290,7 +1541,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
             <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => setConfirmDiscard(true)}>
               <Trash2 className="h-4 w-4" /> Descartar
             </Button>
-            <Button variant="outline" onClick={onClose}>Fechar (manter rascunho)</Button>
+            <Button variant="outline" onClick={() => void closeKeepingDraft()}>Fechar (manter rascunho)</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
