@@ -82,7 +82,7 @@ export const QUERY_TEMPLATES: QueryTemplateMeta[] = [
     label: 'Review (com release)',
     group: 'Avulso (com release)',
     placeholders: ['artist', 'album', 'year', 'notes'],
-    default: '"{{artist}}" "{{album}}" review {{year}} site:metal-archives.com OR site:loudwire.com OR site:angrymetalguy.com',
+    default: 'review aprofundado análise técnica atmosfera riffs vocais bateria produção identidade sonora influências comparação discografia entrevistas processo criativo significado das letras recepção crítica opiniões de fãs fóruns reddit metal archives retrospectiva "{{album}}" "{{artist}}"',
   },
   {
     key: 'standalone.anniversary.with_release',
