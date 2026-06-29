@@ -258,24 +258,155 @@ function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) 
   );
 }
 
-// ---------- New Pauta Dialog (stub) ----------
+// ---------- New Pauta Dialog ----------
+type PreprodKind = 'review' | 'news';
+
 function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
+  const [pautaId, setPautaId] = useState<string | null>(null);
+  const [kind, setKind] = useState<PreprodKind | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+
+  // Create the draft row in DB the moment the dialog opens
+  useEffect(() => {
+    if (!date) {
+      setPautaId(null);
+      setKind(null);
+      return;
+    }
+    let cancelled = false;
+    setCreating(true);
+    (async () => {
+      const { data, error } = await supabase
+        .from('preprod_pautas')
+        .insert({
+          publication_date: format(date, 'yyyy-MM-dd'),
+          status: 'draft',
+          data: {},
+        })
+        .select('id')
+        .single();
+      if (cancelled) return;
+      setCreating(false);
+      if (error || !data) {
+        toast.error('Falha ao criar rascunho: ' + (error?.message ?? 'erro desconhecido'));
+        onClose();
+        return;
+      }
+      setPautaId(data.id);
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date?.toISOString()]);
+
+  const pickKind = async (k: PreprodKind) => {
+    if (!pautaId) return;
+    setKind(k);
+    const { error } = await supabase
+      .from('preprod_pautas')
+      .update({ kind: k })
+      .eq('id', pautaId);
+    if (error) toast.error('Falha ao salvar tipo: ' + error.message);
+  };
+
+  const discard = async () => {
+    if (pautaId) {
+      const { error } = await supabase.from('preprod_pautas').delete().eq('id', pautaId);
+      if (error) toast.error('Falha ao descartar: ' + error.message);
+      else toast.success('Rascunho descartado.');
+    }
+    setConfirmDiscard(false);
+    onClose();
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    if (!open) onClose(); // closing keeps the draft saved
+  };
+
   return (
-    <Dialog open={!!date} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Nova pauta</DialogTitle>
-          <DialogDescription>
-            {date ? format(date, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR }) : ''}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="text-sm text-muted-foreground py-4">
-          Fluxo de criação será definido no próximo passo.
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Fechar</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <>
+      <Dialog open={!!date} onOpenChange={handleOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Nova pauta</DialogTitle>
+            <DialogDescription className="capitalize">
+              {date ? format(date, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR }) : ''}
+              {creating && <span className="ml-2 inline-flex items-center gap-1 text-xs"><Loader2 className="h-3 w-3 animate-spin" /> salvando rascunho…</span>}
+            </DialogDescription>
+          </DialogHeader>
+
+          {!kind && (
+            <div className="py-6">
+              <p className="text-sm text-muted-foreground mb-4">Que tipo de pauta você quer criar?</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  disabled={!pautaId}
+                  onClick={() => pickKind('review')}
+                  className="group rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-6 text-left flex flex-col items-start gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition">
+                    <Star className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-base">Review</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Resenha de um álbum / lançamento.</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  disabled={!pautaId}
+                  onClick={() => pickKind('news')}
+                  className="group rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-6 text-left flex flex-col items-start gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition">
+                    <Newspaper className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-base">Notícia</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Cobertura de uma notícia do cenário.</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {kind && (
+            <div className="py-10 text-center">
+              <div className="inline-flex h-14 w-14 items-center justify-center rounded-full bg-muted mb-3">
+                {kind === 'review' ? <Star className="h-7 w-7 text-primary" /> : <Newspaper className="h-7 w-7 text-primary" />}
+              </div>
+              <div className="text-base font-semibold capitalize">{kind === 'review' ? 'Review' : 'Notícia'}</div>
+              <div className="text-xs text-muted-foreground mt-1">Em construção — próximos passos serão definidos.</div>
+              <Button variant="ghost" size="sm" className="mt-4" onClick={() => pickKind(kind === 'review' ? 'news' : 'review')}>
+                Trocar para {kind === 'review' ? 'Notícia' : 'Review'}
+              </Button>
+            </div>
+          )}
+
+          <DialogFooter className="flex sm:justify-between gap-2">
+            <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => setConfirmDiscard(true)}>
+              <Trash2 className="h-4 w-4" /> Descartar
+            </Button>
+            <Button variant="outline" onClick={onClose}>Fechar (manter rascunho)</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={confirmDiscard} onOpenChange={setConfirmDiscard}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Descartar rascunho?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso apaga este rascunho do banco imediatamente. Não dá pra desfazer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={discard} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Descartar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
