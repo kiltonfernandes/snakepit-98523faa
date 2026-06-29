@@ -843,6 +843,7 @@ function NewPautaDialog({
         mode: 'generate_all',
         result_markdown: text,
         word_count: countWords(text),
+        step: 'result',
       });
       progress.finish(null);
       toast.success(`Pauta gerada (${countWords(text)} palavras).`);
@@ -877,7 +878,7 @@ function NewPautaDialog({
         toast.error('Não consegui interpretar as opções de título. Tente regenerar.');
       } else {
         setTitles(parsed);
-        await persistData({ titles: parsed });
+        await persistData({ titles: parsed, step: 'titles' });
       }
       progress.finish(null);
     } catch (e: any) {
@@ -891,7 +892,7 @@ function NewPautaDialog({
   const pickTitle = async (text: string) => {
     const finalText = applyTitleLabel(text);
     setSelectedTitle(finalText);
-    await persistData({ selected_title: finalText, titles, title_label_on: titleLabelOn });
+    await persistData({ selected_title: finalText, titles, title_label_on: titleLabelOn, step: 'titles' });
   };
 
   const titleLabelPrefix = selectedRelease
@@ -931,6 +932,7 @@ function NewPautaDialog({
         selected_title: selectedTitle,
         mentioned,
         description_html: composed,
+        step: 'description',
       });
       progress.finish(null);
       toast.success('Descrição gerada.');
@@ -953,7 +955,7 @@ function NewPautaDialog({
       onComplete: async (dataUrl) => {
         setCoverDataUrl(dataUrl);
         setCoverGenerating(false);
-        await persistData({ cover_url: dataUrl, cover_source_url: coverImageUrl });
+        await persistData({ cover_url: dataUrl, cover_source_url: coverImageUrl, step: 'cover' });
         toast.success('Capa gerada!');
       },
       onError: (err) => {
