@@ -1,38 +1,117 @@
-## Problema
+## Objetivo
 
-Ao clicar **Gerar tudo** (toggle on/off ou com pauta marcada/desmarcada), a pipeline não entrega o material completo (pauta + títulos + descrição). Nenhum log de edge function aparece nas últimas execuções, então provavelmente uma exceção precoce derruba a pipeline inteira antes de chegar nas etapas seguintes — ou um `await` infinito mantém o modal de progresso travado.
+Após a pauta ser gerada na aba **Pré-produção**, encadear automaticamente: **(1) 3 títulos** → escolha do usuário → **(2) descrição HTML** → **(3) capa** → **(4) painel Pacote do Episódio** (igual ao print enviado). Tudo persistido em `preprod_pautas.data`.
 
-Após revisar `src/components/pautas/NovaPautaWizard.tsx::runGenerateAll`, identifiquei 3 fragilidades que provavelmente causaram a regressão:
+---
 
-1. **Falha em qualquer etapa derruba toda a pipeline.** O try/catch é único, em volta do bloco inteiro. Se a `web-research` der 500 (ou o `streamGeneratePauta` da pauta levantar erro), os passos de **títulos** e **descrição** nunca rodam.
-2. `**aiProgressTopic.start(...)` é chamado várias vezes seguidas**, e `streamGeneratePauta` também chama `start()` internamente. Cada `start()` zera `attempts`/`bytes` — perde-se trilha do passo anterior e, mais grave, o `_meta:error` que vier de uma etapa pode chamar `p?.finish(msg)` deixando o modal "preso" enquanto o `throw` quebra a pipeline.
-3. `**onPaste('')` antes de cada `streamGeneratePauta` apaga o `response_text**` — mesmo no fluxo `formatarApenas`, que justamente precisa ler esse campo. Se o usuário tiver desligado "pauta" mas ativado "formatar apenas" sem conteúdo bruto, o passo aborta com `return` (linha 909) e nem títulos nem descrição rodam.
+## 1. Novos passos no wizard
 
-## Solução
+Adicionar ao tipo `Step` em `src/pages/PreProducao.tsx`:
 
-Reestruturar `runGenerateAll` em `src/components/pautas/NovaPautaWizard.tsx` para que cada etapa seja independente, robusta a falhas e instrumentada.
+```
+'kind' → 'release' → 'research' → 'insumo' → 'config' → 'result' (pauta)
+     → 'titles' → 'description' → 'cover' → 'package'
+```
 
-### Mudanças em `runGenerateAll` (linhas ~801-993)
+Cada transição grava em `preprod_pautas.data` (mesmo padrão de `persistData` já existente).
 
-1. **Try/catch por etapa.** Envolver `pesquisa`, `pauta`/`formatarApenas`, `titulos` e `descricao` cada um em seu próprio `try { ... } catch (e) { console.warn(...); toast.warning(...); }`. Falha de uma etapa **continua para a próxima** ao invés de abortar tudo. Apenas a `pauta` é "soft-required" para `formatarApenas` e títulos/descrição usarem o conteúdo agregado — se ela falhar, ainda usamos o `topic.response_text` anterior como fonte.
-2. **Reset de progresso explícito.** Substituir os múltiplos `aiProgressTopic.start(label)` no meio da pipeline por um único `start('Gerar tudo')` no começo, e usar apenas `setStage` + `pushAttempt({model: 'Etapa: X', status: 'trying'/'selected'})` entre etapas para mostrar o passo corrente sem zerar histórico. O `start()` interno do `streamGeneratePauta` continuará atualizando rótulo/modelo normalmente.
-3. `**formatarApenas` resiliente.** Se `response_text` estiver vazio, **não abortar a pipeline** — apenas emitir `toast.warning` e seguir para títulos/descrição usando o conteúdo agregado existente (ou pular títulos/descrição se nada existir).
-4. **Logs diagnósticos.** Adicionar `console.info('[gerar-tudo]', 'pesquisa:start' | 'pesquisa:ok' | 'pesquisa:fail', ...)` em cada etapa para futura depuração via console.
-5. **Garantir entrega final.** Trocar o `toast.success` único do final por toasts incrementais por etapa concluída (`✓ Pauta`, `✓ Títulos`, `✓ Descrição`) + toast final agregando resultado.
-6. **Botão "Gerar tudo" não fica disabled sem prompt.** Quando o toggle "Gerar tudo" está ligado, o botão abre o picker; o picker pode rodar pesquisa+notes mesmo sem `prompt_text` (o prompt é montado a partir das notas pesquisadas). Ajustar `disabled` na linha 1261 para considerar `googleQuery` ou `notes` quando `generateAll` estiver ativo.
+---
 
-### Mudanças menores
+## 2. Geração de títulos (3 opções)
 
-- Em `src/lib/ai/openrouter-client.ts`, garantir que `p?.finish(null)` no fim do stream **não dispare** quando chamado dentro de um pipeline maior — adicionar opção `progress.noAutoFinish?: boolean` ou simplesmente não chamar `finish` quando o caller indicar pipeline. Mais simples: o caller (`runGenerateAll`) faz `aiProgressTopic.finish(null)` só uma vez ao final. Para isso, expor uma flag `silentFinish` em `StreamGeneratePautaOptions` que pule o `finish` interno.
+**Novo prompt builder** em `src/lib/preprod-prompts.ts`:
 
-### Diagnóstico paralelo
+`buildTitlesPrompt({ pautaMarkdown, artist, album, notes })` retorna prompt com:
+- 3 opções: **clickbait** (gancho emocional), **curiosidade** (pergunta/fato), **impacto** (afirmação forte)
+- Máx **60–70 caracteres** cada
+- CAPS LOCK em no máximo 1–2 palavras
+- Nome da banda quando fizer sentido
+- Máx 2 emojis por título
+- Proibido clickbait enganoso
+- Contrato de resposta: **JSON estrito** `{"titles":[{"kind":"clickbait","text":"..."},{"kind":"curiosidade",...},{"kind":"impacto",...}]}`
 
-Após a correção, abrir o modal **Gerar tudo**, marcar todas as etapas e clicar **Iniciar**. Acompanhar console (`[gerar-tudo] ...`) + edge function logs (`web-research`, `generate-pauta`) para confirmar que todas as 4 etapas executam ponta-a-ponta tanto com `pauta:on` quanto com `pauta:off`.
+**UI step `titles`**: 3 cards (um por opção) com badge do tipo, contagem de caracteres, botão "Escolher". Botão "Regenerar". Título escolhido salvo em `data.selectedTitle`.
 
-## Critérios de aceitação
+Chamada via `streamGeneratePauta` (mesmo pipeline OpenRouter + fallback chain) com `temperature` levemente mais alta (0.85) para variedade. Parser tolerante a markdown encapsulado (já existe `markdown-sanitize.ts`).
 
-- Clicar **Gerar tudo** com todas as etapas marcadas: pauta, títulos e descrição preenchem-se sequencialmente; modal de progresso mostra cada etapa; toasts confirmam cada conclusão.
-- Clicar **Gerar tudo** desmarcando "pauta" (sem "formatar apenas"): títulos e descrição ainda são gerados usando o `response_text` atual do tópico. mas o sisimtea usa ia para formatar o texto de acordo com o letgh definido pelo usuario 
-- Se `web-research` falhar (timeout/500): pauta/títulos/descrição ainda rodam normalmente usando notas existentes; toast avisa "Pesquisa web falhou — seguindo sem ela".
-- Console mostra trilha `[gerar-tudo] pesquisa:ok → pauta:ok → titulos:ok → descricao:ok`.
-- mandatorio qu eo sisiteam entrega todos os materiais conforme experado  essea eh a meta maixa desse plano
+---
+
+## 3. Geração de descrição HTML
+
+**Novo prompt builder** `buildDescriptionPrompt({ selectedTitle, pautaMarkdown, mentioned, notes })` colando integralmente as regras do usuário:
+
+- HTML válido apenas: `<p>`, `<b>`, `<i>`, `<a>`, `<br>`, `<ul>`, `<li>`, `<h3>`
+- Usar o **título selecionado como âncora** (não repetir como H1 — o template já faz isso)
+- Priorizar "Notícias" como base factual
+- Não inventar seções ausentes
+- **NÃO incluir** bloco institucional Heavynauta nem CTAs de plataformas (YouTube, Spotify, Apple, Deezer, Pod.link, Discord, WhatsApp) — adicionados pelo template
+- Regra **Mencionado neste episódio**: se houver conteúdo em `mentioned`, inserir `<h3>🎙️ Mencionado neste episódio</h3><ul>...</ul>` no TOPO, 1 emoji por item, embed `<a href target=_blank rel=noopener>` quando houver URL, parafrasear em 1-2 frases; se vazio, ignorar
+- Saída **somente HTML**, sem markdown, sem code fences
+
+**UI step `description`**:
+- Campo **Mencionado no Episódio** (textarea) com botões Salvar/Limpar (espelhando print)
+- Botão "Gerar descrição (IA)"
+- Preview da descrição em HTML renderizado + textarea editável com `Copy to clipboard`
+- Append automático do bloco institucional + CTAs no preview final (constante exportada em `preprod-prompts.ts` `HEAVYNAUTA_INSTITUTIONAL_HTML`)
+
+Reutilizar lógica de `src/lib/episode/inject-mentioned.ts` se possível para idempotência.
+
+---
+
+## 4. Capa
+
+**UI step `cover`**: usa o componente vigente de geração de capa (já existe `src/lib/cover-generator.ts` + uso em outras telas — investigar arquivo na build phase). Mostra preview 1:1, botões **Baixar capa** e **Gerar capa**. Capa salva como dataURL/asset em `data.coverUrl`.
+
+---
+
+## 5. Painel "Pacote do Episódio" (passo final)
+
+Réplica fiel do print:
+
+**Coluna esquerda**
+- Header: badges `weekday` · `data` · `Spotify agendado` · `Capa pronta`
+- **Título selecionado** + Copy to clipboard
+- **Mencionado no Episódio** (textarea + Salvar/Limpar/Inserir na descrição IA)
+- **Descrição em HTML** (textarea + Copy to clipboard)
+- **Arquivo no OneDrive** (somente se houver upload — reusa lógica `onedrive-upload`; caso contrário esconder o bloco)
+
+**Coluna direita**
+- **Capa do episódio** (preview + Baixar/Gerar)
+- **Ações rápidas**: Visualizar pauta · Copiar link compartilhável · Abrir workspace · Baixar pacote (MP3+capa+descrição) · Spotify for Creators (link externo)
+
+Todos os dados vêm de `preprod_pautas.data`. Botão "Voltar" permite reabrir passos anteriores sem perder estado.
+
+---
+
+## 6. Persistência
+
+Estender JSONB `data` em `preprod_pautas` com:
+
+```ts
+{
+  titles?: { kind: 'clickbait'|'curiosidade'|'impacto'; text: string }[];
+  selectedTitle?: string;
+  mentioned?: string;
+  descriptionHtml?: string;
+  coverUrl?: string;
+}
+```
+
+Sem migration (já é JSONB livre). Autosave a cada mudança via `persistData` existente.
+
+---
+
+## Arquivos afetados
+
+- `src/lib/preprod-prompts.ts` — adiciona `buildTitlesPrompt`, `buildDescriptionPrompt`, `HEAVYNAUTA_INSTITUTIONAL_HTML`, parsers
+- `src/pages/PreProducao.tsx` — novos steps `titles`, `description`, `cover`, `package` + UI
+- Possivelmente extrair `EpisodePackagePanel.tsx` em `src/components/preprod/` para manter o arquivo enxuto
+- Reutiliza: `streamGeneratePauta`, `MarkdownView`, `inject-mentioned.ts`, `cover-generator.ts`, `enrich-episode-description` (edge function já existente para "Inserir na descrição IA")
+
+---
+
+## Perguntas em aberto
+
+1. **Capa**: usar o mesmo `cover-generator.ts` procedural já existente, ou o pipeline de IA de imagem? (vou assumir o procedural vigente — confirma?)
+2. **Spotify for Creators**: link estático para `https://creators.spotify.com/` ou deep-link específico do show?
+3. **Baixar pacote ZIP**: incluir MP3 só quando houver upload no OneDrive, senão só capa+descrição.txt — ok?
