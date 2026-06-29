@@ -587,9 +587,16 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   };
 
   const pickTitle = async (text: string) => {
-    setSelectedTitle(text);
-    await persistData({ selected_title: text, titles });
+    const finalText = applyTitleLabel(text);
+    setSelectedTitle(finalText);
+    await persistData({ selected_title: finalText, titles, title_label_on: titleLabelOn });
   };
+
+  const titleLabelPrefix = selectedRelease
+    ? `Resenha: ${selectedRelease.artist} - ${selectedRelease.album} `
+    : '';
+  const applyTitleLabel = (text: string) =>
+    titleLabelOn && titleLabelPrefix ? `${titleLabelPrefix}${text}` : text;
 
   // ── Descrição ──────────────────────────────────────────────────────────
   const runGenerateDescription = async () => {
