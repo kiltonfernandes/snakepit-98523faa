@@ -338,7 +338,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setStep('kind');
       setResearchQuery('');
       setInsumo('');
-      setLengthWords(500);
+      setLengthWords('500');
       setSentiment('neutral');
       setResult('');
       setManualMode(false);
@@ -501,7 +501,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       : 0.7;
     try {
       const prompt = buildKiltonReviewPrompt(
-        { release, insumo, lengthWords, sentiment },
+        { release, insumo, lengthWords: lengthWordsNum, sentiment },
         settings,
       );
       let text = await streamGeneratePauta({
@@ -516,12 +516,12 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       });
       // Length adjustment loop — single retry if outside ±15%.
       const actual = countWords(text);
-      const lo = Math.floor(lengthWords * 0.85);
-      const hi = Math.ceil(lengthWords * 1.15);
+      const lo = Math.floor(lengthWordsNum * 0.85);
+      const hi = Math.ceil(lengthWordsNum * 1.15);
       if (actual < lo || actual > hi) {
-        progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWords})`, status: 'trying' });
+        progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWordsNum})`, status: 'trying' });
         const adjusted = await streamGeneratePauta({
-          prompt: buildLengthAdjustPrompt(text, lengthWords),
+          prompt: buildLengthAdjustPrompt(text, lengthWordsNum),
           bannedTerms: banned,
           temperature: 0.4,
           system: 'Você ajusta o tamanho de textos editoriais sem perder estrutura.',
@@ -533,7 +533,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
         text = adjusted || text;
       }
       await persistData({
-        length_words: lengthWords,
+        length_words: lengthWordsNum,
         sentiment,
         mode: 'generate_all',
         result_markdown: text,
