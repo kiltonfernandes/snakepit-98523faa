@@ -666,8 +666,106 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                 className="text-sm"
               />
               <div className="flex justify-end pt-1">
-                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => { persistData({ insumo }); toast.info('Próximo passo em construção.'); }}>
+                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => { persistData({ insumo }); setStep('config'); }}>
                   Seguir <ArrowRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 'config' && (
+            <div className="py-2 space-y-5">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">Configuração da pauta</div>
+                <button onClick={() => setStep('insumo')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar ao insumo
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-[11px] uppercase text-muted-foreground">Tamanho (palavras)</Label>
+                  <Input
+                    type="number"
+                    min={50}
+                    step={50}
+                    value={lengthWords}
+                    onChange={(e) => setLengthWords(Math.max(50, Number(e.target.value) || 0))}
+                    className="mt-1 h-9"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">Padrão 500. Tolerância ±15% — se ultrapassar, a IA ajusta automaticamente.</p>
+                </div>
+                <div>
+                  <Label className="text-[11px] uppercase text-muted-foreground">Sentimento</Label>
+                  <div className="mt-1 grid grid-cols-3 gap-1">
+                    {(['positive','neutral','negative'] as ReviewSentiment[]).map(s => (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setSentiment(s)}
+                        className={cn(
+                          'h-9 text-xs rounded-md border transition',
+                          sentiment === s ? 'border-primary bg-primary/10 text-primary font-semibold' : 'border-border hover:bg-accent',
+                        )}
+                      >{SENTIMENT_LABEL[s]}</button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setManualMode(true); persistData({ length_words: lengthWords, sentiment, mode: 'manual' }); toast.info('Modo manual — próximos passos em construção.'); }}
+                  className="rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-4 text-left flex items-start gap-3"
+                >
+                  <Hammer className="h-5 w-5 text-primary mt-0.5" />
+                  <div>
+                    <div className="font-semibold text-sm">Criação manual</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Cada passo você decide — com botões de IA para preencher um a um.</div>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runGenerateAll()}
+                  disabled={generating}
+                  className="rounded-xl border-2 border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 transition p-4 text-left flex items-start gap-3 disabled:opacity-50"
+                >
+                  {generating ? <Loader2 className="h-5 w-5 text-primary mt-0.5 animate-spin" /> : <Sparkles className="h-5 w-5 text-primary mt-0.5" />}
+                  <div>
+                    <div className="font-semibold text-sm">Gerar tudo com IA</div>
+                    <div className="text-[11px] text-muted-foreground mt-0.5">Encadeia chamadas no OpenRouter (DeepSeek V4 Flash) com prompt Kilton + ajuste de tamanho.</div>
+                  </div>
+                </button>
+              </div>
+
+              {manualMode && (
+                <div className="rounded-md border border-dashed border-border p-4 text-xs text-muted-foreground">
+                  Fluxo manual em construção — os próximos passos virão por aqui, cada um com botão "preencher com IA".
+                </div>
+              )}
+            </div>
+          )}
+
+          {step === 'result' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="text-sm font-medium">
+                  Resultado · <span className="text-muted-foreground">{countWords(result)} palavras</span>
+                  <span className="text-muted-foreground"> / alvo {lengthWords}</span>
+                </div>
+                <button onClick={() => setStep('config')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar
+                </button>
+              </div>
+              <div className="max-h-[60vh] overflow-auto rounded-md border border-border bg-card/40 p-4">
+                <MarkdownView text={result} />
+              </div>
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="outline" onClick={() => { navigator.clipboard.writeText(result); toast.success('Copiado.'); }}>Copiar</Button>
+                <Button size="sm" disabled={generating} onClick={() => runGenerateAll()} className="gap-2">
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                  Regenerar
                 </Button>
               </div>
             </div>
