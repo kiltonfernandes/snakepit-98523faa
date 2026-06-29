@@ -904,7 +904,7 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   <Input
                     type="text"
                     value={lengthWords}
-                    onChange={(e) => setLengthWords(e.target.value as unknown as number)}
+                    onChange={(e) => setLengthWords(e.target.value)}
                     className="mt-1 h-9"
                   />
                   <p className="text-[10px] text-muted-foreground mt-1">Padrão 500. Tolerância ±15% — se ultrapassar, a IA ajusta automaticamente.</p>
