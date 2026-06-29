@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -9,6 +9,7 @@ import {
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
@@ -26,6 +27,7 @@ const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 export default function PreProducao() {
   const [view, setView] = useState<View>('month');
   const [anchor, setAnchor] = useState<Date>(startOfDay(new Date()));
+  const [newPautaDate, setNewPautaDate] = useState<Date | null>(null);
 
   const title = useMemo(() => {
     switch (view) {
@@ -70,13 +72,19 @@ export default function PreProducao() {
             Calendário editorial — visão anual, trimestral, mensal, semanal e diária.
           </p>
         </div>
-        <Tabs value={view} onValueChange={(v) => setView(v as View)}>
-          <TabsList>
-            {(Object.keys(VIEW_LABELS) as View[]).map(v => (
-              <TabsTrigger key={v} value={v}>{VIEW_LABELS[v]}</TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-3">
+          <Tabs value={view} onValueChange={(v) => setView(v as View)}>
+            <TabsList>
+              {(Object.keys(VIEW_LABELS) as View[]).map(v => (
+                <TabsTrigger key={v} value={v}>{VIEW_LABELS[v]}</TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <Button size="sm" className="gap-2" onClick={() => setNewPautaDate(anchor)}>
+            <Plus className="h-4 w-4" />
+            Nova pauta
+          </Button>
+        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2 border-b border-border pb-3">
@@ -92,10 +100,12 @@ export default function PreProducao() {
       <div className="rounded-lg border border-border bg-card p-4">
         {view === 'year' && <YearGrid anchor={anchor} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
         {view === 'quarter' && <QuarterGrid anchor={anchor} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'month' && <MonthGrid anchor={anchor} onPickDay={(d) => { setAnchor(d); setView('day'); }} />}
-        {view === 'week' && <WeekGrid anchor={anchor} onPickDay={(d) => { setAnchor(d); setView('day'); }} />}
-        {view === 'day' && <DayView anchor={anchor} />}
+        {view === 'month' && <MonthGrid anchor={anchor} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
+        {view === 'week' && <WeekGrid anchor={anchor} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
+        {view === 'day' && <DayView anchor={anchor} onAdd={setNewPautaDate} />}
       </div>
+
+      <NewPautaDialog date={newPautaDate} onClose={() => setNewPautaDate(null)} />
     </motion.div>
   );
 }
@@ -162,7 +172,7 @@ function MiniMonth({ month }: { month: Date }) {
 }
 
 // ---------- Month ----------
-function MonthGrid({ anchor, onPickDay }: { anchor: Date; onPickDay: (d: Date) => void }) {
+function MonthGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
   const start = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
@@ -174,17 +184,25 @@ function MonthGrid({ anchor, onPickDay }: { anchor: Date; onPickDay: (d: Date) =
       </div>
       <div className="grid grid-cols-7 gap-1">
         {days.map((d) => (
-          <button
+          <div
             key={d.toISOString()}
-            onClick={() => onPickDay(d)}
             className={cn(
-              'aspect-square rounded-md border border-border p-2 text-left text-xs hover:bg-accent transition flex flex-col',
+              'group relative aspect-square rounded-md border border-border p-2 text-left text-xs hover:bg-accent transition flex flex-col cursor-pointer',
               !isSameMonth(d, anchor) && 'opacity-40',
               isToday(d) && 'border-primary',
             )}
+            onClick={() => onPickDay(d)}
           >
             <span className={cn('font-semibold', isToday(d) && 'text-primary')}>{format(d, 'd')}</span>
-          </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAdd(d); }}
+              className="absolute top-1 right-1 h-5 w-5 rounded-md bg-primary/10 text-primary opacity-0 group-hover:opacity-100 hover:bg-primary hover:text-primary-foreground transition flex items-center justify-center"
+              title="Nova pauta neste dia"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -192,35 +210,69 @@ function MonthGrid({ anchor, onPickDay }: { anchor: Date; onPickDay: (d: Date) =
 }
 
 // ---------- Week ----------
-function WeekGrid({ anchor, onPickDay }: { anchor: Date; onPickDay: (d: Date) => void }) {
+function WeekGrid({ anchor, onPickDay, onAdd }: { anchor: Date; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
   const start = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   return (
     <div className="grid grid-cols-7 gap-2">
       {days.map((d) => (
-        <button
+        <div
           key={d.toISOString()}
           onClick={() => onPickDay(d)}
           className={cn(
-            'min-h-[180px] rounded-md border border-border p-3 text-left hover:bg-accent transition flex flex-col',
+            'group relative min-h-[180px] rounded-md border border-border p-3 text-left hover:bg-accent transition flex flex-col cursor-pointer',
             isToday(d) && 'border-primary',
           )}
         >
           <span className="text-[10px] uppercase text-muted-foreground">{format(d, 'EEE', { locale: ptBR })}</span>
           <span className={cn('text-2xl font-bold', isToday(d) && 'text-primary')}>{format(d, 'd')}</span>
-        </button>
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAdd(d); }}
+            className="absolute top-2 right-2 h-6 w-6 rounded-md bg-primary/10 text-primary opacity-0 group-hover:opacity-100 hover:bg-primary hover:text-primary-foreground transition flex items-center justify-center"
+            title="Nova pauta neste dia"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+        </div>
       ))}
     </div>
   );
 }
 
 // ---------- Day ----------
-function DayView({ anchor }: { anchor: Date }) {
+function DayView({ anchor, onAdd }: { anchor: Date; onAdd: (d: Date) => void }) {
   return (
     <div className="min-h-[400px] flex flex-col items-center justify-center text-center text-sm text-muted-foreground">
       <div className="text-5xl font-bold text-foreground mb-2">{format(anchor, 'dd')}</div>
       <div className="capitalize">{format(anchor, "EEEE, MMMM yyyy", { locale: ptBR })}</div>
       <div className="mt-6 text-xs">Sem itens.</div>
+      <Button size="sm" variant="outline" className="mt-4 gap-2" onClick={() => onAdd(anchor)}>
+        <Plus className="h-3.5 w-3.5" />
+        Nova pauta neste dia
+      </Button>
     </div>
+  );
+}
+
+// ---------- New Pauta Dialog (stub) ----------
+function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => void }) {
+  return (
+    <Dialog open={!!date} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Nova pauta</DialogTitle>
+          <DialogDescription>
+            {date ? format(date, "EEEE, dd 'de' MMMM yyyy", { locale: ptBR }) : ''}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="text-sm text-muted-foreground py-4">
+          Fluxo de criação será definido no próximo passo.
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
