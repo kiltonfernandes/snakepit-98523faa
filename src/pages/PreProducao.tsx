@@ -1006,6 +1006,26 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   <ArrowLeft className="h-3 w-3" /> voltar à pauta
                 </button>
               </div>
+              <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-3 py-2">
+                <div className="space-y-0.5">
+                  <Label htmlFor="title-label-toggle" className="text-xs font-medium cursor-pointer">
+                    Label "Resenha: [Banda] - [Álbum]"
+                  </Label>
+                  <p className="text-[10px] text-muted-foreground">
+                    {titleLabelOn && titleLabelPrefix
+                      ? `Prefixo aplicado: ${titleLabelPrefix.trim()}`
+                      : 'Off — título usa apenas a resposta da IA.'}
+                  </p>
+                </div>
+                <Switch
+                  id="title-label-toggle"
+                  checked={titleLabelOn}
+                  onCheckedChange={(v) => {
+                    setTitleLabelOn(v);
+                    persistData({ title_label_on: v });
+                  }}
+                />
+              </div>
               {titles.length === 0 ? (
                 <div className="rounded-md border border-dashed border-border p-6 text-center">
                   <p className="text-xs text-muted-foreground mb-3">Clickbait · Curiosidade · Impacto — até 70 caracteres, máx 2 emojis, sem clickbait enganoso.</p>
@@ -1017,7 +1037,8 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
               ) : (
                 <div className="space-y-2">
                   {titles.map((t) => {
-                    const isSel = t.text === selectedTitle;
+                    const displayText = applyTitleLabel(t.text);
+                    const isSel = displayText === selectedTitle;
                     return (
                       <div key={t.kind}
                         className={cn(
@@ -1028,9 +1049,9 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                       >
                         <div className="flex items-center justify-between gap-2">
                           <Badge variant="secondary" className="text-[10px]">{TITLE_STYLE_LABEL[t.kind]}</Badge>
-                          <span className="text-[10px] text-muted-foreground">{t.text.length} caracteres</span>
+                          <span className="text-[10px] text-muted-foreground">{displayText.length} caracteres</span>
                         </div>
-                        <div className="text-sm font-medium mt-1.5">{t.text}</div>
+                        <div className="text-sm font-medium mt-1.5">{displayText}</div>
                       </div>
                     );
                   })}
