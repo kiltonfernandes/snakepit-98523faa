@@ -1,117 +1,37 @@
-## Objetivo
+Plano para resolver o problema principal de persistência e consistência:
 
-Após a pauta ser gerada na aba **Pré-produção**, encadear automaticamente: **(1) 3 títulos** → escolha do usuário → **(2) descrição HTML** → **(3) capa** → **(4) painel Pacote do Episódio** (igual ao print enviado). Tudo persistido em `preprod_pautas.data`.
+1. Corrigir a gravação da Pré-produção
+- Refatorar o salvamento em `PreProducao.tsx` para nunca sobrescrever o JSON salvo anteriormente.
+- Hoje vários `persistData(...)` substituem `data` inteiro, então etapas posteriores podem apagar `result_markdown`, títulos, descrição, capa ou insumo já salvos.
+- Criar uma fonte local de verdade do rascunho atual e sempre salvar por merge: dados antigos + campos atuais + patch novo.
+- Persistir também mudanças simples de texto ao sair do campo e nos botões de avanço.
 
----
+2. Carregar e mostrar `preprod_pautas` no calendário de Pré-produção
+- Ao abrir a aba Pré-produção, buscar do banco todos os rascunhos/resultados salvos em `preprod_pautas`.
+- Renderizar esses itens dentro dos dias do calendário mensal, semanal e diário.
+- No anual/trimestral, mostrar pelo menos indicadores/contagem por mês para ficar claro que existe conteúdo ali.
+- Depois de criar, alterar, descartar ou fechar o modal, atualizar a lista sem depender de refresh manual.
 
-## 1. Novos passos no wizard
+3. Permitir reabrir rascunhos existentes
+- Clicar em uma pauta já exibida no calendário de Pré-produção deve abrir o mesmo registro, não criar outro.
+- O modal deve hidratar os campos salvos: tipo, release, query, insumo, tamanho, sentimento, resultado markdown, títulos, título escolhido, mencionados, descrição HTML e capa.
+- O botão `+` continua criando uma pauta nova na data escolhida.
 
-Adicionar ao tipo `Step` em `src/pages/PreProducao.tsx`:
+4. Marcar estado coerente do item
+- Manter status como `draft` no início.
+- Atualizar status conforme avanço real: pesquisa/insumo, pauta gerada, pacote/final.
+- Mostrar visualmente no calendário se é rascunho, gerada ou finalizada, usando título escolhido quando existir; senão artista/álbum; senão tipo + data.
 
-```
-'kind' → 'release' → 'research' → 'insumo' → 'config' → 'result' (pauta)
-     → 'titles' → 'description' → 'cover' → 'package'
-```
+5. Fazer a aba Calendário enxergar a Pré-produção
+- Incluir os registros de `preprod_pautas` também na aba Calendário, além das pautas/materiais já existentes.
+- Exibir esses itens na mesma data (`publication_date`) com uma identificação clara de Pré-produção.
+- Assim, uma pauta criada na Pré-produção aparece coerentemente também no Calendário.
 
-Cada transição grava em `preprod_pautas.data` (mesmo padrão de `persistData` já existente).
+6. Reforçar o fluxo antigo da aba Calendário
+- Revisar a criação via `NovaPautaWizard` para garantir que o rascunho seja persistido cedo o suficiente e que o calendário atualize após criar/fechar.
+- Onde necessário, recarregar a lista de pautas após criação para evitar depender apenas do estado otimista.
 
----
-
-## 2. Geração de títulos (3 opções)
-
-**Novo prompt builder** em `src/lib/preprod-prompts.ts`:
-
-`buildTitlesPrompt({ pautaMarkdown, artist, album, notes })` retorna prompt com:
-- 3 opções: **clickbait** (gancho emocional), **curiosidade** (pergunta/fato), **impacto** (afirmação forte)
-- Máx **60–70 caracteres** cada
-- CAPS LOCK em no máximo 1–2 palavras
-- Nome da banda quando fizer sentido
-- Máx 2 emojis por título
-- Proibido clickbait enganoso
-- Contrato de resposta: **JSON estrito** `{"titles":[{"kind":"clickbait","text":"..."},{"kind":"curiosidade",...},{"kind":"impacto",...}]}`
-
-**UI step `titles`**: 3 cards (um por opção) com badge do tipo, contagem de caracteres, botão "Escolher". Botão "Regenerar". Título escolhido salvo em `data.selectedTitle`.
-
-Chamada via `streamGeneratePauta` (mesmo pipeline OpenRouter + fallback chain) com `temperature` levemente mais alta (0.85) para variedade. Parser tolerante a markdown encapsulado (já existe `markdown-sanitize.ts`).
-
----
-
-## 3. Geração de descrição HTML
-
-**Novo prompt builder** `buildDescriptionPrompt({ selectedTitle, pautaMarkdown, mentioned, notes })` colando integralmente as regras do usuário:
-
-- HTML válido apenas: `<p>`, `<b>`, `<i>`, `<a>`, `<br>`, `<ul>`, `<li>`, `<h3>`
-- Usar o **título selecionado como âncora** (não repetir como H1 — o template já faz isso)
-- Priorizar "Notícias" como base factual
-- Não inventar seções ausentes
-- **NÃO incluir** bloco institucional Heavynauta nem CTAs de plataformas (YouTube, Spotify, Apple, Deezer, Pod.link, Discord, WhatsApp) — adicionados pelo template
-- Regra **Mencionado neste episódio**: se houver conteúdo em `mentioned`, inserir `<h3>🎙️ Mencionado neste episódio</h3><ul>...</ul>` no TOPO, 1 emoji por item, embed `<a href target=_blank rel=noopener>` quando houver URL, parafrasear em 1-2 frases; se vazio, ignorar
-- Saída **somente HTML**, sem markdown, sem code fences
-
-**UI step `description`**:
-- Campo **Mencionado no Episódio** (textarea) com botões Salvar/Limpar (espelhando print)
-- Botão "Gerar descrição (IA)"
-- Preview da descrição em HTML renderizado + textarea editável com `Copy to clipboard`
-- Append automático do bloco institucional + CTAs no preview final (constante exportada em `preprod-prompts.ts` `HEAVYNAUTA_INSTITUTIONAL_HTML`)
-
-Reutilizar lógica de `src/lib/episode/inject-mentioned.ts` se possível para idempotência.
-
----
-
-## 4. Capa
-
-**UI step `cover`**: usa o componente vigente de geração de capa (já existe `src/lib/cover-generator.ts` + uso em outras telas — investigar arquivo na build phase). Mostra preview 1:1, botões **Baixar capa** e **Gerar capa**. Capa salva como dataURL/asset em `data.coverUrl`.
-
----
-
-## 5. Painel "Pacote do Episódio" (passo final)
-
-Réplica fiel do print:
-
-**Coluna esquerda**
-- Header: badges `weekday` · `data` · `Spotify agendado` · `Capa pronta`
-- **Título selecionado** + Copy to clipboard
-- **Mencionado no Episódio** (textarea + Salvar/Limpar/Inserir na descrição IA)
-- **Descrição em HTML** (textarea + Copy to clipboard)
-- **Arquivo no OneDrive** (somente se houver upload — reusa lógica `onedrive-upload`; caso contrário esconder o bloco)
-
-**Coluna direita**
-- **Capa do episódio** (preview + Baixar/Gerar)
-- **Ações rápidas**: Visualizar pauta · Copiar link compartilhável · Abrir workspace · Baixar pacote (MP3+capa+descrição) · Spotify for Creators (link externo)
-
-Todos os dados vêm de `preprod_pautas.data`. Botão "Voltar" permite reabrir passos anteriores sem perder estado.
-
----
-
-## 6. Persistência
-
-Estender JSONB `data` em `preprod_pautas` com:
-
-```ts
-{
-  titles?: { kind: 'clickbait'|'curiosidade'|'impacto'; text: string }[];
-  selectedTitle?: string;
-  mentioned?: string;
-  descriptionHtml?: string;
-  coverUrl?: string;
-}
-```
-
-Sem migration (já é JSONB livre). Autosave a cada mudança via `persistData` existente.
-
----
-
-## Arquivos afetados
-
-- `src/lib/preprod-prompts.ts` — adiciona `buildTitlesPrompt`, `buildDescriptionPrompt`, `HEAVYNAUTA_INSTITUTIONAL_HTML`, parsers
-- `src/pages/PreProducao.tsx` — novos steps `titles`, `description`, `cover`, `package` + UI
-- Possivelmente extrair `EpisodePackagePanel.tsx` em `src/components/preprod/` para manter o arquivo enxuto
-- Reutiliza: `streamGeneratePauta`, `MarkdownView`, `inject-mentioned.ts`, `cover-generator.ts`, `enrich-episode-description` (edge function já existente para "Inserir na descrição IA")
-
----
-
-## Perguntas em aberto
-
-1. **Capa**: usar o mesmo `cover-generator.ts` procedural já existente, ou o pipeline de IA de imagem? (vou assumir o procedural vigente — confirma?)
-2. **Spotify for Creators**: link estático para `https://creators.spotify.com/` ou deep-link específico do show?
-3. **Baixar pacote ZIP**: incluir MP3 só quando houver upload no OneDrive, senão só capa+descrição.txt — ok?
+7. Validação final
+- Testar o fluxo: criar pelo `+` na Pré-produção, preencher insumo, gerar pauta, gerar título/descrição/capa, fechar e recarregar.
+- Confirmar que o item aparece na Pré-produção e na aba Calendário na data correta.
+- Confirmar que reabrir o item restaura rascunho e resultado final sem perda de campos.

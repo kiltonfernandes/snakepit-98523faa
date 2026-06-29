@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -58,6 +58,16 @@ import { getEffectivePautaStatus } from '@/lib/episode-status';
 import { STANDALONE_TOPIC_META } from '@/lib/standalone-prompts';
 import type { StandaloneTopic } from '@/lib/types';
 import { NovaPautaWizard } from '@/components/pautas/NovaPautaWizard';
+import {
+  PREPROD_KIND_LABEL,
+  getPreprodLabel,
+  getPreprodStatusClass,
+  getPreprodStatusLabel,
+  inferPreprodStatus,
+  normalizePreprodPauta,
+  preprodDate,
+  type PreprodPauta,
+} from '@/lib/preprod-calendar';
 import JSZip from 'jszip';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -114,9 +124,49 @@ export default function CalendarView() {
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
   const [previewFontSize, setPreviewFontSize] = useState(16);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
+  const [preprodPautas, setPreprodPautas] = useState<PreprodPauta[]>([]);
 
   // Create-pauta wizard (opened from "+" on a calendar day)
   const [createDate, setCreateDate] = useState<string | null>(null);
+
+  const loadPreprodPautas = useCallback(async () => {
+    const { data, error } = await supabase
+      .from('preprod_pautas')
+      .select('*')
+      .order('publication_date', { ascending: true })
+      .order('created_at', { ascending: true });
+    if (error) {
+      toast.error('Falha ao carregar pré-produção: ' + error.message);
+      return;
+    }
+    setPreprodPautas(((data || []) as any[]).map(normalizePreprodPauta));
+  }, []);
+
+  useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('calendar-preprod-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'preprod_pautas' }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          const id = (payload.old as any)?.id;
+          if (id) setPreprodPautas((prev) => prev.filter((p) => p.id !== id));
+          return;
+        }
+        if (payload.new) {
+          const normalized = normalizePreprodPauta(payload.new);
+          setPreprodPautas((prev) => {
+            const idx = prev.findIndex((p) => p.id === normalized.id);
+            if (idx === -1) return [...prev, normalized].sort((a, b) => `${a.publication_date}${a.created_at}`.localeCompare(`${b.publication_date}${b.created_at}`));
+            const next = [...prev];
+            next[idx] = normalized;
+            return next;
+          });
+        }
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, []);
 
   // Cover generation inline state
   const [coverDialogOpen, setCoverDialogOpen] = useState(false);
@@ -197,9 +247,10 @@ export default function CalendarView() {
     }
   };
 
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const fmt = (d: Date) => preprodDate(d);
 
   const getPautasForDate = (dateStr: string) => pautas.filter((p) => p.publication_date === dateStr);
+  const getPreprodForDate = (dateStr: string) => preprodPautas.filter((p) => preprodDate(p.publication_date) === dateStr);
 
   const getUnlinkedMaterialsForDate = (dateStr: string) =>
     materials.filter((m) => m.episode_date === dateStr && !m.source_pauta_id);
@@ -224,13 +275,23 @@ export default function CalendarView() {
   const getItemsForDate = (dateStr: string) => {
     const items: {
       key: string;
-      type: 'pauta' | 'material' | 'release';
+      type: 'pauta' | 'material' | 'release' | 'preprod';
       data: any;
       pauta: Pauta | null;
       material: EpisodeMaterial | null;
     }[] = [];
 
     if (showPautas) {
+      getPreprodForDate(dateStr).forEach((p) => {
+        items.push({
+          key: `preprod-${p.id}`,
+          type: 'preprod',
+          data: p,
+          pauta: null,
+          material: null,
+        });
+      });
+
       const dayPautas = getPautasForDate(dateStr);
       const dayPautaIds = new Set(dayPautas.map((p) => p.id));
       dayPautas.forEach((p) => {
@@ -604,7 +665,9 @@ export default function CalendarView() {
             <button
               key={item.key}
               className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
-                item.type === 'pauta'
+                item.type === 'preprod'
+                  ? 'border-border bg-primary/5 hover:border-primary/40 hover:bg-primary/10'
+                  : item.type === 'pauta'
                   ? 'border-border bg-muted/60 hover:border-primary/40 hover:bg-muted'
                   : item.type === 'release'
                     ? 'border-border bg-secondary/40 hover:border-primary/30 hover:bg-secondary/60'
@@ -615,11 +678,36 @@ export default function CalendarView() {
                   if (relatedMat) openMaterialModal(relatedMat, item.pauta);
                   else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
                 }
+                else if (item.type === 'preprod') navigate(`/pre-producao?preprod=${item.data.id}`);
                 else if (item.type === 'material') openMaterialModal(item.data, item.pauta);
                 else openReleaseModal(item.data);
               }}
             >
-              {item.type === 'pauta' ? (
+              {item.type === 'preprod' ? (
+                <div className="space-y-1">
+                  {(() => {
+                    const status = inferPreprodStatus(item.data);
+                    return (
+                      <div className="flex items-start gap-1.5">
+                        {item.data.data?.cover_url ? (
+                          <img src={item.data.data.cover_url} alt="" className="h-7 w-7 rounded-sm object-cover shrink-0" />
+                        ) : (
+                          <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <span className="block truncate text-[10px] font-semibold text-foreground">{getPreprodLabel(item.data)}</span>
+                          <div className="flex items-center gap-2">
+                            <span className={`h-2 w-2 rounded-full shrink-0 ${getPreprodStatusClass(status)}`} />
+                            <span className="truncate text-[10px] font-medium text-foreground">
+                              Pré-prod · {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              ) : item.type === 'pauta' ? (
                 <div className="space-y-1">
                   {(() => {
                     const mat = relatedMat;
