@@ -1,5 +1,5 @@
 import {
-  LayoutDashboard, Disc, FileText, Palette, Mic, Calendar, Settings, BarChart3
+  LayoutDashboard, Disc, Palette, Mic, Calendar, Settings, BarChart3, Hammer
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
@@ -21,8 +21,7 @@ import {
 const navItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Lançamentos', url: '/releases', icon: Disc },
-  { title: 'Pautas', url: '/pautas', icon: FileText },
-  { title: 'Materiais', url: '/materials', icon: Palette },
+  { title: 'Pré-produção', url: '/pre-producao', icon: Hammer },
   { title: 'Rivaldo', url: '/rivaldo', icon: Mic },
   { title: 'Calendário', url: '/calendar', icon: Calendar },
   { title: 'Analytics', url: '/analytics', icon: BarChart3 },
@@ -57,7 +56,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Produção</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.slice(0, 5).map((item) => (
+              {navItems.slice(0, 4).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location.pathname === item.url}>
                     <NavLink
@@ -80,7 +79,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Sistema</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.slice(5).map((item) => (
+              {navItems.slice(4).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location.pathname === item.url}>
                     <NavLink
