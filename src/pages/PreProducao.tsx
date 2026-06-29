@@ -316,6 +316,16 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
   const [result, setResult] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  // Títulos / descrição / capa
+  const [titles, setTitles] = useState<GeneratedTitle[]>([]);
+  const [selectedTitle, setSelectedTitle] = useState<string>('');
+  const [titlesLoading, setTitlesLoading] = useState(false);
+  const [mentioned, setMentioned] = useState<string>('');
+  const [descriptionHtml, setDescriptionHtml] = useState<string>('');
+  const [descLoading, setDescLoading] = useState(false);
+  const [coverImageUrl, setCoverImageUrl] = useState<string>('');
+  const [coverDataUrl, setCoverDataUrl] = useState<string>('');
+  const [coverGenerating, setCoverGenerating] = useState(false);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
@@ -332,6 +342,8 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
       setResult('');
       setManualMode(false);
       setGenerating(false);
+      setTitles([]); setSelectedTitle(''); setMentioned('');
+      setDescriptionHtml(''); setCoverImageUrl(''); setCoverDataUrl('');
       return;
     }
     let cancelled = false;
