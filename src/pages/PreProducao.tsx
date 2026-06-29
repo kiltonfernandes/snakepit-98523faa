@@ -1160,6 +1160,18 @@ function NewPautaDialog({ date, onClose }: { date: Date | null; onClose: () => v
                   className="mt-1 h-9 text-sm"
                 />
               </div>
+              {coverImageUrl.trim() && /^https?:\/\//i.test(coverImageUrl.trim()) && (
+                <div className="space-y-1">
+                  <Label className="text-[11px] uppercase text-muted-foreground">Pré-visualização da imagem original</Label>
+                  <img
+                    src={coverImageUrl}
+                    alt="Preview da imagem original"
+                    className="w-full max-w-xs mx-auto rounded-md border border-border object-contain bg-muted"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                    onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'block'; }}
+                  />
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <Button size="sm" variant="outline" onClick={() => {
                   const q = selectedRelease ? `${selectedRelease.artist} ${selectedRelease.album} band photo` : selectedTitle;
