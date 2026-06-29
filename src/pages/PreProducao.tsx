@@ -1091,7 +1091,7 @@ function NewPautaDialog({
 
               {selectedRelease && (
                 <div className="flex justify-end pt-2">
-                  <Button size="sm" className="gap-2" onClick={() => setStep('research')}>
+                  <Button size="sm" className="gap-2" onClick={() => goToStep('research')}>
                     Seguir <ArrowRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1103,7 +1103,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Pesquisa</div>
-                <button onClick={() => setStep('release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar
                 </button>
               </div>
@@ -1143,7 +1143,7 @@ function NewPautaDialog({
                 </button>
               </div>
               <div className="flex justify-end pt-1">
-                <Button size="sm" variant="ghost" onClick={() => setStep('insumo')}>Pular para insumo</Button>
+                <Button size="sm" variant="ghost" onClick={() => goToStep('insumo', { research_query: researchQuery })}>Pular para insumo</Button>
               </div>
             </div>
           )}
@@ -1152,7 +1152,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Insumo</div>
-                <button onClick={() => setStep('research')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('research', { insumo })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar à pesquisa
                 </button>
               </div>
@@ -1165,7 +1165,7 @@ function NewPautaDialog({
                 className="text-sm"
               />
               <div className="flex justify-end pt-1">
-                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => { persistData({ insumo }); setStep('config'); }}>
+                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => goToStep('config', { insumo })}>
                   Seguir <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -1176,7 +1176,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-5">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Configuração da pauta</div>
-                <button onClick={() => setStep('insumo')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('insumo', { length_words: lengthWords, sentiment })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar ao insumo
                 </button>
               </div>
@@ -1213,7 +1213,7 @@ function NewPautaDialog({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <button
                   type="button"
-                  onClick={() => { setManualMode(true); persistData({ length_words: lengthWords, sentiment, mode: 'manual' }); toast.info('Modo manual — próximos passos em construção.'); }}
+                  onClick={() => { setManualMode(true); persistData({ length_words: lengthWords, sentiment, mode: 'manual', step: 'config' }); toast.info('Modo manual — próximos passos em construção.'); }}
                   className="rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-4 text-left flex items-start gap-3"
                 >
                   <Hammer className="h-5 w-5 text-primary mt-0.5" />
@@ -1251,7 +1251,7 @@ function NewPautaDialog({
                   Resultado · <span className="text-muted-foreground">{countWords(result)} palavras</span>
                   <span className="text-muted-foreground"> / alvo {lengthWords}</span>
                 </div>
-                <button onClick={() => setStep('config')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('config', { result_markdown: result })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar
                 </button>
               </div>
@@ -1264,7 +1264,7 @@ function NewPautaDialog({
                   {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                   Regenerar
                 </Button>
-                <Button size="sm" disabled={generating || !result.trim()} onClick={() => setStep('titles')} className="gap-2">
+                <Button size="sm" disabled={generating || !result.trim()} onClick={() => goToStep('titles', { result_markdown: result })} className="gap-2">
                   Próximo: títulos <ArrowRight className="h-4 w-4" />
                 </Button>
               </div>
@@ -1275,7 +1275,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Títulos · 3 opções</div>
-                <button onClick={() => setStep('result')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('result', { titles, selected_title: selectedTitle })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar à pauta
                 </button>
               </div>
@@ -1343,7 +1343,7 @@ function NewPautaDialog({
                       {titlesLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                       Regenerar
                     </Button>
-                    <Button size="sm" disabled={!selectedTitle} onClick={() => setStep('description')} className="gap-2">
+                    <Button size="sm" disabled={!selectedTitle} onClick={() => goToStep('description', { titles, selected_title: selectedTitle, title_label_on: titleLabelOn })} className="gap-2">
                       Próximo: descrição <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1356,7 +1356,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Descrição HTML</div>
-                <button onClick={() => setStep('titles')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('titles', { mentioned, description_html: descriptionHtml })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar a títulos
                 </button>
               </div>
@@ -1407,7 +1407,7 @@ function NewPautaDialog({
                     />
                   </div>
                   <div className="flex items-center justify-end">
-                    <Button size="sm" onClick={() => setStep('cover')} className="gap-2">
+                    <Button size="sm" onClick={() => goToStep('cover', { mentioned, description_html: descriptionHtml })} className="gap-2">
                       Próximo: capa <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1420,7 +1420,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Capa do episódio</div>
-                <button onClick={() => setStep('description')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('description', { cover_source_url: coverImageUrl, cover_url: coverDataUrl })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar à descrição
                 </button>
               </div>
@@ -1464,7 +1464,7 @@ function NewPautaDialog({
                     <Button size="sm" variant="outline" onClick={downloadCover} className="gap-2">
                       <Download className="h-4 w-4" /> Baixar capa
                     </Button>
-                    <Button size="sm" onClick={() => setStep('package')} className="gap-2">
+                    <Button size="sm" onClick={() => goToStep('package', { cover_url: coverDataUrl, cover_source_url: coverImageUrl, packaged_at: new Date().toISOString() })} className="gap-2">
                       Próximo: pacote <ArrowRight className="h-4 w-4" />
                     </Button>
                   </div>
@@ -1472,7 +1472,7 @@ function NewPautaDialog({
               )}
               {!coverDataUrl && (
                 <div className="flex items-center justify-end">
-                  <Button size="sm" variant="ghost" onClick={() => setStep('package')}>Pular capa</Button>
+                  <Button size="sm" variant="ghost" onClick={() => goToStep('package', { cover_source_url: coverImageUrl, packaged_at: new Date().toISOString() })}>Pular capa</Button>
                 </div>
               )}
             </div>
@@ -1485,7 +1485,7 @@ function NewPautaDialog({
                   <div className="text-base font-semibold">Pacote do episódio</div>
                   <div className="text-xs text-muted-foreground">Copie título e HTML, baixe a capa e atualize o link do Spotify.</div>
                 </div>
-                <button onClick={() => setStep('cover')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep('cover', { selected_title: selectedTitle, description_html: descriptionHtml, mentioned })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar
                 </button>
               </div>
@@ -1540,7 +1540,7 @@ function NewPautaDialog({
                       <Button size="sm" variant="outline" className="gap-1.5" disabled={!coverDataUrl} onClick={downloadCover}>
                         <Download className="h-3.5 w-3.5" /> Baixar
                       </Button>
-                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setStep('cover')}>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => goToStep('cover', { selected_title: selectedTitle, description_html: descriptionHtml, mentioned })}>
                         <Sparkles className="h-3.5 w-3.5" /> Gerar
                       </Button>
                     </div>
