@@ -51,6 +51,8 @@ export function getPreprodLabel(item: Pick<PreprodPauta, 'kind' | 'data'>): stri
 
 export function getPreprodStatusLabel(status?: string): string {
   switch (status) {
+    case 'ready':
+      return 'Pronto';
     case 'final':
     case 'finalized':
     case 'packaged':
@@ -72,6 +74,8 @@ export function getPreprodStatusLabel(status?: string): string {
 
 export function getPreprodStatusClass(status?: string): string {
   switch (status) {
+    case 'ready':
+      return 'bg-emerald-500';
     case 'final':
     case 'finalized':
     case 'packaged':
@@ -90,6 +94,7 @@ export function getPreprodStatusClass(status?: string): string {
 
 export function inferPreprodStatus(item: Pick<PreprodPauta, 'status' | 'data'>): string {
   const data = item.data || {};
+  if (item.status === 'ready' || data.finalized_at) return 'ready';
   if (data.cover_url || data.packaged_at || data.step === 'package') return 'packaged';
   if (data.description_html) return 'description';
   if (data.selected_title || (Array.isArray(data.titles) && data.titles.length > 0)) return 'titles';
