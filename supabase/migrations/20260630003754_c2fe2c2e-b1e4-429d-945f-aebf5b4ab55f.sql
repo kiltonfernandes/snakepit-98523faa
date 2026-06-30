@@ -1,0 +1,1 @@
+UPDATE preprod_pautas SET data = data - 'cover_url' WHERE jsonb_typeof(data->'cover_url') = 'string' AND left(data->>'cover_url', 5) = 'data:' AND length(data->>'cover_url') > 200000;
