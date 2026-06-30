@@ -988,13 +988,10 @@ function NewPautaDialog({
   };
 
   const closeKeepingDraft = async () => {
-    console.log('[DBG] closeKeepingDraft start pautaId=', pautaId, 'step=', step);
     if (pautaId) {
-      try { await persistData({ step }); } catch (e) { console.log('[DBG] persist threw', e); }
+      try { await persistData({ step }); } catch { /* tolerated */ }
     }
-    console.log('[DBG] closeKeepingDraft calling onClose');
     onClose();
-    console.log('[DBG] closeKeepingDraft after onClose');
   };
 
   const handleOpenChange = (open: boolean) => {
