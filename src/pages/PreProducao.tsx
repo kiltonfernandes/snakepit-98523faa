@@ -1599,7 +1599,20 @@ function NewPautaDialog({
             <Button variant="ghost" className="text-destructive hover:text-destructive gap-2" onClick={() => setConfirmDiscard(true)}>
               <Trash2 className="h-4 w-4" /> Descartar
             </Button>
-            <Button variant="outline" onClick={() => void closeKeepingDraft()}>Fechar (manter rascunho)</Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => void closeKeepingDraft()}>Fechar (manter rascunho)</Button>
+              {step === 'package' && (
+                <Button
+                  onClick={async () => {
+                    await persistData({ step: 'package', finalized_at: new Date().toISOString() }, 'ready');
+                    toast.success('Pauta marcada como pronta.');
+                    setOpen(false);
+                  }}
+                >
+                  Salvar como pronto
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>
