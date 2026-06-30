@@ -1614,12 +1614,9 @@ function NewPautaDialog({
               {step === 'package' && (
                 <Button
                   onClick={async () => {
-                    console.log('[DBG] Salvar como pronto clicked');
                     await persistData({ step: 'package', finalized_at: new Date().toISOString() }, 'ready');
-                    console.log('[DBG] persistData(ready) done');
                     toast.success('Pauta marcada como pronta.');
                     onClose();
-                    console.log('[DBG] Salvar onClose called');
                   }}
                 >
                   Salvar como pronto
