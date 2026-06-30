@@ -683,11 +683,17 @@ function NewPautaDialog({
       mentioned,
       description_html: descriptionHtml,
       cover_source_url: coverImageUrl,
-      cover_url: coverDataUrl,
+      // cover_url intentionally excluded when it's a base64 data URL — JSONB column
+      // cannot handle multi-MB blobs (causes update to hang / payload errors).
+      cover_url: coverDataUrl && !coverDataUrl.startsWith('data:') ? coverDataUrl : undefined,
       step: nextStep,
     };
     const rawNextData = { ...latestDataRef.current, ...base, ...patch };
     const nextData = Object.fromEntries(Object.entries(rawNextData).filter(([, value]) => value !== undefined));
+    // Safety net: also strip any pre-existing oversized base64 cover_url loaded from DB.
+    if (typeof nextData.cover_url === 'string' && nextData.cover_url.startsWith('data:') && nextData.cover_url.length > 200_000) {
+      delete nextData.cover_url;
+    }
     setPersistedData(nextData);
     latestDataRef.current = nextData;
     const status = explicitStatus || inferPreprodStatus({ status: 'draft', data: nextData });
