@@ -820,10 +820,12 @@ function NewPautaDialog({
         onChunk: (full) => setResult(full),
       });
       // Length adjustment loop — single retry if outside ±15%.
+      // Se o campo length estiver vazio, faz bypass desse passo.
       const actual = countWords(text);
+      const lengthProvided = lengthWords.trim() !== '';
       const lo = Math.floor(lengthWordsNum * 0.85);
       const hi = Math.ceil(lengthWordsNum * 1.15);
-      if (actual < lo || actual > hi) {
+      if (lengthProvided && (actual < lo || actual > hi)) {
         progress.pushAttempt({ model: `▶ Ajuste de tamanho (${actual} → ~${lengthWordsNum})`, status: 'trying' });
         const adjusted = await streamGeneratePauta({
           prompt: buildLengthAdjustPrompt(text, lengthWordsNum),
