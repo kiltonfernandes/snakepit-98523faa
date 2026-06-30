@@ -1755,7 +1755,7 @@ function NewPautaDialog({
                 </div>
               )}
               {selectedTitle && (
-                <h1 className="text-2xl font-bold mb-6 text-foreground" style={{ fontSize: `${previewFontSize * 1.6}px` }}>{selectedTitle}</h1>
+                <h1 className="text-2xl font-bold mb-6 text-foreground">{selectedTitle}</h1>
               )}
               <MarkdownView text={result} />
             </div>
