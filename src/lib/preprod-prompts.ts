@@ -147,6 +147,17 @@ Inclua uma seção final com **Resumo** (≈50 palavras) e **Recomendações** �
 
 # 📥 INPUTS
 
+## ⚖️ HIERARQUIA DE PESO DAS FONTES (MANDATÓRIO)
+
+O **INSUMO** (direção editorial / pesquisa) tem **PESO 3 (TRIPLO)** em relação a todo o resto deste prompt padrão. Ele é o **núcleo factual e editorial da review** e DEVE estar presente, visível e estruturalmente integrado à pauta final.
+
+Regras de aplicação:
+- Tudo o que o INSUMO afirma é **fonte primária**; o restante do prompt é andaime estrutural.
+- Se houver conflito entre o INSUMO e o conhecimento geral do modelo, **o INSUMO vence**.
+- Cada bloco H1/H2/H3 deve absorver e refletir explicitamente os pontos do INSUMO quando aplicáveis — não cite o INSUMO como "segundo a pesquisa"; **integre o conteúdo como parte natural da análise**.
+- Nenhum fato relevante do INSUMO pode ficar de fora da pauta final. Se algo do INSUMO não couber em um bloco existente, abra um sub-bloco para acomodá-lo.
+- O prompt padrão define a **forma**; o INSUMO define a **substância**.
+
 ## 💿 Disco alvo
 {{input}}
 
@@ -158,6 +169,8 @@ Inclua uma seção final com **Resumo** (≈50 palavras) e **Recomendações** �
 
 ## 🧠 Direção editorial / Insumo da pesquisa
 {{notes}}
+
+> ⚠️ LEMBRETE FINAL: O INSUMO acima tem peso 3x. É o core da review. Releia antes de fechar a auditoria e confirme que cada ponto factual do INSUMO foi incorporado à pauta.
 
 # 🚨 AUDITORIA FINAL AUTOMÁTICA
 
