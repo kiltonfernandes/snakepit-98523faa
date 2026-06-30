@@ -1606,7 +1606,7 @@ function NewPautaDialog({
                   onClick={async () => {
                     await persistData({ step: 'package', finalized_at: new Date().toISOString() }, 'ready');
                     toast.success('Pauta marcada como pronta.');
-                    setOpen(false);
+                    onClose();
                   }}
                 >
                   Salvar como pronto
