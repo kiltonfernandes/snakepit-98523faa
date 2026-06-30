@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -41,6 +41,7 @@ import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
+import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -511,6 +512,8 @@ function NewPautaDialog({
   const [persistedData, setPersistedData] = useState<Record<string, any>>({});
   const latestDataRef = useRef<Record<string, any>>({});
   const saveSeqRef = useRef(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFontSize, setPreviewFontSize] = useState(16);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
