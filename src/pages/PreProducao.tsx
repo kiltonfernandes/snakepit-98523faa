@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -41,6 +41,7 @@ import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
+import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -511,6 +512,8 @@ function NewPautaDialog({
   const [persistedData, setPersistedData] = useState<Record<string, any>>({});
   const latestDataRef = useRef<Record<string, any>>({});
   const saveSeqRef = useRef(0);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFontSize, setPreviewFontSize] = useState(16);
 
   // Create the draft row in DB the moment the dialog opens
   useEffect(() => {
@@ -1593,10 +1596,50 @@ function NewPautaDialog({
                   </div>
                   <div className="rounded-lg border border-border bg-card/40 p-3 space-y-1.5">
                     <Label className="text-[11px] uppercase text-muted-foreground">Ações rápidas</Label>
-                    <Button size="sm" variant="ghost" className="w-full justify-start gap-2" onClick={() => copy(`${selectedTitle}\n\n${descriptionHtml}`, 'Pacote copiado.')}>
+                    <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => setPreviewOpen(true)} disabled={!result.trim()}>
+                      <Eye className="h-4 w-4" /> Visualizar pauta
+                    </Button>
+                    <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => copy(`${selectedTitle}\n\n${descriptionHtml}`, 'Pacote copiado.')}>
                       <Package className="h-4 w-4" /> Copiar título + HTML
                     </Button>
-                    <Button size="sm" variant="ghost" className="w-full justify-start gap-2" onClick={() => window.open('https://creators.spotify.com/', '_blank', 'noopener')}>
+                    <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => {
+                      const dateStr = effectiveDate ? format(effectiveDate, 'yyyy-MM-dd') : '';
+                      const url = `${window.location.origin}/calendar${dateStr ? `?date=${dateStr}` : ''}`;
+                      copy(url, 'Link copiado.');
+                    }}>
+                      <Share2 className="h-4 w-4" /> Copiar link compartilhável
+                    </Button>
+                    <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => {
+                      const dateStr = effectiveDate ? format(effectiveDate, 'yyyy-MM-dd') : '';
+                      navigate(`/calendar${dateStr ? `?date=${dateStr}` : ''}`);
+                      onClose();
+                    }}>
+                      <FileText className="h-4 w-4" /> Abrir workspace
+                    </Button>
+                    <Button size="sm" variant="outline" className="w-full justify-start gap-2" onClick={() => {
+                      const dateStr = effectiveDate ? format(effectiveDate, 'yyyy-MM-dd') : 'pauta';
+                      const safe = (selectedTitle || 'pauta').replace(/[^\w\-]+/g, '_').slice(0, 60);
+                      const blob = new Blob([
+                        `TÍTULO\n${selectedTitle}\n\n`,
+                        `DESCRIÇÃO (HTML)\n${descriptionHtml}\n\n`,
+                        `MENCIONADO\n${mentioned || '(vazio)'}\n\n`,
+                        coverDataUrl ? `CAPA: incorporada como ${safe}_${dateStr}.png\n` : '',
+                        `\nPAUTA (Markdown)\n${result}\n`,
+                      ], { type: 'text/plain;charset=utf-8' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = `${safe}_${dateStr}.txt`;
+                      document.body.appendChild(a); a.click(); a.remove();
+                      URL.revokeObjectURL(url);
+                      if (coverDataUrl) {
+                        const b = document.createElement('a');
+                        b.href = coverDataUrl; b.download = `${safe}_${dateStr}.png`;
+                        document.body.appendChild(b); b.click(); b.remove();
+                      }
+                    }}>
+                      <Download className="h-4 w-4" /> Baixar pacote (capa + descrição)
+                    </Button>
+                    <Button size="sm" className="w-full justify-start gap-2" onClick={() => window.open('https://creators.spotify.com/', '_blank', 'noopener')}>
                       <ExternalLink className="h-4 w-4" /> Spotify for Creators
                     </Button>
                   </div>
@@ -1647,6 +1690,50 @@ function NewPautaDialog({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-none w-screen h-screen p-0 gap-0 sm:rounded-none">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card/60">
+            <div className="text-[11px] text-muted-foreground">Visualização da Pauta · {previewFontSize}px</div>
+            <div className="flex items-center gap-1">
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setPreviewFontSize((s) => Math.max(10, s - 2))}>
+                <ZoomOut className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8" onClick={() => setPreviewFontSize(16)}>Reset</Button>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setPreviewFontSize((s) => Math.min(32, s + 2))}>
+                <ZoomIn className="h-4 w-4" />
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 ml-2" onClick={() => setPreviewOpen(false)}>Fechar</Button>
+            </div>
+          </div>
+          <ScrollArea className="h-[calc(100vh-40px)]">
+            <div className="max-w-4xl mx-auto px-8 py-8" style={{ fontSize: `${previewFontSize}px` }}>
+              <div className="text-center mb-6">
+                <div className="text-sm tracking-[0.3em] font-semibold text-foreground">SNAKEPIT · AVULSO</div>
+                {effectiveDate && (
+                  <div className="text-xs text-muted-foreground mt-1">{format(effectiveDate, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</div>
+                )}
+              </div>
+              <hr className="border-border mb-6" />
+              {kind && (
+                <div className="inline-flex items-center gap-2 mb-4">
+                  <Disc className="h-4 w-4 text-primary" />
+                  <span className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">{PREPROD_KIND_LABEL[kind]}</span>
+                </div>
+              )}
+              {selectedRelease && (
+                <div className="mb-4">
+                  <ReleaseLinkBar release={selectedRelease} />
+                </div>
+              )}
+              {selectedTitle && (
+                <h1 className="text-2xl font-bold mb-6 text-foreground" style={{ fontSize: `${previewFontSize * 1.6}px` }}>{selectedTitle}</h1>
+              )}
+              <MarkdownView text={result} />
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
