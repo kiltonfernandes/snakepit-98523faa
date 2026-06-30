@@ -1559,10 +1559,37 @@ function NewPautaDialog({
                   <div className="rounded-lg border border-border bg-card/40 p-3">
                     <div className="flex items-center justify-between mb-2">
                       <Label className="text-[11px] uppercase text-muted-foreground gap-1.5 inline-flex items-center">🎙️ Mencionado no Episódio</Label>
-                      <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" className="h-7" onClick={() => persistData({ mentioned })}>Salvar</Button>
-                        <Button size="sm" variant="ghost" className="h-7" onClick={() => { setMentioned(''); persistData({ mentioned: '' }); }}>Limpar</Button>
-                      </div>
+                       <div className="flex items-center gap-1">
+                         <Button size="sm" variant="ghost" className="h-7" onClick={() => {
+                           const items = (mentioned || '')
+                             .split(/\r?\n/)
+                             .map((l) => l.trim())
+                             .filter(Boolean);
+                           let sectionHtml = '';
+                           if (items.length > 0) {
+                             const lis = items.map((line) => {
+                               const urlMatch = line.match(/https?:\/\/\S+/);
+                               if (urlMatch) {
+                                 const url = urlMatch[0];
+                                 const label = line.replace(url, '').trim() || url;
+                                 return `<li>🔗 <a href="${url}" target="_blank" rel="noopener">${label}</a></li>`;
+                               }
+                               return `<li>🎵 ${line}</li>`;
+                             }).join('\n');
+                             sectionHtml = `<h3>🎙️ Mencionado neste episódio</h3>\n<ul>\n${lis}\n</ul>`;
+                           }
+                           const newHtml = injectMentionedSection(descriptionHtml || '', sectionHtml);
+                           setDescriptionHtml(newHtml);
+                           persistData({ mentioned, description_html: newHtml });
+                           toast.success('Mencionado embutido na descrição.');
+                         }}>Salvar</Button>
+                         <Button size="sm" variant="ghost" className="h-7" onClick={() => {
+                           const cleaned = injectMentionedSection(descriptionHtml || '', '');
+                           setMentioned('');
+                           setDescriptionHtml(cleaned);
+                           persistData({ mentioned: '', description_html: cleaned });
+                         }}>Limpar</Button>
+                       </div>
                     </div>
                     <Textarea value={mentioned} onChange={(e) => setMentioned(e.target.value)} rows={4} placeholder="Cole links, vídeos ou assuntos…" className="text-sm" />
                   </div>
@@ -1707,8 +1734,8 @@ function NewPautaDialog({
               <Button size="sm" variant="outline" className="h-8 ml-2" onClick={() => setPreviewOpen(false)}>Fechar</Button>
             </div>
           </div>
-          <ScrollArea className="h-[calc(100vh-40px)]">
-            <div className="max-w-4xl mx-auto px-8 py-8" style={{ fontSize: `${previewFontSize}px` }}>
+           <ScrollArea className="h-[calc(100vh-40px)]">
+             <div className="max-w-4xl mx-auto px-8 py-8" style={{ zoom: previewFontSize / 16 } as React.CSSProperties}>
               <div className="text-center mb-6">
                 <div className="text-sm tracking-[0.3em] font-semibold text-foreground">SNAKEPIT · AVULSO</div>
                 {effectiveDate && (
