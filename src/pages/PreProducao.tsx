@@ -142,6 +142,7 @@ export default function PreProducao() {
   }, [preprodPautas]);
 
   const closeDialog = () => {
+    console.log('[DBG] closeDialog called');
     setNewPautaDate(null);
     setEditingPauta(null);
   };
