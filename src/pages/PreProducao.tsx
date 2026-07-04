@@ -566,6 +566,7 @@ function NewPautaDialog({
       setNewsSubject('');
       setResearchQuery('');
       setInsumo('');
+      setSinglesSelection([]);
       setLengthWords('500');
       setSentiment('neutral');
       setResult('');
@@ -588,6 +589,7 @@ function NewPautaDialog({
       setNewsSubject(data.news_subject || '');
       setResearchQuery(data.research_query || '');
       setInsumo(data.insumo || '');
+      setSinglesSelection(Array.isArray(data.singles_selection) ? data.singles_selection : []);
       setLengthWords(String(data.length_words || '500'));
       setSentiment((data.sentiment as ReviewSentiment) || 'neutral');
       setResult(data.result_markdown || '');
