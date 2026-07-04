@@ -641,7 +641,7 @@ function NewPautaDialog({
   const pickKind = async (k: PreprodKind) => {
     if (!pautaId) return;
     setKind(k);
-    const nextStep: Step = k === 'news' ? 'news_subject' : 'release';
+    const nextStep: Step = k === 'news' ? 'news_subject' : k === 'singles' ? 'singles_pick' : 'release';
     setStep(nextStep);
     const nextData = { ...latestDataRef.current, step: nextStep };
     setPersistedData(nextData);
