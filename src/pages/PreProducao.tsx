@@ -693,9 +693,13 @@ function NewPautaDialog({
   useEffect(() => {
     if (step !== 'research') return;
     if (researchQuery.trim()) return;
+    if (kind === 'news') {
+      if (newsSubject.trim()) setResearchQuery(buildNewsSearchQuery(newsSubject));
+      return;
+    }
     const r = selectedRelease;
     const year = r?.release_date ? String(r.release_date).slice(0, 4) : '';
-    const key = kind === 'news' ? 'standalone.news.with_release' : 'standalone.review.with_release';
+    const key = 'standalone.review.with_release';
     const q = renderQueryTemplate(key, {
       artist: r?.artist || '',
       album: r?.album || '',
@@ -703,7 +707,7 @@ function NewPautaDialog({
       notes: '',
     });
     setResearchQuery(q);
-  }, [step, selectedRelease, kind, researchQuery]);
+  }, [step, selectedRelease, kind, researchQuery, newsSubject]);
 
   const persistData = async (patch: Record<string, any>, explicitStatus?: string) => {
     if (!pautaId) return;
