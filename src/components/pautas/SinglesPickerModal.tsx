@@ -357,19 +357,19 @@ function AddChannelForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
           feed = feed_url || '';
         } else {
           const e = await resp.json().catch(() => ({}));
-          toast.error(e.message || e.error || `Erro ${resp.status} ao resolver canal.`);
+          toast.warning((e.message || e.error || `Erro ${resp.status}`) + ' — canal salvo, resolva o feed depois.');
         }
       }
-      if (!feed) { toast.error('Cole o Channel ID (UC…) ou o feed RSS manualmente.'); setSaving(false); return; }
       const { error } = await supabase.from('youtube_channels').insert({
         name: name.trim(),
         channel_url: channelUrl.trim(),
-        feed_url: feed,
+        feed_url: feed || null,
+        channel_id: cid || null,
         monitor_days: monitorDays,
         active: true,
-      });
+      } as any);
       if (error) { toast.error('Falha ao salvar: ' + error.message); return; }
-      toast.success('Canal cadastrado.');
+      toast.success(feed ? 'Canal cadastrado.' : 'Canal cadastrado (sem feed resolvido — informe o Channel ID depois).');
       onCreated();
     } finally {
       setSaving(false);
