@@ -51,8 +51,9 @@ serve(async (req) => {
           user,
           temperature: 0.2,
           maxTokens: 400,
-          webSearch: false,
-          deadlineMs: 20_000,
+          webSearch: true,
+          models: ["deepseek/deepseek-v4-pro"],
+          deadlineMs: 45_000,
         });
         const obj = parseJsonLoose(text || "");
         if (obj) {
