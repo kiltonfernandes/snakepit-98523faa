@@ -107,6 +107,28 @@ export default function PreProducao() {
     });
   }, []);
 
+  const moveItem = useCallback(async (id: string, newDate: Date) => {
+    const target = preprodDate(newDate);
+    const current = preprodPautas.find((p) => p.id === id);
+    if (!current || current.publication_date === target) return;
+    // Optimistic update
+    setPreprodPautas((prev) => prev.map((p) => p.id === id ? { ...p, publication_date: target } : p));
+    const { data, error } = await supabase
+      .from('preprod_pautas')
+      .update({ publication_date: target })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) {
+      // Revert
+      setPreprodPautas((prev) => prev.map((p) => p.id === id ? current : p));
+      toast.error('Falha ao mover: ' + error.message);
+      return;
+    }
+    if (data) upsertPreprodPauta(data);
+    toast.success(`Pauta movida para ${format(newDate, "dd 'de' MMMM", { locale: ptBR })}.`);
+  }, [preprodPautas, upsertPreprodPauta]);
+
   useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
 
   useEffect(() => {
@@ -227,8 +249,8 @@ export default function PreProducao() {
         {loadingPautas && <div className="mb-3 text-xs text-muted-foreground">Carregando pautas salvas…</div>}
         {view === 'year' && <YearGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
         {view === 'quarter' && <QuarterGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
-        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
+        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} onMove={moveItem} />}
+        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} onMove={moveItem} />}
         {view === 'day' && <DayView anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onAdd={setNewPautaDate} />}
       </div>
 
