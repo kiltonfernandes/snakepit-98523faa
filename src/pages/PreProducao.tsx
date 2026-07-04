@@ -581,6 +581,7 @@ function NewPautaDialog({
       setKind((item.kind as PreprodKind | null) || null);
       setReleaseId(data.release_id || null);
       setQuery('');
+      setNewsSubject(data.news_subject || '');
       setResearchQuery(data.research_query || '');
       setInsumo(data.insumo || '');
       setLengthWords(String(data.length_words || '500'));
