@@ -1392,8 +1392,8 @@ function NewPautaDialog({
             <div className="py-2 space-y-5">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Configuração da pauta</div>
-                <button onClick={() => goToStep('insumo', { length_words: lengthWords, sentiment })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-                  <ArrowLeft className="h-3 w-3" /> voltar ao insumo
+                <button onClick={() => goToStep(kind === 'singles' ? 'singles_pick' : 'insumo', { length_words: lengthWords, sentiment })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar {kind === 'singles' ? 'aos v\u00eddeos' : 'ao insumo'}
                 </button>
               </div>
 
