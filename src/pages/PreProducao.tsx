@@ -530,6 +530,7 @@ function NewPautaDialog({
   const [newsSubject, setNewsSubject] = useState<string>('');
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
+  const [singlesSelection, setSinglesSelection] = useState<SinglesVideoInput[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [lengthWords, setLengthWords] = useState<string>('500');
   const lengthWordsNum = parseInt(lengthWords, 10) || 500;
