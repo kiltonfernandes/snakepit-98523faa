@@ -1074,7 +1074,7 @@ function NewPautaDialog({
   return (
     <>
       <Dialog open={!!effectiveDate} onOpenChange={handleOpenChange}>
-        <DialogContent className={cn(step === 'package' ? 'max-w-5xl' : 'max-w-2xl', 'max-h-[92vh] overflow-y-auto')}>
+        <DialogContent className={cn((step === 'package' || step === 'singles_pick') ? 'max-w-5xl' : 'max-w-2xl', 'max-h-[92vh] overflow-y-auto')}>
           <DialogHeader>
             <DialogTitle>{item ? 'Editar pauta' : 'Nova pauta'}</DialogTitle>
             <DialogDescription className="capitalize">
