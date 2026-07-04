@@ -494,7 +494,7 @@ function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsBy
 }
 
 // ---------- New Pauta Dialog ----------
-type Step = 'kind' | 'release' | 'news_subject' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
+type Step = 'kind' | 'release' | 'news_subject' | 'singles_pick' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
 
 const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
   clickbait: 'Clickbait',
