@@ -1196,6 +1196,46 @@ function NewPautaDialog({
                 </div>
               )}
             </div>
+            ))
+          )}
+
+          {step === 'news_subject' && kind === 'news' && (
+            <div className="py-2 space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Newspaper className="h-4 w-4 text-primary" />
+                <span className="font-medium">Notícia</span>
+                <button onClick={() => pickKind('review')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                  trocar para Review
+                </button>
+              </div>
+              <div>
+                <Label className="text-[11px] uppercase text-muted-foreground">Assunto da notícia</Label>
+                <Textarea
+                  autoFocus
+                  value={newsSubject}
+                  onChange={(e) => setNewsSubject(e.target.value)}
+                  onBlur={() => persistData({ news_subject: newsSubject })}
+                  rows={3}
+                  placeholder="Ex.: Metallica anuncia nova turnê mundial para 2027, com passagem por SP…"
+                  className="mt-1 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Descreva em 1–3 linhas o que aconteceu. Esse assunto vira o núcleo da pesquisa.</p>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  disabled={!newsSubject.trim()}
+                  onClick={() => {
+                    const q = buildNewsSearchQuery(newsSubject);
+                    setResearchQuery(q);
+                    goToStep('research', { news_subject: newsSubject, research_query: q });
+                  }}
+                >
+                  <Search className="h-4 w-4" /> Buscar notícia
+                </Button>
+              </div>
+            </div>
           )}
 
           {step === 'research' && (
