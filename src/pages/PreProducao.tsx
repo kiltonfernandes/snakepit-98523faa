@@ -713,6 +713,7 @@ function NewPautaDialog({
       release_id: releaseId ?? latestDataRef.current.release_id,
       artist: selectedRelease?.artist ?? latestDataRef.current.artist,
       album: selectedRelease?.album ?? latestDataRef.current.album,
+      news_subject: newsSubject,
       research_query: researchQuery,
       insumo,
       length_words: lengthWords,
