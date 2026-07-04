@@ -1098,6 +1098,7 @@ function NewPautaDialog({
           )}
 
           {step === 'release' && kind && (
+            (kind === 'news' ? null : (
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm">
