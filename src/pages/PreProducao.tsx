@@ -559,6 +559,7 @@ function NewPautaDialog({
       setReleaseId(null);
       setQuery('');
       setStep('kind');
+      setNewsSubject('');
       setResearchQuery('');
       setInsumo('');
       setLengthWords('500');
