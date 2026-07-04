@@ -304,6 +304,90 @@ export function buildNewsSearchQuery(subject: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Singles — pauta segmentada por vídeo/canal do YouTube
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SinglesVideoInput {
+  video_id: string;
+  video_url: string;
+  title: string;
+  band?: string;
+  single?: string;
+  one_liner?: string;
+  insumo?: string;
+}
+
+function metalArchivesSearchUrl(band?: string, single?: string): string {
+  const q = [band, single].filter(Boolean).join(' ').trim() || (band || '');
+  const enc = encodeURIComponent(q);
+  return `https://www.metal-archives.com/search?searchString=${enc}&type=band_name`;
+}
+
+const SINGLES_PROMPT_HEADER = `# 🎵 PAUTA DE SINGLES — HEAVYNAUTA
+
+## Cobertura editorial de um round-up de novos singles de heavy metal, segmentada por vídeo.
+
+Você é o redator-chefe do podcast Heavynauta. Vai produzir a PAUTA COMPLETA de um episódio "Singles" — um round-up dos lançamentos abaixo. O texto final deve ter aproximadamente **{{length_words}} palavras** no total (tolerância ±15%), distribuídas de forma equilibrada entre os singles listados.
+
+# 🧱 REGRAS DE ESTRUTURA (MANDATÓRIAS)
+
+- Saída em **Markdown puro** (sem fences).
+- Um bloco **H1** por single, na ordem fornecida. Cabeçalho: \`# 🎵 {Banda} — {Single}\`.
+- Logo após o H1, uma linha de links no formato: \`[▶️ Ver no YouTube]({video_url}) · [📚 Metal Archives]({ma_url})\`.
+- Dentro de cada bloco, incluir:
+  - \`## 📌 Contexto\` — apresentação do lançamento com base no título/one-liner.
+  - \`## 🔬 Análise\` — leitura crítica curta (som, atmosfera, produção, contexto de cena).
+  - \`## 🎙️ Pauta de gravação\` — bullets prontos pra fala do apresentador, com ganchos e transições. Este bloco DEVE incorporar EXPLICITAMENTE os pontos do INSUMO daquele vídeo — o insumo tem **peso 3x** dentro do bloco correspondente.
+- Ao final de todos os singles, um bloco único de encerramento \`# 🧠 MORAL DA HISTÓRIA\` com a linha começando por \`**PENSE NISSO:**\` e uma pergunta aberta.
+
+# ⚖️ HIERARQUIA DE PESO (MANDATÓRIA)
+
+O **INSUMO** de cada vídeo é fonte primária **DAQUELE BLOCO** — peso 3x. Não misture insumos entre blocos. Se um insumo estiver vazio, sinalize como \`(sem insumo — leitura baseada em título/descrição)\` e siga.
+
+## 📰 Regras editoriais da plataforma
+{{platform_block}}
+`;
+
+export function buildSinglesPautaPrompt(
+  args: { videos: SinglesVideoInput[]; lengthWords: number },
+  settings: Partial<AppSettings> | null | undefined,
+): string {
+  const { videos, lengthWords } = args;
+  const header = SINGLES_PROMPT_HEADER
+    .replace(/\{\{length_words\}\}/g, String(lengthWords))
+    .replace(/\{\{platform_block\}\}/g, buildPlatformBlock(settings));
+
+  const videoBlocks = videos.map((v, i) => {
+    const band = (v.band || '').trim() || '(banda a identificar)';
+    const single = (v.single || '').trim() || '(single a identificar)';
+    const ma = metalArchivesSearchUrl(v.band, v.single);
+    return [
+      `## VÍDEO ${i + 1} — ${band} — ${single}`,
+      `- video_url: ${v.video_url}`,
+      `- ma_url: ${ma}`,
+      `- título original: ${v.title}`,
+      v.one_liner ? `- one_liner: ${v.one_liner}` : '',
+      '',
+      'INSUMO (peso 3x DESTE bloco):',
+      '<<<',
+      (v.insumo || '').trim() || '(vazio — leitura baseada em título/one-liner)',
+      '>>>',
+    ].filter(Boolean).join('\n');
+  }).join('\n\n');
+
+  return [
+    header,
+    '',
+    '# 📥 SINGLES DO EPISÓDIO',
+    '',
+    videoBlocks,
+    '',
+    '# 🎯 COMANDO FINAL',
+    `Produza a pauta segmentada por vídeo em **Markdown puro**, na ordem acima, respeitando os headers exatos (\`# 🎵 {Banda} — {Single}\`) e a linha de links imediatamente abaixo de cada H1. Tamanho total ≈ ${lengthWords} palavras.`,
+  ].join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Títulos (3 opções: clickbait / curiosidade / impacto)
 // ─────────────────────────────────────────────────────────────────────────────
 
