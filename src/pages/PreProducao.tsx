@@ -850,22 +850,29 @@ function NewPautaDialog({
 
   const runGenerateAll = async () => {
     const isNews = kind === 'news';
+    const isSingles = kind === 'singles';
     const release = selectedRelease || null;
-    if (!isNews && !release) { toast.error('Selecione um disco antes.'); return; }
+    if (!isNews && !isSingles && !release) { toast.error('Selecione um disco antes.'); return; }
     if (isNews && !newsSubject.trim()) { toast.error('Preencha o assunto da notícia.'); return; }
-    if (!insumo.trim()) { toast.error(isNews ? 'Preencha a direção da pesquisa.' : 'Preencha o insumo da pesquisa.'); return; }
+    if (isSingles && singlesSelection.length === 0) { toast.error('Selecione ao menos um v\u00eddeo.'); return; }
+    if (!isSingles && !insumo.trim()) { toast.error(isNews ? 'Preencha a direção da pesquisa.' : 'Preencha o insumo da pesquisa.'); return; }
     setManualMode(false);
     setGenerating(true);
     setStep('result');
     setResult('');
-    progress.start(isNews ? 'Gerando pauta de notícia' : 'Gerando review Kilton');
+    progress.start(isSingles ? 'Gerando pauta de singles' : isNews ? 'Gerando pauta de notícia' : 'Gerando review Kilton');
     const banned = (settings?.banned_terms_text || '')
       .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
     const temperature = typeof settings?.brand_tone_temperature === 'number'
       ? Math.max(0, Math.min(1, settings.brand_tone_temperature / 100))
       : 0.7;
     try {
-      const prompt = isNews
+      const prompt = isSingles
+        ? buildSinglesPautaPrompt(
+            { videos: singlesSelection, lengthWords: lengthWordsNum },
+            settings,
+          )
+        : isNews
         ? buildNewsPautaPrompt(
             { subject: newsSubject, insumo, lengthWords: lengthWordsNum },
             settings,
@@ -879,7 +886,7 @@ function NewPautaDialog({
         bannedTerms: banned,
         temperature,
         system: 'Você é o redator-chefe do podcast Heavynauta. Saída em Markdown puro.',
-        label: isNews ? 'Pauta de notícia' : 'Review Kilton',
+        label: isSingles ? 'Pauta de singles' : isNews ? 'Pauta de notícia' : 'Review Kilton',
         progress,
         silentLifecycle: true,
         onChunk: (full) => setResult(full),
