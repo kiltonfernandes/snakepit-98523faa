@@ -405,10 +405,14 @@ export function buildTitlesPrompt(args: {
   pautaMarkdown: string;
   insumo?: string;
   subject?: string;
+  singles?: Array<{ band?: string; single?: string }>;
 }): string {
-  const { release, pautaMarkdown, insumo, subject } = args;
-  const band = release?.artist || (subject ? '(notícia)' : '(banda)');
-  const album = release?.album || (subject || '(álbum)');
+  const { release, pautaMarkdown, insumo, subject, singles } = args;
+  const singlesLine = singles && singles.length > 0
+    ? singles.map(s => `${s.band || '?'} — ${s.single || '?'}`).join(' | ')
+    : '';
+  const band = release?.artist || (singlesLine ? '(round-up de singles)' : (subject ? '(notícia)' : '(banda)'));
+  const album = release?.album || (singlesLine || subject || '(álbum)');
   return [
     '# PAPEL',
     'Você é um especialista em copywriting para YouTube, com foco em maximizar o Click-Through Rate (CTR) sem perder relação com o conteúdo apresentado.',
@@ -448,6 +452,7 @@ export function buildTitlesPrompt(args: {
     `BANDA: ${band}`,
     `ÁLBUM: ${album}`,
     subject ? `ASSUNTO DA NOTÍCIA: ${subject}` : '',
+    singlesLine ? `SINGLES DO EPISÓDIO: ${singlesLine}` : '',
     '',
     'PAUTA (markdown) — fonte principal:',
     '<<<',
