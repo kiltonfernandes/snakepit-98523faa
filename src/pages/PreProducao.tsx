@@ -1086,7 +1086,7 @@ function NewPautaDialog({
           {step === 'kind' && (
             <div className="py-6">
               <p className="text-sm text-muted-foreground mb-4">Que tipo de pauta você quer criar?</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
                   disabled={!pautaId}
@@ -1115,7 +1115,45 @@ function NewPautaDialog({
                     <div className="text-xs text-muted-foreground mt-0.5">Cobertura de uma notícia do cenário.</div>
                   </div>
                 </button>
+                <button
+                  type="button"
+                  disabled={!pautaId}
+                  onClick={() => pickKind('singles')}
+                  className="group rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-6 text-left flex flex-col items-start gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition">
+                    <Music className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-base">Singles</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Round-up de novos singles dos canais do YouTube.</div>
+                  </div>
+                </button>
               </div>
+            </div>
+          )}
+
+          {step === 'singles_pick' && kind === 'singles' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <Music className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Singles</span>
+                  <button onClick={() => pickKind('review')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                    trocar tipo
+                  </button>
+                </div>
+                <div className="text-[11px] text-muted-foreground">{singlesSelection.length} v\u00eddeo(s) escolhido(s)</div>
+              </div>
+              <SinglesPickerModal
+                monitorDaysDefault={5}
+                initialSelectedIds={[]}
+                onCancel={() => goToStep('kind', {})}
+                onConfirm={(selection) => {
+                  setSinglesSelection(selection);
+                  goToStep('config', { singles_selection: selection });
+                }}
+              />
             </div>
           )}
 
