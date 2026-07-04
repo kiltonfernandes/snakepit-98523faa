@@ -354,9 +354,15 @@ function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (it
   return (
     <button
       type="button"
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        e.dataTransfer.setData('text/preprod-id', item.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       onClick={(e) => { e.stopPropagation(); onOpen(item); }}
-      className="w-full rounded-md border border-border bg-muted/50 px-2 py-1.5 text-left hover:border-primary/50 hover:bg-muted transition"
-      title="Abrir pauta salva"
+      className="w-full rounded-md border border-border bg-muted/50 px-2 py-1.5 text-left hover:border-primary/50 hover:bg-muted transition cursor-grab active:cursor-grabbing"
+      title="Abrir pauta salva (arraste para mover)"
     >
       <div className="flex items-center gap-1.5 min-w-0">
         <span className={cn('h-2 w-2 rounded-full shrink-0', getPreprodStatusClass(status))} />
@@ -372,7 +378,7 @@ function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (it
 }
 
 // ---------- Month ----------
-function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
+function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
   const start = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
@@ -394,6 +400,8 @@ function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: 
               isToday(d) && 'border-primary',
             )}
             onClick={() => onPickDay(d)}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('text/preprod-id')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+            onDrop={(e) => { const id = e.dataTransfer.getData('text/preprod-id'); if (id && onMove) { e.preventDefault(); e.stopPropagation(); void onMove(id, d); } }}
           >
             <span className={cn('font-semibold', isToday(d) && 'text-primary')}>{format(d, 'd')}</span>
             <button
@@ -417,7 +425,7 @@ function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: 
 }
 
 // ---------- Week ----------
-function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
+function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
   const start = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   return (
@@ -428,6 +436,8 @@ function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: D
         <div
           key={d.toISOString()}
           onClick={() => onPickDay(d)}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes('text/preprod-id')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+          onDrop={(e) => { const id = e.dataTransfer.getData('text/preprod-id'); if (id && onMove) { e.preventDefault(); e.stopPropagation(); void onMove(id, d); } }}
           className={cn(
             'group relative min-h-[180px] rounded-md border border-border p-3 text-left hover:bg-accent transition flex flex-col cursor-pointer',
             isToday(d) && 'border-primary',
