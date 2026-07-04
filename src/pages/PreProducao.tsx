@@ -1290,7 +1290,7 @@ function NewPautaDialog({
           {step === 'insumo' && (
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Insumo</div>
+                <div className="text-sm font-medium">{kind === 'news' ? 'Direção da pesquisa' : 'Insumo'}</div>
                 <button onClick={() => goToStep('research', { insumo })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar à pesquisa
                 </button>
@@ -1300,13 +1300,30 @@ function NewPautaDialog({
                 onChange={(e) => setInsumo(e.target.value)}
                 onBlur={() => persistData({ insumo })}
                 rows={14}
-                placeholder="Cole aqui as notas da pesquisa (manual ou IA). Pode editar livremente."
+                placeholder={kind === 'news'
+                  ? 'Edite a direção editorial da notícia — fatos, ângulos, links relevantes. A IA vai usar isso como núcleo (peso 3x) da pauta.'
+                  : 'Cole aqui as notas da pesquisa (manual ou IA). Pode editar livremente.'}
                 className="text-sm"
               />
-              <div className="flex justify-end pt-1">
-                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => goToStep('config', { insumo })}>
-                  Seguir <ArrowRight className="h-4 w-4" />
-                </Button>
+              <div className="flex justify-end pt-1 gap-2">
+                {kind === 'news' ? (
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    disabled={!insumo.trim() || generating}
+                    onClick={async () => {
+                      await persistData({ insumo });
+                      void runGenerateAll();
+                    }}
+                  >
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Criar com IA
+                  </Button>
+                ) : (
+                  <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => goToStep('config', { insumo })}>
+                    Seguir <ArrowRight className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           )}
