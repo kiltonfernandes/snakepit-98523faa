@@ -33,6 +33,8 @@ import {
   buildDescriptionPrompt,
   sanitizeDescriptionHtml,
   composeFinalDescriptionHtml,
+  buildNewsPautaPrompt,
+  buildNewsSearchQuery,
   type ReviewSentiment,
   type GeneratedTitle,
   type TitleStyle,
