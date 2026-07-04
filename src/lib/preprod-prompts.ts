@@ -499,9 +499,13 @@ export function buildDescriptionPrompt(args: {
   mentioned?: string;
   release: Release | null;
   subject?: string;
+  singles?: Array<{ band?: string; single?: string; video_url?: string }>;
 }): string {
-  const { selectedTitle, pautaMarkdown, mentioned, release, subject } = args;
+  const { selectedTitle, pautaMarkdown, mentioned, release, subject, singles } = args;
   const mentionedBlock = (mentioned || '').trim();
+  const singlesLine = singles && singles.length > 0
+    ? singles.map(s => `${s.band || '?'} — ${s.single || '?'}`).join(' | ')
+    : '';
   return [
     'Você é o redator-chefe do podcast Heavynauta. Gere APENAS a descrição editorial HTML do episódio.',
     '',
@@ -530,6 +534,7 @@ export function buildDescriptionPrompt(args: {
     release ? `BANDA: ${release.artist}` : '',
     release ? `ÁLBUM: ${release.album}` : '',
     subject ? `ASSUNTO DA NOTÍCIA: ${subject}` : '',
+    singlesLine ? `SINGLES DO EPISÓDIO: ${singlesLine}` : '',
     '',
     'PAUTA (markdown) — base factual:',
     '<<<',
