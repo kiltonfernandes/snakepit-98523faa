@@ -635,8 +635,9 @@ function NewPautaDialog({
   const pickKind = async (k: PreprodKind) => {
     if (!pautaId) return;
     setKind(k);
-    setStep('release');
-    const nextData = { ...latestDataRef.current, step: 'release' };
+    const nextStep: Step = k === 'news' ? 'news_subject' : 'release';
+    setStep(nextStep);
+    const nextData = { ...latestDataRef.current, step: nextStep };
     setPersistedData(nextData);
     latestDataRef.current = nextData;
     const { data, error } = await supabase
