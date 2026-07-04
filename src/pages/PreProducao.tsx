@@ -796,7 +796,7 @@ function NewPautaDialog({
     }, 650);
     return () => window.clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, newsSubject, researchQuery, insumo, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
+  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, newsSubject, researchQuery, insumo, singlesSelection, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
 
   const openManualSearch = () => {
     const url = `https://www.google.com/search?q=${encodeURIComponent(researchQuery)}`;
