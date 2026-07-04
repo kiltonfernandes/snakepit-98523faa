@@ -938,7 +938,13 @@ function NewPautaDialog({
       const banned = (settings?.banned_terms_text || '')
         .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
       const raw = await streamGeneratePauta({
-        prompt: buildTitlesPrompt({ release: selectedRelease || null, pautaMarkdown: result, insumo, subject: kind === 'news' ? newsSubject : undefined }),
+        prompt: buildTitlesPrompt({
+          release: selectedRelease || null,
+          pautaMarkdown: result,
+          insumo,
+          subject: kind === 'news' ? newsSubject : undefined,
+          singles: kind === 'singles' ? singlesSelection : undefined,
+        }),
         bannedTerms: banned,
         temperature: 0.85,
         system: 'Você gera 3 opções de título seguindo um contrato JSON estrito.',
@@ -991,6 +997,7 @@ function NewPautaDialog({
           mentioned,
           release: selectedRelease || null,
           subject: kind === 'news' ? newsSubject : undefined,
+          singles: kind === 'singles' ? singlesSelection : undefined,
         }),
         bannedTerms: banned,
         temperature: 0.6,
