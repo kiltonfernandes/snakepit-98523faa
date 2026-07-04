@@ -1242,7 +1242,7 @@ function NewPautaDialog({
             <div className="py-2 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Pesquisa</div>
-                <button onClick={() => goToStep('release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep(kind === 'news' ? 'news_subject' : 'release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar
                 </button>
               </div>
