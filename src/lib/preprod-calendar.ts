@@ -1,4 +1,4 @@
-export type PreprodKind = 'review' | 'news' | string;
+export type PreprodKind = 'review' | 'news' | 'singles' | string;
 
 export interface PreprodPauta {
   id: string;
@@ -25,6 +25,7 @@ export function normalizePreprodPauta(row: any): PreprodPauta {
 export const PREPROD_KIND_LABEL: Record<string, string> = {
   review: 'Review',
   news: 'Notícia',
+  singles: 'Singles',
 };
 
 export function preprodDate(value: string | Date): string {
@@ -106,11 +107,13 @@ export function inferPreprodStatus(item: Pick<PreprodPauta, 'status' | 'data'>):
 }
 
 export function inferPreprodStep(data: Record<string, any>, kind: PreprodKind | null): string {
-  const order = ['kind', 'release', 'news_subject', 'research', 'insumo', 'config', 'result', 'titles', 'description', 'cover', 'package'];
+  const order = ['kind', 'release', 'news_subject', 'singles_pick', 'research', 'insumo', 'config', 'result', 'titles', 'description', 'cover', 'package'];
   let inferred = 'kind';
   if (kind === 'news') inferred = 'news_subject';
+  else if (kind === 'singles') inferred = 'singles_pick';
   else if (kind) inferred = 'release';
   if (data.news_subject) inferred = 'research';
+  if (kind === 'singles' && Array.isArray(data.singles_selection) && data.singles_selection.length > 0) inferred = 'config';
   if (data.release_id || data.research_query) inferred = 'research';
   if (data.insumo) inferred = 'config';
   if (data.result_markdown) inferred = 'titles';

@@ -43,3 +43,4 @@
 - [Mentioned in Episode](mem://features/episode-mentioned-section) — Field on materials + pautas, AI enrichment via enrich-episode-description, idempotent HTML injection before institutional block
 
 - [Autosave Queue](mem://tech/autosave-queue) — Debounced/ordered/retried persistence for pauta+material inputs, with localStorage snapshot recovery
+- [Singles flow](mem://features/singles-flow) — Round-up de singles via canais do YouTube (RSS), enriquecimento IA, pauta segmentada por vídeo

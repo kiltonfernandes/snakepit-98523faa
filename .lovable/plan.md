@@ -1,37 +1,116 @@
-Plano para resolver o problema principal de persistência e consistência:
+## Objetivo
 
-1. Corrigir a gravação da Pré-produção
-- Refatorar o salvamento em `PreProducao.tsx` para nunca sobrescrever o JSON salvo anteriormente.
-- Hoje vários `persistData(...)` substituem `data` inteiro, então etapas posteriores podem apagar `result_markdown`, títulos, descrição, capa ou insumo já salvos.
-- Criar uma fonte local de verdade do rascunho atual e sempre salvar por merge: dados antigos + campos atuais + patch novo.
-- Persistir também mudanças simples de texto ao sair do campo e nos botões de avanço.
+Adicionar o fluxo **Singles** ao wizard Nova Pauta em Pré-produção. O usuário cadastra canais do YouTube (RSS), o modal lista os vídeos mais recentes, permite enriquecer com IA (banda / single / one-liner), definir insumo por vídeo e seguir o fluxo padrão de pauta — porém a pauta final é **segmentada por vídeo**, cada bloco com link YouTube + Metal Archives.
 
-2. Carregar e mostrar `preprod_pautas` no calendário de Pré-produção
-- Ao abrir a aba Pré-produção, buscar do banco todos os rascunhos/resultados salvos em `preprod_pautas`.
-- Renderizar esses itens dentro dos dias do calendário mensal, semanal e diário.
-- No anual/trimestral, mostrar pelo menos indicadores/contagem por mês para ficar claro que existe conteúdo ali.
-- Depois de criar, alterar, descartar ou fechar o modal, atualizar a lista sem depender de refresh manual.
+---
 
-3. Permitir reabrir rascunhos existentes
-- Clicar em uma pauta já exibida no calendário de Pré-produção deve abrir o mesmo registro, não criar outro.
-- O modal deve hidratar os campos salvos: tipo, release, query, insumo, tamanho, sentimento, resultado markdown, títulos, título escolhido, mencionados, descrição HTML e capa.
-- O botão `+` continua criando uma pauta nova na data escolhida.
+## 1. Banco (migration)
 
-4. Marcar estado coerente do item
-- Manter status como `draft` no início.
-- Atualizar status conforme avanço real: pesquisa/insumo, pauta gerada, pacote/final.
-- Mostrar visualmente no calendário se é rascunho, gerada ou finalizada, usando título escolhido quando existir; senão artista/álbum; senão tipo + data.
+`**youtube_channels**` — CRUD de canais
 
-5. Fazer a aba Calendário enxergar a Pré-produção
-- Incluir os registros de `preprod_pautas` também na aba Calendário, além das pautas/materiais já existentes.
-- Exibir esses itens na mesma data (`publication_date`) com uma identificação clara de Pré-produção.
-- Assim, uma pauta criada na Pré-produção aparece coerentemente também no Calendário.
+- `name` (text), `channel_url` (text), `feed_url` (text, RSS), `active` (bool default true)
+- created_at / updated_at + trigger
+- RLS liberado (padrão do projeto, sem auth)
 
-6. Reforçar o fluxo antigo da aba Calendário
-- Revisar a criação via `NovaPautaWizard` para garantir que o rascunho seja persistido cedo o suficiente e que o calendário atualize após criar/fechar.
-- Onde necessário, recarregar a lista de pautas após criação para evitar depender apenas do estado otimista.
+`**singles_videos**` — cache dos itens do feed + enriquecimento
 
-7. Validação final
-- Testar o fluxo: criar pelo `+` na Pré-produção, preencher insumo, gerar pauta, gerar título/descrição/capa, fechar e recarregar.
-- Confirmar que o item aparece na Pré-produção e na aba Calendário na data correta.
-- Confirmar que reabrir o item restaura rascunho e resultado final sem perda de campos.
+- `channel_id` (fk youtube_channels)
+- `video_id` (text, unique), `video_url`, `title`, `description`, `published_at`
+- `band` (text, nullable), `single` (text, nullable), `one_liner` (text, nullable) — preenchidos pela IA
+- `enriched_at` (timestamptz, nullable)
+- `insumo` (text, nullable) — insumo por vídeo, editável
+- Índice em `channel_id`, `published_at desc`
+
+Grants padrão (`authenticated` + `service_role`).
+
+&nbsp;
+
+---
+
+## 2. Wizard Nova Pauta
+
+`NovaPautaWizard.tsx` já tem `review` e `noticia`. Adicionar terceiro botão **Singles** (ícone 🎵). Ao clicar → abre `SinglesPickerModal`.
+
+O `kind` novo `'singles'` entra em `src/lib/preprod-calendar.ts` (`pickKind`, `inferPreprodStep`) e no tipo de `preprod_pautas` (usa o mesmo `payload` JSON — sem migration extra).
+
+---
+
+## 3. `SinglesPickerModal` (novo componente)
+
+Cabeçalho: botão **Cadastrar canal do YouTube** → sub-form (nome + URL do canal). Sistema resolve o `feed_url` automaticamente a partir da URL (padrão `youtube.com/feeds/videos.xml?channel_id=…` ou `?user=…`), com fallback pra colar o RSS manualmente.
+
+&nbsp;
+
+na tela dessa tablema aqui eu preciso ter um  campo de dias para monitorar, as por padrao pode deixar 5 dias, mas eu posso colocar o quanto eu quiser e co base nesses dias voce precisa scrapre o cnal e listar os videos aqui 
+
+**Tabela** (colunas):
+
+
+| ☑   | Banda | Single | Título do vídeo | One-liner | Insumo | Publicado |
+| --- | ----- | ------ | --------------- | --------- | ------ | --------- |
+
+
+- Coluna Insumo: botão **Insumo** → abre popover/drawer com **Busca manual** (link Google) e **Busca automática (IA :online)** — mesmo padrão do fluxo Notícia. Resposta preenche `singles_videos.insumo` daquela linha.
+- Botão **Enriquecer com IA** (topo): roda em lote nos vídeos selecionados sem enrichment. Chama edge function que retorna `{band, single, one_liner}` por vídeo, salva no banco.
+- Botão **Atualizar feeds**: rebusca RSS de todos canais ativos, faz upsert em `singles_videos`.
+- Botão **Prosseguir** (habilitado com ≥1 selecionado): grava seleção no payload da pauta e segue o wizard (titles → description → cover → pauta).
+
+---
+
+## 4. Edge functions
+
+`**fetch-youtube-channel-feed**` (novo)
+
+- Input: `feed_url`
+- Faz fetch do RSS (`youtube.com/feeds/videos.xml`), parseia (entry → id/title/link/published/media:description), retorna array.
+
+`**enrich-singles-videos**` (novo)
+
+- Input: `[{video_id, title, description}]`
+- Chama OpenRouter (modelo padrão do projeto) com prompt: "extraia banda, single/álbum e one-liner (1 frase PT-BR) desse anúncio de lançamento". Retorna JSON estruturado por vídeo.
+
+---
+
+## 5. Prompts (`src/lib/preprod-prompts.ts`)
+
+Novo `buildSinglesPautaPrompt({ videos, lengthWords }, settings)`:
+
+- Instrui a IA a gerar **um bloco H1 por vídeo**, na ordem escolhida. Cada bloco contém:
+  - `# 🎵 {Banda} — {Single}`
+  - Linha com placeholders que o front converte em botões: `[▶️ Ver no YouTube]({video_url})` e `[📚 Metal Archives](https://www.metal-archives.com/search?searchString={banda+single}&type=band_name)`
+  - `## Contexto` (baseado no title/description do vídeo)
+  - `## Pauta de gravação` (fala do apresentador, ganchos, transições) — **peso 3x no `insumo` daquele vídeo**
+- Fechamento único **PENSE NISSO:** no final agrupando os singles do episódio.
+
+`buildTitlesPrompt` e `buildDescriptionPrompt` recebem `singles?: Array<{band, single}>` para contexto quando `kind==='singles'`. Contrato JSON e estrutura HTML permanecem iguais.
+
+---
+
+## 6. UI da pauta renderizada
+
+No `MarkdownView` da pauta, os links já viram `<a>` normais. Não precisa componente novo — o prompt garante que cada vídeo tenha os dois links inline logo abaixo do header. Metal Archives usa search URL (`?searchString=…&type=band_name`) conforme decidido.
+
+---
+
+## Detalhes técnicos
+
+- Reaproveita `AiCallProgressModal` para "Enriquecer com IA" e "Atualizar feeds".
+- `payload` da pauta ganha `singles_selection: [{video_id, band, single, video_url, insumo, one_liner}]`.
+- Fluxo pós-modal reusa `titles → description → cover → pauta` já existente; só troca o prompt builder quando `kind==='singles'`.
+- Nada muda no drag-and-drop do calendário; item de singles aparece igual aos outros.
+
+---
+
+## Arquivos afetados
+
+- **Novos**: `supabase/migrations/…_singles.sql`, `supabase/functions/fetch-youtube-channel-feed/index.ts`, `supabase/functions/enrich-singles-videos/index.ts`, `src/components/pautas/SinglesPickerModal.tsx`, `src/components/pautas/YoutubeChannelsManager.tsx`
+- **Editados**: `src/lib/preprod-calendar.ts`, `src/lib/preprod-prompts.ts`, `src/components/pautas/NovaPautaWizard.tsx`, `src/pages/PreProducao.tsx`
+
+---
+
+## Entrega faseada (implementar nesta ordem)
+
+1. Migration + CRUD de canais + refresh de feed (sem IA)
+2. Enrichment em lote + coluna insumo por vídeo
+3. Prompt novo + geração da pauta segmentada
+4. Ajustes finos de UI (badges, ordenação, filtros)

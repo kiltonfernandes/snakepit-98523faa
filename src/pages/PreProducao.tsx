@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut, Music } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -35,10 +35,13 @@ import {
   composeFinalDescriptionHtml,
   buildNewsPautaPrompt,
   buildNewsSearchQuery,
+  buildSinglesPautaPrompt,
   type ReviewSentiment,
   type GeneratedTitle,
   type TitleStyle,
+  type SinglesVideoInput,
 } from '@/lib/preprod-prompts';
+import { SinglesPickerModal } from '@/components/pautas/SinglesPickerModal';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
@@ -491,7 +494,7 @@ function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsBy
 }
 
 // ---------- New Pauta Dialog ----------
-type Step = 'kind' | 'release' | 'news_subject' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
+type Step = 'kind' | 'release' | 'news_subject' | 'singles_pick' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
 
 const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
   clickbait: 'Clickbait',
@@ -527,6 +530,7 @@ function NewPautaDialog({
   const [newsSubject, setNewsSubject] = useState<string>('');
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
+  const [singlesSelection, setSinglesSelection] = useState<SinglesVideoInput[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [lengthWords, setLengthWords] = useState<string>('500');
   const lengthWordsNum = parseInt(lengthWords, 10) || 500;
@@ -562,6 +566,7 @@ function NewPautaDialog({
       setNewsSubject('');
       setResearchQuery('');
       setInsumo('');
+      setSinglesSelection([]);
       setLengthWords('500');
       setSentiment('neutral');
       setResult('');
@@ -584,6 +589,7 @@ function NewPautaDialog({
       setNewsSubject(data.news_subject || '');
       setResearchQuery(data.research_query || '');
       setInsumo(data.insumo || '');
+      setSinglesSelection(Array.isArray(data.singles_selection) ? data.singles_selection : []);
       setLengthWords(String(data.length_words || '500'));
       setSentiment((data.sentiment as ReviewSentiment) || 'neutral');
       setResult(data.result_markdown || '');
@@ -635,7 +641,7 @@ function NewPautaDialog({
   const pickKind = async (k: PreprodKind) => {
     if (!pautaId) return;
     setKind(k);
-    const nextStep: Step = k === 'news' ? 'news_subject' : 'release';
+    const nextStep: Step = k === 'news' ? 'news_subject' : k === 'singles' ? 'singles_pick' : 'release';
     setStep(nextStep);
     const nextData = { ...latestDataRef.current, step: nextStep };
     setPersistedData(nextData);
@@ -720,6 +726,7 @@ function NewPautaDialog({
       news_subject: newsSubject,
       research_query: researchQuery,
       insumo,
+      singles_selection: singlesSelection,
       length_words: lengthWords,
       sentiment,
       result_markdown: result,
@@ -762,6 +769,7 @@ function NewPautaDialog({
       news_subject: newsSubject,
       research_query: researchQuery,
       insumo,
+      singles_selection: singlesSelection,
       length_words: lengthWords,
       sentiment,
       result_markdown: result,
@@ -788,7 +796,7 @@ function NewPautaDialog({
     }, 650);
     return () => window.clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, newsSubject, researchQuery, insumo, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
+  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, newsSubject, researchQuery, insumo, singlesSelection, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
 
   const openManualSearch = () => {
     const url = `https://www.google.com/search?q=${encodeURIComponent(researchQuery)}`;
@@ -842,22 +850,29 @@ function NewPautaDialog({
 
   const runGenerateAll = async () => {
     const isNews = kind === 'news';
+    const isSingles = kind === 'singles';
     const release = selectedRelease || null;
-    if (!isNews && !release) { toast.error('Selecione um disco antes.'); return; }
+    if (!isNews && !isSingles && !release) { toast.error('Selecione um disco antes.'); return; }
     if (isNews && !newsSubject.trim()) { toast.error('Preencha o assunto da notícia.'); return; }
-    if (!insumo.trim()) { toast.error(isNews ? 'Preencha a direção da pesquisa.' : 'Preencha o insumo da pesquisa.'); return; }
+    if (isSingles && singlesSelection.length === 0) { toast.error('Selecione ao menos um v\u00eddeo.'); return; }
+    if (!isSingles && !insumo.trim()) { toast.error(isNews ? 'Preencha a direção da pesquisa.' : 'Preencha o insumo da pesquisa.'); return; }
     setManualMode(false);
     setGenerating(true);
     setStep('result');
     setResult('');
-    progress.start(isNews ? 'Gerando pauta de notícia' : 'Gerando review Kilton');
+    progress.start(isSingles ? 'Gerando pauta de singles' : isNews ? 'Gerando pauta de notícia' : 'Gerando review Kilton');
     const banned = (settings?.banned_terms_text || '')
       .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
     const temperature = typeof settings?.brand_tone_temperature === 'number'
       ? Math.max(0, Math.min(1, settings.brand_tone_temperature / 100))
       : 0.7;
     try {
-      const prompt = isNews
+      const prompt = isSingles
+        ? buildSinglesPautaPrompt(
+            { videos: singlesSelection, lengthWords: lengthWordsNum },
+            settings,
+          )
+        : isNews
         ? buildNewsPautaPrompt(
             { subject: newsSubject, insumo, lengthWords: lengthWordsNum },
             settings,
@@ -871,7 +886,7 @@ function NewPautaDialog({
         bannedTerms: banned,
         temperature,
         system: 'Você é o redator-chefe do podcast Heavynauta. Saída em Markdown puro.',
-        label: isNews ? 'Pauta de notícia' : 'Review Kilton',
+        label: isSingles ? 'Pauta de singles' : isNews ? 'Pauta de notícia' : 'Review Kilton',
         progress,
         silentLifecycle: true,
         onChunk: (full) => setResult(full),
@@ -923,7 +938,13 @@ function NewPautaDialog({
       const banned = (settings?.banned_terms_text || '')
         .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
       const raw = await streamGeneratePauta({
-        prompt: buildTitlesPrompt({ release: selectedRelease || null, pautaMarkdown: result, insumo, subject: kind === 'news' ? newsSubject : undefined }),
+        prompt: buildTitlesPrompt({
+          release: selectedRelease || null,
+          pautaMarkdown: result,
+          insumo,
+          subject: kind === 'news' ? newsSubject : undefined,
+          singles: kind === 'singles' ? singlesSelection : undefined,
+        }),
         bannedTerms: banned,
         temperature: 0.85,
         system: 'Você gera 3 opções de título seguindo um contrato JSON estrito.',
@@ -976,6 +997,7 @@ function NewPautaDialog({
           mentioned,
           release: selectedRelease || null,
           subject: kind === 'news' ? newsSubject : undefined,
+          singles: kind === 'singles' ? singlesSelection : undefined,
         }),
         bannedTerms: banned,
         temperature: 0.6,
@@ -1052,7 +1074,7 @@ function NewPautaDialog({
   return (
     <>
       <Dialog open={!!effectiveDate} onOpenChange={handleOpenChange}>
-        <DialogContent className={cn(step === 'package' ? 'max-w-5xl' : 'max-w-2xl', 'max-h-[92vh] overflow-y-auto')}>
+        <DialogContent className={cn((step === 'package' || step === 'singles_pick') ? 'max-w-5xl' : 'max-w-2xl', 'max-h-[92vh] overflow-y-auto')}>
           <DialogHeader>
             <DialogTitle>{item ? 'Editar pauta' : 'Nova pauta'}</DialogTitle>
             <DialogDescription className="capitalize">
@@ -1064,7 +1086,7 @@ function NewPautaDialog({
           {step === 'kind' && (
             <div className="py-6">
               <p className="text-sm text-muted-foreground mb-4">Que tipo de pauta você quer criar?</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <button
                   type="button"
                   disabled={!pautaId}
@@ -1093,7 +1115,45 @@ function NewPautaDialog({
                     <div className="text-xs text-muted-foreground mt-0.5">Cobertura de uma notícia do cenário.</div>
                   </div>
                 </button>
+                <button
+                  type="button"
+                  disabled={!pautaId}
+                  onClick={() => pickKind('singles')}
+                  className="group rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition p-6 text-left flex flex-col items-start gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition">
+                    <Music className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-base">Singles</div>
+                    <div className="text-xs text-muted-foreground mt-0.5">Round-up de novos singles dos canais do YouTube.</div>
+                  </div>
+                </button>
               </div>
+            </div>
+          )}
+
+          {step === 'singles_pick' && kind === 'singles' && (
+            <div className="py-2 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-sm">
+                  <Music className="h-4 w-4 text-primary" />
+                  <span className="font-medium">Singles</span>
+                  <button onClick={() => pickKind('review')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                    trocar tipo
+                  </button>
+                </div>
+                <div className="text-[11px] text-muted-foreground">{singlesSelection.length} v\u00eddeo(s) escolhido(s)</div>
+              </div>
+              <SinglesPickerModal
+                monitorDaysDefault={5}
+                initialSelectedIds={[]}
+                onCancel={() => goToStep('kind', {})}
+                onConfirm={(selection) => {
+                  setSinglesSelection(selection);
+                  goToStep('config', { singles_selection: selection });
+                }}
+              />
             </div>
           )}
 
@@ -1332,8 +1392,8 @@ function NewPautaDialog({
             <div className="py-2 space-y-5">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Configuração da pauta</div>
-                <button onClick={() => goToStep('insumo', { length_words: lengthWords, sentiment })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
-                  <ArrowLeft className="h-3 w-3" /> voltar ao insumo
+                <button onClick={() => goToStep(kind === 'singles' ? 'singles_pick' : 'insumo', { length_words: lengthWords, sentiment })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                  <ArrowLeft className="h-3 w-3" /> voltar {kind === 'singles' ? 'aos v\u00eddeos' : 'ao insumo'}
                 </button>
               </div>
 

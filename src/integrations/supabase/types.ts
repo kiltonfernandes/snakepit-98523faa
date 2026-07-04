@@ -653,6 +653,101 @@ export type Database = {
         }
         Relationships: []
       }
+      singles_videos: {
+        Row: {
+          band: string | null
+          channel_id: string
+          created_at: string
+          description: string | null
+          enriched_at: string | null
+          id: string
+          insumo: string | null
+          one_liner: string | null
+          published_at: string | null
+          single: string | null
+          title: string
+          updated_at: string
+          video_id: string
+          video_url: string
+        }
+        Insert: {
+          band?: string | null
+          channel_id: string
+          created_at?: string
+          description?: string | null
+          enriched_at?: string | null
+          id?: string
+          insumo?: string | null
+          one_liner?: string | null
+          published_at?: string | null
+          single?: string | null
+          title: string
+          updated_at?: string
+          video_id: string
+          video_url: string
+        }
+        Update: {
+          band?: string | null
+          channel_id?: string
+          created_at?: string
+          description?: string | null
+          enriched_at?: string | null
+          id?: string
+          insumo?: string | null
+          one_liner?: string | null
+          published_at?: string | null
+          single?: string | null
+          title?: string
+          updated_at?: string
+          video_id?: string
+          video_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "singles_videos_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "youtube_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      youtube_channels: {
+        Row: {
+          active: boolean
+          channel_url: string
+          created_at: string
+          feed_url: string
+          id: string
+          last_synced_at: string | null
+          monitor_days: number
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          channel_url: string
+          created_at?: string
+          feed_url: string
+          id?: string
+          last_synced_at?: string | null
+          monitor_days?: number
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          channel_url?: string
+          created_at?: string
+          feed_url?: string
+          id?: string
+          last_synced_at?: string | null
+          monitor_days?: number
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
