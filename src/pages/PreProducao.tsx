@@ -491,7 +491,7 @@ function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsBy
 }
 
 // ---------- New Pauta Dialog ----------
-type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
+type Step = 'kind' | 'release' | 'news_subject' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
 
 const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
   clickbait: 'Clickbait',
@@ -524,6 +524,7 @@ function NewPautaDialog({
   const [query, setQuery] = useState('');
   const [shortlistOpen, setShortlistOpen] = useState(false);
   const [step, setStep] = useState<Step>('kind');
+  const [newsSubject, setNewsSubject] = useState<string>('');
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
