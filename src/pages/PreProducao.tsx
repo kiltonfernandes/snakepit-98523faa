@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut } from 'lucide-react';
+import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut, Music } from 'lucide-react';
 import {
   addDays, addMonths, addQuarters, addYears, addWeeks,
   startOfDay, startOfWeek, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear,
@@ -35,10 +35,13 @@ import {
   composeFinalDescriptionHtml,
   buildNewsPautaPrompt,
   buildNewsSearchQuery,
+  buildSinglesPautaPrompt,
   type ReviewSentiment,
   type GeneratedTitle,
   type TitleStyle,
+  type SinglesVideoInput,
 } from '@/lib/preprod-prompts';
+import { SinglesPickerModal } from '@/components/pautas/SinglesPickerModal';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
