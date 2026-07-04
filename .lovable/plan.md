@@ -1,116 +1,68 @@
-## Objetivo
+# Objetivo
 
-Adicionar o fluxo **Singles** ao wizard Nova Pauta em Pré-produção. O usuário cadastra canais do YouTube (RSS), o modal lista os vídeos mais recentes, permite enriquecer com IA (banda / single / one-liner), definir insumo por vídeo e seguir o fluxo padrão de pauta — porém a pauta final é **segmentada por vídeo**, cada bloco com link YouTube + Metal Archives.
+Fazer o cadastro de canais do YouTube funcionar de verdade quando o usuário cola URLs com `@handle` (padrão atual do YouTube). Hoje o `fetch-youtube-channel-feed` tenta um único fetch da página do canal e faz regex por `channelId`, mas o YouTube frequentemente devolve consent wall / HTML minificado diferente / bloqueia por user-agent, então a resolução falha silenciosamente.
 
----
+# Estratégia (RSS oficial + fallback scrape HTML)
 
-## 1. Banco (migration)
+Manter RSS como fonte primária (rápido, gratuito, sem quota), mas trocar a resolução do `feed_url` por uma cadeia robusta de tentativas. Se ainda assim vier vazio, fallback pra scrape do HTML de `/videos`.
 
-`**youtube_channels**` — CRUD de canais
+## Cadeia de resolução do channel_id (edge function `fetch-youtube-channel-feed`)
 
-- `name` (text), `channel_url` (text), `feed_url` (text, RSS), `active` (bool default true)
-- created_at / updated_at + trigger
-- RLS liberado (padrão do projeto, sem auth)
+Ordem de tentativas — a primeira que devolver um `UC…` válido vence:
 
-`**singles_videos**` — cache dos itens do feed + enriquecimento
+1. **Match direto na URL** — se já é `/channel/UC…` ou já é `feeds/videos.xml`, usa direto.
+2. **Fetch da página do canal com headers de browser real** — `User-Agent` de Chrome desktop, `Accept-Language: en-US,en;q=0.9`, `Cookie: CONSENT=YES+1` (bypassa o consent wall europeu que retorna HTML sem os metadados). Extrai `channelId` procurando, em ordem:
+  - `"channelId":"UC..."` (JSON embutido no ytInitialData)
+  - `<meta itemprop="identifier" content="UC..."`  / `itemprop="channelId"`
+  - `<link rel="canonical" href=".../channel/UC..."`
+  - `"externalId":"UC..."` (ytcfg)
+  - `browseId":"UC..."`
+3. **Fallback via `/@handle/about**` — se a URL raiz falhar, tenta `youtube.com/@handle/about` (página mais leve, menos JS, canonical costuma estar limpo).
+4. **Fallback via endpoint público de resolução** — `youtube.com/youtubei/v1/navigation/resolve_url` com body mínimo (`context.client = { clientName: "WEB", clientVersion: "2.20240101" }`, `url: <handle_url>`) usando a API key pública embutida no ytcfg (`AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8` — chave pública do WEB client, não é secret). Retorna `endpoint.browseEndpoint.browseId` = channel_id.
+5. **Erro estruturado** — se todas falharem, devolve `{ error: "channel_id_not_resolved", tried: [...], html_preview: "..." }` pro front mostrar mensagem clara e permitir colar o RSS manualmente.
 
-- `channel_id` (fk youtube_channels)
-- `video_id` (text, unique), `video_url`, `title`, `description`, `published_at`
-- `band` (text, nullable), `single` (text, nullable), `one_liner` (text, nullable) — preenchidos pela IA
-- `enriched_at` (timestamptz, nullable)
-- `insumo` (text, nullable) — insumo por vídeo, editável
-- Índice em `channel_id`, `published_at desc`
+Cachear o `feed_url` resolvido na tabela `youtube_channels` (já tem coluna) pra não re-resolver todo refresh.  
+  
+entoa eu consigo encontrar o channel id tbm entao coloca esse campo no form de cadastro por qu eeu ai eu coloco o id do channel  e iss deve a jusdar a o scrape 
 
-Grants padrão (`authenticated` + `service_role`).
+## Fallback quando o RSS vem vazio (poucos vídeos)
 
-&nbsp;
+RSS oficial só devolve os ~15 últimos e às vezes está atrasado. Quando `items.length === 0` **e** foi pedido `since_days`, tentar scrape da página `/@handle/videos`:
 
----
+- Fetch com mesmos headers de browser (UA + CONSENT cookie).
+- Extrair o bloco `var ytInitialData = {...};` via regex delimitando `};</script>`.
+- `JSON.parse` e navegar até `contents.twoColumnBrowseResultsRenderer.tabs[?].tabRenderer.content.richGridRenderer.contents[].richItemRenderer.content.videoRenderer`.
+- De cada `videoRenderer` extrair: `videoId`, `title.runs[0].text`, `publishedTimeText.simpleText` (ex.: "há 2 dias" — converter em data aproximada), `descriptionSnippet` se houver.
+- Merge com os itens do RSS (dedupe por `video_id`).
 
-## 2. Wizard Nova Pauta
+Se `ytInitialData` não parsear, retornar só o que o RSS deu + warning no payload.
 
-`NovaPautaWizard.tsx` já tem `review` e `noticia`. Adicionar terceiro botão **Singles** (ícone 🎵). Ao clicar → abre `SinglesPickerModal`.
+## Ajustes no front (`SinglesPickerModal.tsx`)
 
-O `kind` novo `'singles'` entra em `src/lib/preprod-calendar.ts` (`pickKind`, `inferPreprodStep`) e no tipo de `preprod_pautas` (usa o mesmo `payload` JSON — sem migration extra).
-
----
-
-## 3. `SinglesPickerModal` (novo componente)
-
-Cabeçalho: botão **Cadastrar canal do YouTube** → sub-form (nome + URL do canal). Sistema resolve o `feed_url` automaticamente a partir da URL (padrão `youtube.com/feeds/videos.xml?channel_id=…` ou `?user=…`), com fallback pra colar o RSS manualmente.
-
-&nbsp;
-
-na tela dessa tablema aqui eu preciso ter um  campo de dias para monitorar, as por padrao pode deixar 5 dias, mas eu posso colocar o quanto eu quiser e co base nesses dias voce precisa scrapre o cnal e listar os videos aqui 
-
-**Tabela** (colunas):
-
-
-| ☑   | Banda | Single | Título do vídeo | One-liner | Insumo | Publicado |
-| --- | ----- | ------ | --------------- | --------- | ------ | --------- |
-
-
-- Coluna Insumo: botão **Insumo** → abre popover/drawer com **Busca manual** (link Google) e **Busca automática (IA :online)** — mesmo padrão do fluxo Notícia. Resposta preenche `singles_videos.insumo` daquela linha.
-- Botão **Enriquecer com IA** (topo): roda em lote nos vídeos selecionados sem enrichment. Chama edge function que retorna `{band, single, one_liner}` por vídeo, salva no banco.
-- Botão **Atualizar feeds**: rebusca RSS de todos canais ativos, faz upsert em `singles_videos`.
-- Botão **Prosseguir** (habilitado com ≥1 selecionado): grava seleção no payload da pauta e segue o wizard (titles → description → cover → pauta).
-
----
-
-## 4. Edge functions
-
-`**fetch-youtube-channel-feed**` (novo)
-
-- Input: `feed_url`
-- Faz fetch do RSS (`youtube.com/feeds/videos.xml`), parseia (entry → id/title/link/published/media:description), retorna array.
-
-`**enrich-singles-videos**` (novo)
-
-- Input: `[{video_id, title, description}]`
-- Chama OpenRouter (modelo padrão do projeto) com prompt: "extraia banda, single/álbum e one-liner (1 frase PT-BR) desse anúncio de lançamento". Retorna JSON estruturado por vídeo.
-
----
-
-## 5. Prompts (`src/lib/preprod-prompts.ts`)
-
-Novo `buildSinglesPautaPrompt({ videos, lengthWords }, settings)`:
-
-- Instrui a IA a gerar **um bloco H1 por vídeo**, na ordem escolhida. Cada bloco contém:
-  - `# 🎵 {Banda} — {Single}`
-  - Linha com placeholders que o front converte em botões: `[▶️ Ver no YouTube]({video_url})` e `[📚 Metal Archives](https://www.metal-archives.com/search?searchString={banda+single}&type=band_name)`
-  - `## Contexto` (baseado no title/description do vídeo)
-  - `## Pauta de gravação` (fala do apresentador, ganchos, transições) — **peso 3x no `insumo` daquele vídeo**
-- Fechamento único **PENSE NISSO:** no final agrupando os singles do episódio.
-
-`buildTitlesPrompt` e `buildDescriptionPrompt` recebem `singles?: Array<{band, single}>` para contexto quando `kind==='singles'`. Contrato JSON e estrutura HTML permanecem iguais.
-
----
-
-## 6. UI da pauta renderizada
-
-No `MarkdownView` da pauta, os links já viram `<a>` normais. Não precisa componente novo — o prompt garante que cada vídeo tenha os dois links inline logo abaixo do header. Metal Archives usa search URL (`?searchString=…&type=band_name`) conforme decidido.
-
----
+- Ao cadastrar canal, chamar `fetch-youtube-channel-feed` uma vez pra resolver e **persistir o `feed_url**` resolvido em `youtube_channels.feed_url`. Se falhar, mostrar toast com a mensagem estruturada e um campo "colar RSS manualmente" (`https://www.youtube.com/feeds/videos.xml?channel_id=UC…`).
+- Botão "Testar canal" ao lado do form de cadastro pra validar antes de salvar.
+- No refresh (botão "Atualizar feeds"), sempre passar o `feed_url` já salvo; só cair na resolução via `channel_url` se `feed_url` estiver null.
 
 ## Detalhes técnicos
 
-- Reaproveita `AiCallProgressModal` para "Enriquecer com IA" e "Atualizar feeds".
-- `payload` da pauta ganha `singles_selection: [{video_id, band, single, video_url, insumo, one_liner}]`.
-- Fluxo pós-modal reusa `titles → description → cover → pauta` já existente; só troca o prompt builder quando `kind==='singles'`.
-- Nada muda no drag-and-drop do calendário; item de singles aparece igual aos outros.
-
----
+- Nenhuma dependência nova, nenhuma secret nova.
+- Headers do fetch (todas as requisições a `youtube.com`):
+  ```
+  User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36
+  Accept-Language: en-US,en;q=0.9
+  Cookie: CONSENT=YES+cb.20210328-17-p0.en+FX+000
+  ```
+- Timeout de 10s por tentativa com `AbortController` pra não travar o modal.
+- Logar (console.log no edge) qual estratégia venceu — facilita debug futuro.
+- Sem alteração de schema.
 
 ## Arquivos afetados
 
-- **Novos**: `supabase/migrations/…_singles.sql`, `supabase/functions/fetch-youtube-channel-feed/index.ts`, `supabase/functions/enrich-singles-videos/index.ts`, `src/components/pautas/SinglesPickerModal.tsx`, `src/components/pautas/YoutubeChannelsManager.tsx`
-- **Editados**: `src/lib/preprod-calendar.ts`, `src/lib/preprod-prompts.ts`, `src/components/pautas/NovaPautaWizard.tsx`, `src/pages/PreProducao.tsx`
+- **Editado**: `supabase/functions/fetch-youtube-channel-feed/index.ts` (cadeia de resolução + fallback HTML scrape + headers)
+- **Editado**: `src/components/pautas/SinglesPickerModal.tsx` (persistir feed_url resolvido, botão "Testar canal", mensagem de erro estruturada, campo RSS manual)
 
----
+## Entrega
 
-## Entrega faseada (implementar nesta ordem)
-
-1. Migration + CRUD de canais + refresh de feed (sem IA)
-2. Enrichment em lote + coluna insumo por vídeo
-3. Prompt novo + geração da pauta segmentada
-4. Ajustes finos de UI (badges, ordenação, filtros)
+1. Reescrita do edge function com as 4 estratégias + logs.
+2. Front persistindo `feed_url` e mostrando erro acionável.
+3. Fallback HTML scrape (`ytInitialData`) só quando RSS vem vazio.

@@ -329,6 +329,7 @@ function AddChannelForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
   const [name, setName] = useState('');
   const [channelUrl, setChannelUrl] = useState('');
   const [feedUrl, setFeedUrl] = useState('');
+  const [channelId, setChannelId] = useState('');
   const [monitorDays, setMonitorDays] = useState<number>(5);
   const [saving, setSaving] = useState(false);
 
@@ -337,8 +338,11 @@ function AddChannelForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
     setSaving(true);
     try {
       let feed = feedUrl.trim();
+      const cid = channelId.trim();
+      if (!feed && /^UC[A-Za-z0-9_-]{22}$/.test(cid)) {
+        feed = `https://www.youtube.com/feeds/videos.xml?channel_id=${cid}`;
+      }
       if (!feed) {
-        // Resolve feed via edge function
         const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fetch-youtube-channel-feed`;
         const resp = await fetch(url, {
           method: 'POST',
@@ -346,14 +350,17 @@ function AddChannelForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
             'Content-Type': 'application/json',
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
           },
-          body: JSON.stringify({ channel_url: channelUrl.trim(), since_days: 1 }),
+          body: JSON.stringify({ channel_url: channelUrl.trim(), channel_id: cid || undefined, since_days: 1 }),
         });
         if (resp.ok) {
           const { feed_url } = await resp.json();
           feed = feed_url || '';
+        } else {
+          const e = await resp.json().catch(() => ({}));
+          toast.error(e.message || e.error || `Erro ${resp.status} ao resolver canal.`);
         }
       }
-      if (!feed) { toast.error('Não consegui resolver o feed RSS. Cole manualmente o /feeds/videos.xml…'); setSaving(false); return; }
+      if (!feed) { toast.error('Cole o Channel ID (UC…) ou o feed RSS manualmente.'); setSaving(false); return; }
       const { error } = await supabase.from('youtube_channels').insert({
         name: name.trim(),
         channel_url: channelUrl.trim(),
@@ -375,8 +382,12 @@ function AddChannelForm({ onCancel, onCreated }: { onCancel: () => void; onCreat
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <Input placeholder="Nome do canal (ex.: Century Media)" value={name} onChange={(e) => setName(e.target.value)} />
         <Input placeholder="URL do canal (youtube.com/@handle ou /channel/UC...)" value={channelUrl} onChange={(e) => setChannelUrl(e.target.value)} />
+        <Input placeholder="Channel ID (opcional — UC…, mais confiável)" value={channelId} onChange={(e) => setChannelId(e.target.value)} />
         <Input placeholder="Feed RSS (opcional — resolve automático)" value={feedUrl} onChange={(e) => setFeedUrl(e.target.value)} />
         <Input type="number" min={1} placeholder="Dias para monitorar" value={monitorDays} onChange={(e) => setMonitorDays(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+      </div>
+      <div className="text-[10px] text-muted-foreground">
+        Dica: se o cadastro por @handle falhar, abra o canal no YouTube → "Compartilhar" → copie o Channel ID (começa com UC) e cole aqui.
       </div>
       <div className="flex justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel}>Cancelar</Button>
