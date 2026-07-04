@@ -83,11 +83,28 @@ export function SinglesPickerModal({
   useEffect(() => { void loadAll(); }, [loadAll]);
 
   const filteredVideos = useMemo(() => {
-    if (!monitorDays || monitorDays <= 0) return videos;
-    const cutoff = Date.now() - monitorDays * 24 * 60 * 60 * 1000;
-    return videos.filter(v => {
+    const cutoff = monitorDays > 0 ? Date.now() - monitorDays * 24 * 60 * 60 * 1000 : 0;
+    const inWindow = videos.filter(v => {
+      if (!cutoff) return true;
       if (!v.published_at) return true;
       return new Date(v.published_at).getTime() >= cutoff;
+    });
+    // Dedupe por banda (case-insensitive): mantém o mais recente.
+    // Vídeos sem banda enriquecida passam individualmente.
+    const bestByBand = new Map<string, Video>();
+    const noBand: Video[] = [];
+    for (const v of inWindow) {
+      const key = (v.band || '').trim().toLowerCase();
+      if (!key) { noBand.push(v); continue; }
+      const cur = bestByBand.get(key);
+      const t = v.published_at ? Date.parse(v.published_at) : 0;
+      const ct = cur?.published_at ? Date.parse(cur.published_at) : 0;
+      if (!cur || t > ct) bestByBand.set(key, v);
+    }
+    return [...bestByBand.values(), ...noBand].sort((a, b) => {
+      const ta = a.published_at ? Date.parse(a.published_at) : 0;
+      const tb = b.published_at ? Date.parse(b.published_at) : 0;
+      return tb - ta;
     });
   }, [videos, monitorDays]);
 
