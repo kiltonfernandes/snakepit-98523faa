@@ -837,34 +837,37 @@ function NewPautaDialog({
   };
 
   const runGenerateAll = async () => {
-    if (kind !== 'review') {
-      toast.info('Fluxo automático disponível apenas para Review por enquanto.');
-      return;
-    }
+    const isNews = kind === 'news';
     const release = selectedRelease || null;
-    if (!release) { toast.error('Selecione um disco antes.'); return; }
-    if (!insumo.trim()) { toast.error('Preencha o insumo da pesquisa.'); return; }
+    if (!isNews && !release) { toast.error('Selecione um disco antes.'); return; }
+    if (isNews && !newsSubject.trim()) { toast.error('Preencha o assunto da notícia.'); return; }
+    if (!insumo.trim()) { toast.error(isNews ? 'Preencha a direção da pesquisa.' : 'Preencha o insumo da pesquisa.'); return; }
     setManualMode(false);
     setGenerating(true);
     setStep('result');
     setResult('');
-    progress.start('Gerando review Kilton');
+    progress.start(isNews ? 'Gerando pauta de notícia' : 'Gerando review Kilton');
     const banned = (settings?.banned_terms_text || '')
       .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
     const temperature = typeof settings?.brand_tone_temperature === 'number'
       ? Math.max(0, Math.min(1, settings.brand_tone_temperature / 100))
       : 0.7;
     try {
-      const prompt = buildKiltonReviewPrompt(
-        { release, insumo, lengthWords: lengthWordsNum, sentiment },
-        settings,
-      );
+      const prompt = isNews
+        ? buildNewsPautaPrompt(
+            { subject: newsSubject, insumo, lengthWords: lengthWordsNum },
+            settings,
+          )
+        : buildKiltonReviewPrompt(
+            { release: release!, insumo, lengthWords: lengthWordsNum, sentiment },
+            settings,
+          );
       let text = await streamGeneratePauta({
         prompt,
         bannedTerms: banned,
         temperature,
         system: 'Você é o redator-chefe do podcast Heavynauta. Saída em Markdown puro.',
-        label: 'Review Kilton',
+        label: isNews ? 'Pauta de notícia' : 'Review Kilton',
         progress,
         silentLifecycle: true,
         onChunk: (full) => setResult(full),
