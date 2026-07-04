@@ -715,9 +715,10 @@ export type Database = {
       youtube_channels: {
         Row: {
           active: boolean
+          channel_id: string | null
           channel_url: string
           created_at: string
-          feed_url: string
+          feed_url: string | null
           id: string
           last_synced_at: string | null
           monitor_days: number
@@ -726,9 +727,10 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          channel_id?: string | null
           channel_url: string
           created_at?: string
-          feed_url: string
+          feed_url?: string | null
           id?: string
           last_synced_at?: string | null
           monitor_days?: number
@@ -737,9 +739,10 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          channel_id?: string | null
           channel_url?: string
           created_at?: string
-          feed_url?: string
+          feed_url?: string | null
           id?: string
           last_synced_at?: string | null
           monitor_days?: number
