@@ -33,6 +33,8 @@ import {
   buildDescriptionPrompt,
   sanitizeDescriptionHtml,
   composeFinalDescriptionHtml,
+  buildNewsPautaPrompt,
+  buildNewsSearchQuery,
   type ReviewSentiment,
   type GeneratedTitle,
   type TitleStyle,
@@ -104,6 +106,28 @@ export default function PreProducao() {
       return next;
     });
   }, []);
+
+  const moveItem = useCallback(async (id: string, newDate: Date) => {
+    const target = preprodDate(newDate);
+    const current = preprodPautas.find((p) => p.id === id);
+    if (!current || current.publication_date === target) return;
+    // Optimistic update
+    setPreprodPautas((prev) => prev.map((p) => p.id === id ? { ...p, publication_date: target } : p));
+    const { data, error } = await supabase
+      .from('preprod_pautas')
+      .update({ publication_date: target })
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) {
+      // Revert
+      setPreprodPautas((prev) => prev.map((p) => p.id === id ? current : p));
+      toast.error('Falha ao mover: ' + error.message);
+      return;
+    }
+    if (data) upsertPreprodPauta(data);
+    toast.success(`Pauta movida para ${format(newDate, "dd 'de' MMMM", { locale: ptBR })}.`);
+  }, [preprodPautas, upsertPreprodPauta]);
 
   useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
 
@@ -225,8 +249,8 @@ export default function PreProducao() {
         {loadingPautas && <div className="mb-3 text-xs text-muted-foreground">Carregando pautas salvas…</div>}
         {view === 'year' && <YearGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
         {view === 'quarter' && <QuarterGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
-        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} />}
+        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} onMove={moveItem} />}
+        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} onMove={moveItem} />}
         {view === 'day' && <DayView anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onAdd={setNewPautaDate} />}
       </div>
 
@@ -330,9 +354,15 @@ function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (it
   return (
     <button
       type="button"
+      draggable
+      onDragStart={(e) => {
+        e.stopPropagation();
+        e.dataTransfer.setData('text/preprod-id', item.id);
+        e.dataTransfer.effectAllowed = 'move';
+      }}
       onClick={(e) => { e.stopPropagation(); onOpen(item); }}
-      className="w-full rounded-md border border-border bg-muted/50 px-2 py-1.5 text-left hover:border-primary/50 hover:bg-muted transition"
-      title="Abrir pauta salva"
+      className="w-full rounded-md border border-border bg-muted/50 px-2 py-1.5 text-left hover:border-primary/50 hover:bg-muted transition cursor-grab active:cursor-grabbing"
+      title="Abrir pauta salva (arraste para mover)"
     >
       <div className="flex items-center gap-1.5 min-w-0">
         <span className={cn('h-2 w-2 rounded-full shrink-0', getPreprodStatusClass(status))} />
@@ -348,7 +378,7 @@ function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (it
 }
 
 // ---------- Month ----------
-function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
+function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
   const start = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
@@ -370,6 +400,8 @@ function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: 
               isToday(d) && 'border-primary',
             )}
             onClick={() => onPickDay(d)}
+            onDragOver={(e) => { if (e.dataTransfer.types.includes('text/preprod-id')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+            onDrop={(e) => { const id = e.dataTransfer.getData('text/preprod-id'); if (id && onMove) { e.preventDefault(); e.stopPropagation(); void onMove(id, d); } }}
           >
             <span className={cn('font-semibold', isToday(d) && 'text-primary')}>{format(d, 'd')}</span>
             <button
@@ -393,7 +425,7 @@ function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: 
 }
 
 // ---------- Week ----------
-function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void }) {
+function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
   const start = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   return (
@@ -404,6 +436,8 @@ function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd }: { anchor: D
         <div
           key={d.toISOString()}
           onClick={() => onPickDay(d)}
+          onDragOver={(e) => { if (e.dataTransfer.types.includes('text/preprod-id')) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+          onDrop={(e) => { const id = e.dataTransfer.getData('text/preprod-id'); if (id && onMove) { e.preventDefault(); e.stopPropagation(); void onMove(id, d); } }}
           className={cn(
             'group relative min-h-[180px] rounded-md border border-border p-3 text-left hover:bg-accent transition flex flex-col cursor-pointer',
             isToday(d) && 'border-primary',
@@ -457,7 +491,7 @@ function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsBy
 }
 
 // ---------- New Pauta Dialog ----------
-type Step = 'kind' | 'release' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
+type Step = 'kind' | 'release' | 'news_subject' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
 
 const TITLE_STYLE_LABEL: Record<TitleStyle, string> = {
   clickbait: 'Clickbait',
@@ -490,6 +524,7 @@ function NewPautaDialog({
   const [query, setQuery] = useState('');
   const [shortlistOpen, setShortlistOpen] = useState(false);
   const [step, setStep] = useState<Step>('kind');
+  const [newsSubject, setNewsSubject] = useState<string>('');
   const [researchQuery, setResearchQuery] = useState('');
   const [insumo, setInsumo] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
@@ -524,6 +559,7 @@ function NewPautaDialog({
       setReleaseId(null);
       setQuery('');
       setStep('kind');
+      setNewsSubject('');
       setResearchQuery('');
       setInsumo('');
       setLengthWords('500');
@@ -545,6 +581,7 @@ function NewPautaDialog({
       setKind((item.kind as PreprodKind | null) || null);
       setReleaseId(data.release_id || null);
       setQuery('');
+      setNewsSubject(data.news_subject || '');
       setResearchQuery(data.research_query || '');
       setInsumo(data.insumo || '');
       setLengthWords(String(data.length_words || '500'));
@@ -598,8 +635,9 @@ function NewPautaDialog({
   const pickKind = async (k: PreprodKind) => {
     if (!pautaId) return;
     setKind(k);
-    setStep('release');
-    const nextData = { ...latestDataRef.current, step: 'release' };
+    const nextStep: Step = k === 'news' ? 'news_subject' : 'release';
+    setStep(nextStep);
+    const nextData = { ...latestDataRef.current, step: nextStep };
     setPersistedData(nextData);
     latestDataRef.current = nextData;
     const { data, error } = await supabase
@@ -655,9 +693,13 @@ function NewPautaDialog({
   useEffect(() => {
     if (step !== 'research') return;
     if (researchQuery.trim()) return;
+    if (kind === 'news') {
+      if (newsSubject.trim()) setResearchQuery(buildNewsSearchQuery(newsSubject));
+      return;
+    }
     const r = selectedRelease;
     const year = r?.release_date ? String(r.release_date).slice(0, 4) : '';
-    const key = kind === 'news' ? 'standalone.news.with_release' : 'standalone.review.with_release';
+    const key = 'standalone.review.with_release';
     const q = renderQueryTemplate(key, {
       artist: r?.artist || '',
       album: r?.album || '',
@@ -665,7 +707,7 @@ function NewPautaDialog({
       notes: '',
     });
     setResearchQuery(q);
-  }, [step, selectedRelease, kind, researchQuery]);
+  }, [step, selectedRelease, kind, researchQuery, newsSubject]);
 
   const persistData = async (patch: Record<string, any>, explicitStatus?: string) => {
     if (!pautaId) return;
@@ -675,6 +717,7 @@ function NewPautaDialog({
       release_id: releaseId ?? latestDataRef.current.release_id,
       artist: selectedRelease?.artist ?? latestDataRef.current.artist,
       album: selectedRelease?.album ?? latestDataRef.current.album,
+      news_subject: newsSubject,
       research_query: researchQuery,
       insumo,
       length_words: lengthWords,
@@ -716,6 +759,7 @@ function NewPautaDialog({
   useEffect(() => {
     if (!pautaId) return;
     const patch: Record<string, any> = {
+      news_subject: newsSubject,
       research_query: researchQuery,
       insumo,
       length_words: lengthWords,
@@ -744,7 +788,7 @@ function NewPautaDialog({
     }, 650);
     return () => window.clearTimeout(timer);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, researchQuery, insumo, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
+  }, [pautaId, releaseId, selectedRelease?.artist, selectedRelease?.album, newsSubject, researchQuery, insumo, lengthWords, sentiment, result, titles, selectedTitle, titleLabelOn, mentioned, descriptionHtml, coverImageUrl, coverDataUrl, step]);
 
   const openManualSearch = () => {
     const url = `https://www.google.com/search?q=${encodeURIComponent(researchQuery)}`;
@@ -797,34 +841,37 @@ function NewPautaDialog({
   };
 
   const runGenerateAll = async () => {
-    if (kind !== 'review') {
-      toast.info('Fluxo automático disponível apenas para Review por enquanto.');
-      return;
-    }
+    const isNews = kind === 'news';
     const release = selectedRelease || null;
-    if (!release) { toast.error('Selecione um disco antes.'); return; }
-    if (!insumo.trim()) { toast.error('Preencha o insumo da pesquisa.'); return; }
+    if (!isNews && !release) { toast.error('Selecione um disco antes.'); return; }
+    if (isNews && !newsSubject.trim()) { toast.error('Preencha o assunto da notícia.'); return; }
+    if (!insumo.trim()) { toast.error(isNews ? 'Preencha a direção da pesquisa.' : 'Preencha o insumo da pesquisa.'); return; }
     setManualMode(false);
     setGenerating(true);
     setStep('result');
     setResult('');
-    progress.start('Gerando review Kilton');
+    progress.start(isNews ? 'Gerando pauta de notícia' : 'Gerando review Kilton');
     const banned = (settings?.banned_terms_text || '')
       .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
     const temperature = typeof settings?.brand_tone_temperature === 'number'
       ? Math.max(0, Math.min(1, settings.brand_tone_temperature / 100))
       : 0.7;
     try {
-      const prompt = buildKiltonReviewPrompt(
-        { release, insumo, lengthWords: lengthWordsNum, sentiment },
-        settings,
-      );
+      const prompt = isNews
+        ? buildNewsPautaPrompt(
+            { subject: newsSubject, insumo, lengthWords: lengthWordsNum },
+            settings,
+          )
+        : buildKiltonReviewPrompt(
+            { release: release!, insumo, lengthWords: lengthWordsNum, sentiment },
+            settings,
+          );
       let text = await streamGeneratePauta({
         prompt,
         bannedTerms: banned,
         temperature,
         system: 'Você é o redator-chefe do podcast Heavynauta. Saída em Markdown puro.',
-        label: 'Review Kilton',
+        label: isNews ? 'Pauta de notícia' : 'Review Kilton',
         progress,
         silentLifecycle: true,
         onChunk: (full) => setResult(full),
@@ -876,7 +923,7 @@ function NewPautaDialog({
       const banned = (settings?.banned_terms_text || '')
         .split(/[\n,;]+/).map(s => s.trim()).filter(Boolean);
       const raw = await streamGeneratePauta({
-        prompt: buildTitlesPrompt({ release: selectedRelease || null, pautaMarkdown: result, insumo }),
+        prompt: buildTitlesPrompt({ release: selectedRelease || null, pautaMarkdown: result, insumo, subject: kind === 'news' ? newsSubject : undefined }),
         bannedTerms: banned,
         temperature: 0.85,
         system: 'Você gera 3 opções de título seguindo um contrato JSON estrito.',
@@ -928,6 +975,7 @@ function NewPautaDialog({
           pautaMarkdown: result,
           mentioned,
           release: selectedRelease || null,
+          subject: kind === 'news' ? newsSubject : undefined,
         }),
         bannedTerms: banned,
         temperature: 0.6,
@@ -1050,6 +1098,7 @@ function NewPautaDialog({
           )}
 
           {step === 'release' && kind && (
+            (kind === 'news' ? null : (
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-sm">
@@ -1147,13 +1196,53 @@ function NewPautaDialog({
                 </div>
               )}
             </div>
+            ))
+          )}
+
+          {step === 'news_subject' && kind === 'news' && (
+            <div className="py-2 space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Newspaper className="h-4 w-4 text-primary" />
+                <span className="font-medium">Notícia</span>
+                <button onClick={() => pickKind('review')} className="text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2">
+                  trocar para Review
+                </button>
+              </div>
+              <div>
+                <Label className="text-[11px] uppercase text-muted-foreground">Assunto da notícia</Label>
+                <Textarea
+                  autoFocus
+                  value={newsSubject}
+                  onChange={(e) => setNewsSubject(e.target.value)}
+                  onBlur={() => persistData({ news_subject: newsSubject })}
+                  rows={3}
+                  placeholder="Ex.: Metallica anuncia nova turnê mundial para 2027, com passagem por SP…"
+                  className="mt-1 text-sm"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">Descreva em 1–3 linhas o que aconteceu. Esse assunto vira o núcleo da pesquisa.</p>
+              </div>
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  className="gap-2"
+                  disabled={!newsSubject.trim()}
+                  onClick={() => {
+                    const q = buildNewsSearchQuery(newsSubject);
+                    setResearchQuery(q);
+                    goToStep('research', { news_subject: newsSubject, research_query: q });
+                  }}
+                >
+                  <Search className="h-4 w-4" /> Buscar notícia
+                </Button>
+              </div>
+            </div>
           )}
 
           {step === 'research' && (
             <div className="py-2 space-y-4">
               <div className="flex items-center justify-between">
                 <div className="text-sm font-medium">Pesquisa</div>
-                <button onClick={() => goToStep('release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
+                <button onClick={() => goToStep(kind === 'news' ? 'news_subject' : 'release')} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar
                 </button>
               </div>
@@ -1201,7 +1290,7 @@ function NewPautaDialog({
           {step === 'insumo' && (
             <div className="py-2 space-y-3">
               <div className="flex items-center justify-between">
-                <div className="text-sm font-medium">Insumo</div>
+                <div className="text-sm font-medium">{kind === 'news' ? 'Direção da pesquisa' : 'Insumo'}</div>
                 <button onClick={() => goToStep('research', { insumo })} className="text-[11px] text-muted-foreground hover:text-foreground inline-flex items-center gap-1">
                   <ArrowLeft className="h-3 w-3" /> voltar à pesquisa
                 </button>
@@ -1211,13 +1300,30 @@ function NewPautaDialog({
                 onChange={(e) => setInsumo(e.target.value)}
                 onBlur={() => persistData({ insumo })}
                 rows={14}
-                placeholder="Cole aqui as notas da pesquisa (manual ou IA). Pode editar livremente."
+                placeholder={kind === 'news'
+                  ? 'Edite a direção editorial da notícia — fatos, ângulos, links relevantes. A IA vai usar isso como núcleo (peso 3x) da pauta.'
+                  : 'Cole aqui as notas da pesquisa (manual ou IA). Pode editar livremente.'}
                 className="text-sm"
               />
-              <div className="flex justify-end pt-1">
-                <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => goToStep('config', { insumo })}>
-                  Seguir <ArrowRight className="h-4 w-4" />
-                </Button>
+              <div className="flex justify-end pt-1 gap-2">
+                {kind === 'news' ? (
+                  <Button
+                    size="sm"
+                    className="gap-2"
+                    disabled={!insumo.trim() || generating}
+                    onClick={async () => {
+                      await persistData({ insumo });
+                      void runGenerateAll();
+                    }}
+                  >
+                    {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Criar com IA
+                  </Button>
+                ) : (
+                  <Button size="sm" className="gap-2" disabled={!insumo.trim()} onClick={() => goToStep('config', { insumo })}>
+                    Seguir <ArrowRight className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           )}

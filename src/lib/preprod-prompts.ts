@@ -231,6 +231,79 @@ export function countWords(text: string): number {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Notícia — pauta editorial baseada em um assunto + direção de pesquisa
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NEWS_PROMPT = `# 📰 PAUTA DE NOTÍCIA — HEAVYNAUTA
+
+## Cobertura editorial densa, contextualizada, jornalística
+
+Você é o redator-chefe do podcast Heavynauta. Vai produzir a PAUTA COMPLETA de um episódio de NOTÍCIA sobre o assunto abaixo. O texto final deve ter aproximadamente **{{length_words}} palavras** (tolerância ±15%).
+
+# 📌 ASSUNTO DA NOTÍCIA
+{{subject}}
+
+# 🧠 DIREÇÃO EDITORIAL / INSUMO DA PESQUISA (PESO 3x)
+O bloco abaixo é a **fonte primária** do episódio. Ele tem PESO TRIPLO em relação ao restante deste prompt. Cada fato relevante do INSUMO deve estar presente, visível e integrado à pauta final. Não invente fatos; se algo do INSUMO conflita com conhecimento geral, o INSUMO vence.
+
+{{notes}}
+
+## 📰 Regras editoriais da plataforma
+{{platform_block}}
+
+# 🧱 ESTRUTURA OBRIGATÓRIA (Markdown puro)
+
+# H1 — 🎬 O QUE ACONTECEU
+## H2 — Fato central em 3-5 bullets objetivos
+## H2 — Timeline (datas, ordem dos acontecimentos)
+## H2 — Personagens envolvidos (banda, gravadora, jornalistas, fãs)
+
+# H1 — 🧭 CONTEXTO
+## H2 — Histórico da banda/cena/gênero relacionado ao fato
+## H2 — Precedentes (casos parecidos, quando fizer sentido)
+## H2 — Situação da indústria hoje
+
+# H1 — 🔬 ANÁLISE EDITORIAL
+## H2 — O que isso significa musicalmente/culturalmente
+## H2 — Leituras possíveis (separe FATO, INTERPRETAÇÃO e OPINIÃO DE FÃS)
+## H2 — Ganchos para debate no episódio (3-5 perguntas)
+
+# H1 — 🌐 RECEPÇÃO
+## H2 — Reação da crítica especializada
+## H2 — Reação dos fãs (fóruns, redes, comentários)
+## H2 — Posicionamento oficial (se houver)
+
+# H1 — 🎧 PARA O EPISÓDIO
+## H2 — Sugestões de faixas/álbuns/vídeos relacionados
+## H2 — Links úteis (se aparecerem no INSUMO)
+## H2 — Fechamento iniciado por "PENSE NISSO:"
+
+# 🚨 AUDITORIA FINAL
+Antes de entregar: hierarquia H1–H4 correta, bullets/subitens, densidade real, cada ponto factual do INSUMO incorporado, sem repetição, tom humano, jornalístico e reflexivo. Tamanho ≈ {{length_words}} palavras.
+
+# 🎯 COMANDO FINAL
+Produza a pauta de notícia em **Markdown puro** (sem envelopar em fences).`;
+
+export function buildNewsPautaPrompt(args: {
+  subject: string;
+  insumo: string;
+  lengthWords: number;
+}, settings: Partial<AppSettings> | null | undefined): string {
+  const { subject, insumo, lengthWords } = args;
+  return NEWS_PROMPT
+    .replace(/\{\{length_words\}\}/g, String(lengthWords))
+    .replace(/\{\{subject\}\}/g, (subject || '').trim() || '(assunto não informado)')
+    .replace(/\{\{notes\}\}/g, (insumo || '').trim() || '(direção da pesquisa vazia)')
+    .replace(/\{\{platform_block\}\}/g, buildPlatformBlock(settings));
+}
+
+/** Prompt de pesquisa usado tanto no Google (manual) quanto no OpenRouter :online (IA). */
+export function buildNewsSearchQuery(subject: string): string {
+  const s = (subject || '').trim();
+  return `Busquem em centenas de fontes informações detalhadas sobre o assunto >>> ${s} <<<`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Títulos (3 opções: clickbait / curiosidade / impacto)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -247,10 +320,11 @@ export function buildTitlesPrompt(args: {
   release: Release | null;
   pautaMarkdown: string;
   insumo?: string;
+  subject?: string;
 }): string {
-  const { release, pautaMarkdown, insumo } = args;
-  const band = release?.artist || '(banda)';
-  const album = release?.album || '(álbum)';
+  const { release, pautaMarkdown, insumo, subject } = args;
+  const band = release?.artist || (subject ? '(notícia)' : '(banda)');
+  const album = release?.album || (subject || '(álbum)');
   return [
     'Você é o redator-chefe do podcast Heavynauta. Gere 3 opções de TÍTULO para o episódio.',
     '',
@@ -271,13 +345,14 @@ export function buildTitlesPrompt(args: {
     '',
     `BANDA: ${band}`,
     `ÁLBUM: ${album}`,
+    subject ? `ASSUNTO DA NOTÍCIA: ${subject}` : '',
     '',
     'PAUTA (markdown) — fonte principal:',
     '<<<',
     (pautaMarkdown || '').slice(0, 12000),
     '>>>',
     insumo && insumo.trim() ? `\nNOTAS DA PESQUISA:\n${insumo.slice(0, 4000)}` : '',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 /** Parse the strict JSON contract above, tolerando code fences e texto extra. */
@@ -316,8 +391,9 @@ export function buildDescriptionPrompt(args: {
   pautaMarkdown: string;
   mentioned?: string;
   release: Release | null;
+  subject?: string;
 }): string {
-  const { selectedTitle, pautaMarkdown, mentioned, release } = args;
+  const { selectedTitle, pautaMarkdown, mentioned, release, subject } = args;
   const mentionedBlock = (mentioned || '').trim();
   return [
     'Você é o redator-chefe do podcast Heavynauta. Gere APENAS a descrição editorial HTML do episódio.',
@@ -346,6 +422,7 @@ export function buildDescriptionPrompt(args: {
     `TÍTULO SELECIONADO: ${selectedTitle}`,
     release ? `BANDA: ${release.artist}` : '',
     release ? `ÁLBUM: ${release.album}` : '',
+    subject ? `ASSUNTO DA NOTÍCIA: ${subject}` : '',
     '',
     'PAUTA (markdown) — base factual:',
     '<<<',

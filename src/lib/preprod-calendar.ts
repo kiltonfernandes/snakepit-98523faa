@@ -106,9 +106,11 @@ export function inferPreprodStatus(item: Pick<PreprodPauta, 'status' | 'data'>):
 }
 
 export function inferPreprodStep(data: Record<string, any>, kind: PreprodKind | null): string {
-  const order = ['kind', 'release', 'research', 'insumo', 'config', 'result', 'titles', 'description', 'cover', 'package'];
+  const order = ['kind', 'release', 'news_subject', 'research', 'insumo', 'config', 'result', 'titles', 'description', 'cover', 'package'];
   let inferred = 'kind';
-  if (kind) inferred = 'release';
+  if (kind === 'news') inferred = 'news_subject';
+  else if (kind) inferred = 'release';
+  if (data.news_subject) inferred = 'research';
   if (data.release_id || data.research_query) inferred = 'research';
   if (data.insumo) inferred = 'config';
   if (data.result_markdown) inferred = 'titles';
