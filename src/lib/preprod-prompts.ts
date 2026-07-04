@@ -247,10 +247,11 @@ export function buildTitlesPrompt(args: {
   release: Release | null;
   pautaMarkdown: string;
   insumo?: string;
+  subject?: string;
 }): string {
-  const { release, pautaMarkdown, insumo } = args;
-  const band = release?.artist || '(banda)';
-  const album = release?.album || '(álbum)';
+  const { release, pautaMarkdown, insumo, subject } = args;
+  const band = release?.artist || (subject ? '(notícia)' : '(banda)');
+  const album = release?.album || (subject || '(álbum)');
   return [
     'Você é o redator-chefe do podcast Heavynauta. Gere 3 opções de TÍTULO para o episódio.',
     '',
@@ -271,13 +272,14 @@ export function buildTitlesPrompt(args: {
     '',
     `BANDA: ${band}`,
     `ÁLBUM: ${album}`,
+    subject ? `ASSUNTO DA NOTÍCIA: ${subject}` : '',
     '',
     'PAUTA (markdown) — fonte principal:',
     '<<<',
     (pautaMarkdown || '').slice(0, 12000),
     '>>>',
     insumo && insumo.trim() ? `\nNOTAS DA PESQUISA:\n${insumo.slice(0, 4000)}` : '',
-  ].join('\n');
+  ].filter(Boolean).join('\n');
 }
 
 /** Parse the strict JSON contract above, tolerando code fences e texto extra. */
@@ -316,8 +318,9 @@ export function buildDescriptionPrompt(args: {
   pautaMarkdown: string;
   mentioned?: string;
   release: Release | null;
+  subject?: string;
 }): string {
-  const { selectedTitle, pautaMarkdown, mentioned, release } = args;
+  const { selectedTitle, pautaMarkdown, mentioned, release, subject } = args;
   const mentionedBlock = (mentioned || '').trim();
   return [
     'Você é o redator-chefe do podcast Heavynauta. Gere APENAS a descrição editorial HTML do episódio.',
@@ -346,6 +349,7 @@ export function buildDescriptionPrompt(args: {
     `TÍTULO SELECIONADO: ${selectedTitle}`,
     release ? `BANDA: ${release.artist}` : '',
     release ? `ÁLBUM: ${release.album}` : '',
+    subject ? `ASSUNTO DA NOTÍCIA: ${subject}` : '',
     '',
     'PAUTA (markdown) — base factual:',
     '<<<',
