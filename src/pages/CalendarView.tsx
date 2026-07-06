@@ -282,7 +282,9 @@ export default function CalendarView() {
     }[] = [];
 
     if (showPautas) {
-      getPreprodForDate(dateStr).forEach((p) => {
+      const dayPreprod = getPreprodForDate(dateStr);
+      const dayPreprodIds = new Set(dayPreprod.map((p) => p.id));
+      dayPreprod.forEach((p) => {
         items.push({
           key: `preprod-${p.id}`,
           type: 'preprod',
@@ -304,7 +306,14 @@ export default function CalendarView() {
         });
       });
       materials
-        .filter((m) => m.episode_date === dateStr && (!m.source_pauta_id || !dayPautaIds.has(m.source_pauta_id)))
+        .filter((m) => {
+          if (m.episode_date !== dateStr) return false;
+          // Skip if the material's regular pauta is already rendered
+          if (m.source_pauta_id && dayPautaIds.has(m.source_pauta_id)) return false;
+          // Skip if the material is linked to a preprod pauta already rendered on this day
+          if ((m as any).preprod_pauta_id && dayPreprodIds.has((m as any).preprod_pauta_id)) return false;
+          return true;
+        })
         .forEach((m) => {
           items.push({
             key: `material-${m.id}`,
