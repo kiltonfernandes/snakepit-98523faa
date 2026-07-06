@@ -1802,6 +1802,31 @@ function NewPautaDialog({
                         <Copy className="h-3.5 w-3.5" /> Copiar
                       </Button>
                     </div>
+                    {titleLabelPrefix && (
+                      <div className="flex items-center justify-between rounded-md border border-border bg-muted/30 px-2.5 py-1.5 mb-2">
+                        <div className="space-y-0.5 min-w-0 pr-2">
+                          <Label htmlFor="title-label-toggle-pkg" className="text-[11px] font-medium cursor-pointer">
+                            Label "Resenha: [Banda] - [Álbum]"
+                          </Label>
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {titleLabelOn ? `Prefixo aplicado: ${titleLabelPrefix.trim()}` : 'Off — sem prefixo.'}
+                          </p>
+                        </div>
+                        <Switch
+                          id="title-label-toggle-pkg"
+                          checked={titleLabelOn}
+                          onCheckedChange={(v) => {
+                            setTitleLabelOn(v);
+                            const stripped = titleLabelPrefix && selectedTitle.startsWith(titleLabelPrefix)
+                              ? selectedTitle.slice(titleLabelPrefix.length)
+                              : selectedTitle;
+                            const next = v && titleLabelPrefix ? `${titleLabelPrefix}${stripped}` : stripped;
+                            setSelectedTitle(next);
+                            persistData({ title_label_on: v, selected_title: next });
+                          }}
+                        />
+                      </div>
+                    )}
                     <Textarea value={selectedTitle} onChange={(e) => setSelectedTitle(e.target.value)} onBlur={() => persistData({ selected_title: selectedTitle })} rows={2} className="text-sm" />
                   </div>
                   <div className="rounded-lg border border-border bg-card/40 p-3">
