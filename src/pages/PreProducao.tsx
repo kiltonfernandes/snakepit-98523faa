@@ -816,6 +816,11 @@ function NewPautaDialog({
     else {
       if (data) onSaved?.(normalizePreprodPauta(data));
       if (seq === saveSeqRef.current) void onChanged();
+      try {
+        await syncPreprodToEpisodeMaterial(pautaId, preprodDate(effectiveDate!), nextData);
+      } catch (e) {
+        console.warn('[preprod] falha ao sincronizar episode_materials', e);
+      }
     }
   };
 
