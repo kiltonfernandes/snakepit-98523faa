@@ -593,7 +593,7 @@ function NewPautaDialog({
       setSinglesSelection(Array.isArray(data.singles_selection) ? data.singles_selection : []);
       setLengthWords(String(data.length_words || '500'));
       setSentiment((data.sentiment as ReviewSentiment) || 'neutral');
-      setResult(data.result_markdown || '');
+      setResult(data.result_markdown ? wrapWithSegways(data.result_markdown) : '');
       setManualMode(data.mode === 'manual');
       setGenerating(false);
       setTitles(Array.isArray(data.titles) ? data.titles : []);
