@@ -325,9 +325,10 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
           </div>
 
           {/* RIGHT: preview / actions */}
-          <div className="flex flex-col bg-muted/10">
+          <div className="flex flex-col bg-muted/10 min-h-0">
             {selected ? (
-              <div className="p-5 flex flex-col h-full gap-4">
+              <div className="flex flex-col h-full min-h-0">
+                <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
                 <div>
                   <p className="text-xs uppercase tracking-widest text-muted-foreground font-mono">Selecionado</p>
                   <h3 className="text-lg font-bold leading-tight mt-1 break-words">{selected.name}</h3>
@@ -358,7 +359,8 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
                     </ul>
                   )}
                 </div>
-                <div className="flex flex-col gap-2 mt-auto">
+                </div>
+                <div className="flex flex-col gap-2 p-5 pt-3 border-t border-border bg-muted/20 shrink-0">
                   <Button variant="outline" size="sm" onClick={() => togglePlay(selected)}>
                     {playingId === selected.id ? <><Pause className="w-3.5 h-3.5 mr-1" /> Pausar</> : <><Play className="w-3.5 h-3.5 mr-1" /> Preview</>}
                   </Button>
