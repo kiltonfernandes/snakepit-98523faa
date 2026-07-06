@@ -916,8 +916,8 @@ function NewPautaDialog({
         length_words: lengthWordsNum,
         sentiment,
         mode: 'generate_all',
-        result_markdown: text,
-        word_count: countWords(text),
+        result_markdown: wrapWithSegways(text),
+        word_count: countWords(wrapWithSegways(text)),
         step: 'result',
       });
       progress.finish(null);
