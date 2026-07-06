@@ -901,6 +901,7 @@ function NewPautaDialog({
 
   const discard = async () => {
     if (pautaId) {
+      await supabase.from('episode_materials' as any).delete().eq('preprod_pauta_id', pautaId);
       const { error } = await supabase.from('preprod_pautas').delete().eq('id', pautaId);
       if (error) toast.error('Falha ao descartar: ' + error.message);
       else toast.success('Rascunho descartado.');
