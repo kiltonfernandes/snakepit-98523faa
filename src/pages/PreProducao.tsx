@@ -76,6 +76,61 @@ const VIEW_LABELS: Record<View, string> = {
 
 const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
+// ─── Rivaldo bridge ──────────────────────────────────────────────────────────
+// Preprod pautas precisam aparecer no seletor de episódios do Rivaldo. Para
+// isso espelhamos a informação editorial em `episode_materials` sempre que já
+// existe pelo menos um título. `preprod_pauta_id` amarra o registro ao
+// rascunho de origem (unique index) para o upsert ser idempotente.
+const SLOT_BY_WEEKDAY: Record<number, string> = {
+  0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday',
+  4: 'thursday', 5: 'friday', 6: 'saturday',
+};
+
+async function syncPreprodToEpisodeMaterial(
+  pautaId: string,
+  publicationDate: string,
+  data: Record<string, any>,
+) {
+  const titles = Array.isArray(data.titles) ? data.titles as { kind?: string; text: string }[] : [];
+  const selectedTitle: string = data.selected_title || '';
+  if (!selectedTitle && titles.length === 0) return;
+  const titleOptions = titles.length > 0
+    ? titles.map(t => ({ text: String(t.text || '').trim() })).filter(t => t.text)
+    : [{ text: selectedTitle }];
+  let selectedIndex = 0;
+  if (selectedTitle) {
+    const idx = titleOptions.findIndex(t => t.text === selectedTitle);
+    selectedIndex = idx >= 0 ? idx : 0;
+    if (idx < 0) titleOptions.unshift({ text: selectedTitle });
+  }
+  const weekMonth = publicationDate.slice(0, 7);
+  const weekId = `standalone-${weekMonth}`;
+  const weekStart = `${weekMonth}-01`;
+  await supabase.from('editorial_weeks' as any).upsert({
+    id: weekId, start_date: weekStart, status: 'draft',
+  } as any, { onConflict: 'id' });
+  const wd = new Date(`${publicationDate}T12:00:00`).getDay();
+  const slotKey = SLOT_BY_WEEKDAY[wd] || 'monday';
+  const coverUrl = typeof data.cover_url === 'string' && !data.cover_url.startsWith('data:')
+    ? data.cover_url : null;
+  const payload: Record<string, any> = {
+    preprod_pauta_id: pautaId,
+    week_id: weekId,
+    slot_key: slotKey,
+    episode_date: publicationDate,
+    title_options_json: titleOptions,
+    selected_title_index: selectedIndex,
+    description_html: data.description_html || null,
+    cover_url: coverUrl,
+    cover_source_url: data.cover_source_url || null,
+    mentioned_in_episode: data.mentioned || null,
+    is_standalone: true,
+    updated_at: new Date().toISOString(),
+  };
+  await supabase.from('episode_materials' as any)
+    .upsert(payload as any, { onConflict: 'preprod_pauta_id' });
+}
+
 export default function PreProducao() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [view, setView] = useState<View>('month');
