@@ -3,15 +3,17 @@
  * Permite buscar, abrir no Metal Archives, remover da shortlist e
  * disparar a criação de uma nova pauta (review) pré-preenchida.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Star, Search, ExternalLink, Sparkles, Disc } from 'lucide-react';
+import { Star, Search, ExternalLink, Sparkles, Disc, CheckCircle2 } from 'lucide-react';
 import { useApp } from '@/contexts/AppContext';
 import { resolveAllLinks } from '@/lib/dynamic-links';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface Props {
@@ -23,6 +25,43 @@ interface Props {
 export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Props) {
   const { releases, updateRelease } = useApp();
   const [q, setQ] = useState('');
+  const navigate = useNavigate();
+  const [pautaByRelease, setPautaByRelease] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('preprod_pautas')
+        .select('id, release_id')
+        .not('release_id', 'is', null);
+      if (cancelled || error || !data) return;
+      const map: Record<string, string> = {};
+      for (const row of data as Array<{ id: string; release_id: string | null }>) {
+        if (row.release_id && !map[row.release_id]) map[row.release_id] = row.id;
+      }
+      setPautaByRelease(map);
+    })();
+    const channel = supabase
+      .channel('shortlist-preprod-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'preprod_pautas' }, () => {
+        supabase
+          .from('preprod_pautas')
+          .select('id, release_id')
+          .not('release_id', 'is', null)
+          .then(({ data }) => {
+            if (cancelled || !data) return;
+            const map: Record<string, string> = {};
+            for (const row of data as Array<{ id: string; release_id: string | null }>) {
+              if (row.release_id && !map[row.release_id]) map[row.release_id] = row.id;
+            }
+            setPautaByRelease(map);
+          });
+      })
+      .subscribe();
+    return () => { cancelled = true; void supabase.removeChannel(channel); };
+  }, [open]);
 
   const shortlisted = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -65,8 +104,9 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
             ) : shortlisted.map((r) => {
               const links = resolveAllLinks(r);
               const ma = links.metal_archives || r.metal_archives_url;
+              const existingPautaId = pautaByRelease[r.id];
               return (
-                <div key={r.id} className="flex items-start gap-3 px-6 py-3 hover:bg-muted/30">
+                <div key={r.id} className={`flex items-start gap-3 px-6 py-3 hover:bg-muted/30 ${existingPautaId ? 'border-l-4 border-l-emerald-500 bg-emerald-500/5' : ''}`}>
                   <Disc className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm truncate">{r.artist} — {r.album}</div>
@@ -77,6 +117,11 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
                       {r.country && <Badge variant="outline" className="font-normal text-[10px]">{r.country}</Badge>}
                       {typeof r.rating === 'number' && (
                         <span className="text-[10px] text-primary">{'★'.repeat(r.rating)}{'☆'.repeat(Math.max(0, 5 - r.rating))}</span>
+                      )}
+                      {existingPautaId && (
+                        <Badge className="font-semibold text-[10px] bg-emerald-500 text-white hover:bg-emerald-600 border-transparent">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> PAUTA CRIADA
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -99,7 +144,19 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
                     >
                       <Star className="h-3.5 w-3.5 fill-current text-primary" />
                     </Button>
-                    {onCreatePautaFromRelease && (
+                    {existingPautaId ? (
+                      <Button
+                        size="sm"
+                        className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/50"
+                        onClick={() => {
+                          navigate(`/pre-producao?preprod=${existingPautaId}`);
+                          onClose();
+                        }}
+                        title="Abrir pauta já criada"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Ver pauta
+                      </Button>
+                    ) : onCreatePautaFromRelease && (
                       <Button
                         size="sm"
                         variant="default"
