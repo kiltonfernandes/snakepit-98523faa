@@ -184,6 +184,7 @@ export type Database = {
           id: string
           is_standalone: boolean
           mentioned_in_episode: string | null
+          preprod_pauta_id: string | null
           repository_file_id: string | null
           repository_provider: string | null
           repository_uploaded_at: string | null
@@ -206,6 +207,7 @@ export type Database = {
           id: string
           is_standalone?: boolean
           mentioned_in_episode?: string | null
+          preprod_pauta_id?: string | null
           repository_file_id?: string | null
           repository_provider?: string | null
           repository_uploaded_at?: string | null
@@ -228,6 +230,7 @@ export type Database = {
           id?: string
           is_standalone?: boolean
           mentioned_in_episode?: string | null
+          preprod_pauta_id?: string | null
           repository_file_id?: string | null
           repository_provider?: string | null
           repository_uploaded_at?: string | null
