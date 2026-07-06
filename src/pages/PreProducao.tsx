@@ -81,10 +81,12 @@ const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 // isso espelhamos a informação editorial em `episode_materials` sempre que já
 // existe pelo menos um título. `preprod_pauta_id` amarra o registro ao
 // rascunho de origem (unique index) para o upsert ser idempotente.
-const SLOT_BY_WEEKDAY: Record<number, string> = {
-  0: 'sunday', 1: 'monday', 2: 'tuesday', 3: 'wednesday',
-  4: 'thursday', 5: 'friday', 6: 'saturday',
-};
+//
+// Usamos week_id/slot_key ÚNICOS por pauta (`preprod-<id>`) para nunca colidir
+// com a constraint UNIQUE(week_id, slot_key) — mesmo se houver várias avulsas
+// no mesmo dia da semana. O Rivaldo agrupa por `is_standalone` mesmo assim.
+function preprodWeekId(pautaId: string) { return `preprod-${pautaId}`; }
+function preprodSlotKey(pautaId: string) { return `preprod-${pautaId.slice(0, 8)}`; }
 
 async function syncPreprodToEpisodeMaterial(
   pautaId: string,
@@ -103,14 +105,12 @@ async function syncPreprodToEpisodeMaterial(
     selectedIndex = idx >= 0 ? idx : 0;
     if (idx < 0) titleOptions.unshift({ text: selectedTitle });
   }
-  const weekMonth = publicationDate.slice(0, 7);
-  const weekId = `standalone-${weekMonth}`;
-  const weekStart = `${weekMonth}-01`;
-  await supabase.from('editorial_weeks' as any).upsert({
-    id: weekId, start_date: weekStart, status: 'draft',
+  const weekId = preprodWeekId(pautaId);
+  const slotKey = preprodSlotKey(pautaId);
+  const { error: weekErr } = await supabase.from('editorial_weeks' as any).upsert({
+    id: weekId, start_date: publicationDate, status: 'draft',
   } as any, { onConflict: 'id' });
-  const wd = new Date(`${publicationDate}T12:00:00`).getDay();
-  const slotKey = SLOT_BY_WEEKDAY[wd] || 'monday';
+  if (weekErr) { console.error('[preprod] editorial_weeks upsert falhou', weekErr); throw weekErr; }
   const coverUrl = typeof data.cover_url === 'string' && !data.cover_url.startsWith('data:')
     ? data.cover_url : null;
   const payload: Record<string, any> = {
@@ -127,8 +127,21 @@ async function syncPreprodToEpisodeMaterial(
     is_standalone: true,
     updated_at: new Date().toISOString(),
   };
-  await supabase.from('episode_materials' as any)
+  const { error: emErr } = await supabase.from('episode_materials' as any)
     .upsert(payload as any, { onConflict: 'preprod_pauta_id' });
+  if (emErr) { console.error('[preprod] episode_materials upsert falhou', emErr, payload); throw emErr; }
+}
+
+// Backfill: garante que toda preprod pauta com título esteja espelhada.
+async function backfillPreprodMirrors(pautas: PreprodPauta[]) {
+  const eligible = pautas.filter((p) => {
+    const d = (p as any).data || {};
+    const hasTitles = Array.isArray(d.titles) && d.titles.length > 0;
+    return hasTitles || !!d.selected_title;
+  });
+  await Promise.allSettled(eligible.map((p) =>
+    syncPreprodToEpisodeMaterial(p.id, preprodDate(p.publication_date), (p as any).data || {})
+  ));
 }
 
 export default function PreProducao() {
@@ -154,6 +167,13 @@ export default function PreProducao() {
     }
     setPreprodPautas(((data || []) as any[]).map(normalizePreprodPauta));
   }, []);
+
+  // Backfill on mount: repara episode_materials de preprods já existentes.
+  useEffect(() => {
+    if (preprodPautas.length === 0) return;
+    void backfillPreprodMirrors(preprodPautas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preprodPautas.length]);
 
   const upsertPreprodPauta = useCallback((row: any) => {
     const normalized = normalizePreprodPauta(row);
