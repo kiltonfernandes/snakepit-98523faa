@@ -106,10 +106,17 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
               const ma = links.metal_archives || r.metal_archives_url;
               const existingPautaId = pautaByRelease[r.id];
               return (
-                <div key={r.id} className={`flex items-start gap-3 px-6 py-3 hover:bg-muted/30 ${existingPautaId ? 'border-l-4 border-l-emerald-500 bg-emerald-500/5' : ''}`}>
-                  <Disc className="h-4 w-4 text-muted-foreground mt-1 shrink-0" />
+                <div
+                  key={r.id}
+                  className={`flex items-start gap-3 px-6 py-3 hover:bg-muted/30 transition-colors ${
+                    existingPautaId
+                      ? 'border-l-4 border-l-emerald-400 bg-emerald-400/15 shadow-[inset_0_0_20px_rgba(52,211,153,0.15)]'
+                      : ''
+                  }`}
+                >
+                  <Disc className={`h-4 w-4 mt-1 shrink-0 ${existingPautaId ? 'text-emerald-400' : 'text-muted-foreground'}`} />
                   <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm truncate">{r.artist} — {r.album}</div>
+                    <div className={`font-medium text-sm truncate ${existingPautaId ? 'text-emerald-50' : ''}`}>{r.artist} — {r.album}</div>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {(r.genres || []).slice(0, 4).map(g => (
                         <Badge key={g} variant="secondary" className="font-normal text-[10px]">{g}</Badge>
@@ -119,7 +126,7 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
                         <span className="text-[10px] text-primary">{'★'.repeat(r.rating)}{'☆'.repeat(Math.max(0, 5 - r.rating))}</span>
                       )}
                       {existingPautaId && (
-                        <Badge className="font-semibold text-[10px] bg-emerald-500 text-white hover:bg-emerald-600 border-transparent">
+                        <Badge className="font-semibold text-[10px] bg-emerald-400 text-emerald-950 hover:bg-emerald-300 border-transparent">
                           <CheckCircle2 className="h-3 w-3 mr-1" /> PAUTA CRIADA
                         </Badge>
                       )}
