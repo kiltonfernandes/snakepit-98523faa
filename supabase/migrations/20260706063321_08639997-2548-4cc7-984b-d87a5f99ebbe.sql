@@ -1,0 +1,2 @@
+ALTER TABLE public.episode_materials ADD COLUMN IF NOT EXISTS preprod_pauta_id UUID DEFAULT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ux_episode_materials_preprod_pauta_id ON public.episode_materials(preprod_pauta_id) WHERE preprod_pauta_id IS NOT NULL;
