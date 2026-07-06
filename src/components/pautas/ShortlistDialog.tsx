@@ -68,7 +68,7 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
     return releases
       .filter(r => r.shortlist)
       .filter(r => !term || `${r.artist} ${r.album} ${(r.genres || []).join(' ')}`.toLowerCase().includes(term))
-      .sort((a, b) => (a.artist || '').localeCompare(b.artist || ''));
+      .sort((a, b) => (a.release_date || '').localeCompare(b.release_date || ''));
   }, [releases, q]);
 
   return (
