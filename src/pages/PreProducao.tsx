@@ -44,6 +44,7 @@ import {
 import { SinglesPickerModal } from '@/components/pautas/SinglesPickerModal';
 import { generateCoverImage } from '@/lib/cover-generator';
 import { streamGeneratePauta } from '@/lib/ai/openrouter-client';
+import { wrapWithSegways } from '@/lib/standalone-prompts';
 import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
