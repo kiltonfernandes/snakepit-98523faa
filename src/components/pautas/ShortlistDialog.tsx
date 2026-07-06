@@ -154,7 +154,7 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
                     {existingPautaId ? (
                       <Button
                         size="sm"
-                        className="gap-1.5 bg-emerald-500 hover:bg-emerald-600 text-white font-semibold shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400/50"
+                        className="gap-1.5 bg-emerald-500 hover:bg-emerald-400 text-white font-semibold shadow-[0_0_20px_rgba(16,185,129,0.45)] ring-2 ring-emerald-300/70 animate-pulse hover:animate-none hover:scale-105 transition-transform"
                         onClick={() => {
                           navigate(`/pre-producao?preprod=${existingPautaId}`);
                           onClose();
