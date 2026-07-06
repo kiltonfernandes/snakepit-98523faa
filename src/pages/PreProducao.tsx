@@ -168,6 +168,13 @@ export default function PreProducao() {
     setPreprodPautas(((data || []) as any[]).map(normalizePreprodPauta));
   }, []);
 
+  // Backfill on mount: repara episode_materials de preprods já existentes.
+  useEffect(() => {
+    if (preprodPautas.length === 0) return;
+    void backfillPreprodMirrors(preprodPautas);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preprodPautas.length]);
+
   const upsertPreprodPauta = useCallback((row: any) => {
     const normalized = normalizePreprodPauta(row);
     setPreprodPautas((prev) => {
