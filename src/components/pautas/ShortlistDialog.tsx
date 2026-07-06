@@ -32,7 +32,7 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
     if (!open) return;
     let cancelled = false;
     (async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('preprod_pautas')
         .select('id, release_id')
         .not('release_id', 'is', null);
@@ -46,14 +46,14 @@ export function ShortlistDialog({ open, onClose, onCreatePautaFromRelease }: Pro
     const channel = supabase
       .channel('shortlist-preprod-sync')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'preprod_pautas' }, () => {
-        supabase
+        (supabase as any)
           .from('preprod_pautas')
           .select('id, release_id')
           .not('release_id', 'is', null)
-          .then(({ data }) => {
+          .then(({ data }: { data: Array<{ id: string; release_id: string | null }> | null }) => {
             if (cancelled || !data) return;
             const map: Record<string, string> = {};
-            for (const row of data as Array<{ id: string; release_id: string | null }>) {
+            for (const row of data) {
               if (row.release_id && !map[row.release_id]) map[row.release_id] = row.id;
             }
             setPautaByRelease(map);
