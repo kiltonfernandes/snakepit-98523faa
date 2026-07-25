@@ -47,6 +47,60 @@ export function PautaComments({ pautaId, containerRef }: Props) {
 
   useEffect(() => { loadComments(); }, [loadComments]);
 
+  // Highlight commented snippets in the pauta content.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const HIGHLIGHT_CLASS = 'pauta-comment-highlight';
+    const apply = () => {
+      // Clear previous highlights.
+      container.querySelectorAll(`mark.${HIGHLIGHT_CLASS}`).forEach((el) => {
+        const parent = el.parentNode;
+        if (!parent) return;
+        while (el.firstChild) parent.insertBefore(el.firstChild, el);
+        parent.removeChild(el);
+        parent.normalize();
+      });
+      if (!comments.length) return;
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT, {
+        acceptNode: (node) => {
+          const p = node.parentElement;
+          if (!p) return NodeFilter.FILTER_REJECT;
+          if (p.closest('aside')) return NodeFilter.FILTER_REJECT; // skip sidebar
+          if (p.tagName === 'SCRIPT' || p.tagName === 'STYLE') return NodeFilter.FILTER_REJECT;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      });
+      const textNodes: Text[] = [];
+      let n: Node | null;
+      while ((n = walker.nextNode())) textNodes.push(n as Text);
+      for (const c of comments) {
+        const snippet = (c.selected_text || '').trim();
+        if (!snippet) continue;
+        for (const tn of textNodes) {
+          if (!tn.parentNode) continue;
+          const idx = tn.data.indexOf(snippet);
+          if (idx < 0) continue;
+          const range = document.createRange();
+          range.setStart(tn, idx);
+          range.setEnd(tn, idx + snippet.length);
+          const mark = document.createElement('mark');
+          mark.className = HIGHLIGHT_CLASS;
+          mark.style.backgroundColor = '#facc15';
+          mark.style.color = '#0a0a0a';
+          mark.style.padding = '0 2px';
+          mark.style.borderRadius = '2px';
+          mark.style.boxShadow = '0 0 0 1px rgba(0,0,0,0.15)';
+          try { range.surroundContents(mark); } catch { /* selection crosses boundaries, skip */ }
+          break;
+        }
+      }
+    };
+    // Wait a tick so MarkdownView has rendered.
+    const t = setTimeout(apply, 60);
+    return () => clearTimeout(t);
+  }, [comments, containerRef]);
+
   // Realtime updates
   useEffect(() => {
     if (!pautaId) return;
