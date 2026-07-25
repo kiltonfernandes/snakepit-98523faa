@@ -49,6 +49,7 @@ import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { injectMentionedSection } from '@/lib/episode/inject-mentioned';
+import { PautaComments } from '@/components/pautas/PautaComments';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -614,6 +615,7 @@ function NewPautaDialog({
   const [result, setResult] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  const previewContentRef = useRef<HTMLDivElement>(null);
   // Títulos / descrição / capa
   const [titles, setTitles] = useState<GeneratedTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<string>('');
@@ -2008,7 +2010,7 @@ function NewPautaDialog({
             </div>
           </div>
            <ScrollArea className="h-[calc(100vh-40px)]">
-             <div className="max-w-4xl mx-auto px-8 py-8" style={{ zoom: previewFontSize / 16 } as React.CSSProperties}>
+             <div ref={previewContentRef} className="max-w-4xl mx-auto px-8 py-8 lg:pr-[360px]" style={{ zoom: previewFontSize / 16 } as React.CSSProperties}>
               <div className="text-center mb-6">
                 <div className="text-sm tracking-[0.3em] font-semibold text-foreground">SNAKEPIT · AVULSO</div>
                 {effectiveDate && (
@@ -2033,6 +2035,9 @@ function NewPautaDialog({
               <MarkdownView text={result} />
             </div>
           </ScrollArea>
+          {previewOpen && (
+            <PautaComments pautaId={pautaId} containerRef={previewContentRef} />
+          )}
         </DialogContent>
       </Dialog>
     </>
