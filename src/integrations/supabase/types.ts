@@ -420,6 +420,44 @@ export type Database = {
           },
         ]
       }
+      preprod_pauta_comments: {
+        Row: {
+          author: string | null
+          comment_html: string
+          created_at: string
+          id: string
+          pauta_id: string
+          selected_text: string
+          updated_at: string
+        }
+        Insert: {
+          author?: string | null
+          comment_html?: string
+          created_at?: string
+          id?: string
+          pauta_id: string
+          selected_text?: string
+          updated_at?: string
+        }
+        Update: {
+          author?: string | null
+          comment_html?: string
+          created_at?: string
+          id?: string
+          pauta_id?: string
+          selected_text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preprod_pauta_comments_pauta_id_fkey"
+            columns: ["pauta_id"]
+            isOneToOne: false
+            referencedRelation: "preprod_pautas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       preprod_pautas: {
         Row: {
           created_at: string
