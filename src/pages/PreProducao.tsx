@@ -2010,7 +2010,7 @@ function NewPautaDialog({
             </div>
           </div>
            <ScrollArea className="h-[calc(100vh-40px)]">
-             <div className="max-w-4xl mx-auto px-8 py-8" style={{ zoom: previewFontSize / 16 } as React.CSSProperties}>
+             <div ref={previewContentRef} className="max-w-4xl mx-auto px-8 py-8 lg:pr-[360px]" style={{ zoom: previewFontSize / 16 } as React.CSSProperties}>
               <div className="text-center mb-6">
                 <div className="text-sm tracking-[0.3em] font-semibold text-foreground">SNAKEPIT · AVULSO</div>
                 {effectiveDate && (
@@ -2035,6 +2035,9 @@ function NewPautaDialog({
               <MarkdownView text={result} />
             </div>
           </ScrollArea>
+          {previewOpen && (
+            <PautaComments pautaId={pautaId} containerRef={previewContentRef} />
+          )}
         </DialogContent>
       </Dialog>
     </>
