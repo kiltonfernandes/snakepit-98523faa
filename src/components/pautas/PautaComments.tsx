@@ -200,8 +200,8 @@ export function PautaComments({ pautaId, containerRef }: Props) {
           onMouseDown={(e) => e.stopPropagation()}
         >
           <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Comentando trecho</div>
-          <div className="text-xs italic text-muted-foreground mb-2 line-clamp-2 border-l-2 border-primary/60 pl-2">
-            "{editor.selectedText}"
+          <div className="mb-2 line-clamp-2 border-l-2 border-primary/60 pl-2">
+            <mark className="bg-yellow-400 text-neutral-900 px-1 py-0.5 rounded text-xs italic">{editor.selectedText}</mark>
           </div>
           <div className="flex items-center gap-1 mb-2 border-b border-border pb-2">
             <Button size="icon" variant="ghost" className="h-7 w-7" onMouseDown={(e) => e.preventDefault()} onClick={() => exec('bold')}><Bold className="h-3.5 w-3.5" /></Button>
@@ -238,8 +238,10 @@ export function PautaComments({ pautaId, containerRef }: Props) {
           ) : (
             comments.map((c) => (
               <div key={c.id} className="rounded-md border border-border bg-background p-2 text-xs space-y-1.5 group">
-                <div className="italic text-muted-foreground border-l-2 border-primary/60 pl-2 line-clamp-3">"{c.selected_text}"</div>
-                <div className="prose prose-xs dark:prose-invert max-w-none [&_*]:text-xs" dangerouslySetInnerHTML={{ __html: c.comment_html }} />
+                <div className="border-l-2 border-primary/60 pl-2 line-clamp-3">
+                  <mark className="bg-yellow-400 text-neutral-900 px-1 py-0.5 rounded italic">{c.selected_text}</mark>
+                </div>
+                <div className="prose prose-xs max-w-none text-white [&_*]:text-white [&_*]:text-xs" dangerouslySetInnerHTML={{ __html: c.comment_html }} />
                 <div className="flex items-center justify-between pt-1">
                   <div className="text-[10px] text-muted-foreground">{format(new Date(c.created_at), "dd/MM HH:mm", { locale: ptBR })}</div>
                   <button onClick={() => remove(c.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"><Trash2 className="h-3 w-3" /></button>
