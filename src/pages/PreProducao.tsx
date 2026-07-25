@@ -49,6 +49,7 @@ import { useAiCallProgress } from '@/contexts/AiCallProgressContext';
 import { MarkdownView } from '@/components/shared/MarkdownView';
 import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { injectMentionedSection } from '@/lib/episode/inject-mentioned';
+import { PautaComments } from '@/components/pautas/PautaComments';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import {
