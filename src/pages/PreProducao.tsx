@@ -615,6 +615,7 @@ function NewPautaDialog({
   const [result, setResult] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [manualMode, setManualMode] = useState(false);
+  const previewContentRef = useRef<HTMLDivElement>(null);
   // Títulos / descrição / capa
   const [titles, setTitles] = useState<GeneratedTitle[]>([]);
   const [selectedTitle, setSelectedTitle] = useState<string>('');
