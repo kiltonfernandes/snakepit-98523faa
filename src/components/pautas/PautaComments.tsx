@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
-import { MessageSquarePlus, Trash2, Bold, Italic, Underline as UnderlineIcon, List as ListIcon, Link as LinkIcon } from 'lucide-react';
+import { MessageSquarePlus, Trash2, Bold, Italic, Underline as UnderlineIcon, List as ListIcon, Link as LinkIcon, ChevronRight, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -31,7 +31,8 @@ interface Props {
 export function PautaComments({ pautaId, containerRef }: Props) {
   const [comments, setComments] = useState<PautaComment[]>([]);
   const [popover, setPopover] = useState<{ x: number; y: number; selectedText: string } | null>(null);
-  const [editor, setEditor] = useState<{ x: number; y: number; selectedText: string } | null>(null);
+  const [editor, setEditor] = useState<{ x: number; y: number; selectedText: string; editingId?: string; initialHtml?: string } | null>(null);
+  const [collapsed, setCollapsed] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
   const loadComments = useCallback(async () => {
@@ -86,10 +87,12 @@ export function PautaComments({ pautaId, containerRef }: Props) {
           range.setEnd(tn, idx + snippet.length);
           const mark = document.createElement('mark');
           mark.className = HIGHLIGHT_CLASS;
+          mark.dataset.commentId = c.id;
           mark.style.backgroundColor = '#facc15';
           mark.style.color = '#0a0a0a';
           mark.style.padding = '0 2px';
           mark.style.borderRadius = '2px';
+          mark.style.cursor = 'pointer';
           mark.style.boxShadow = '0 0 0 1px rgba(0,0,0,0.15)';
           try { range.surroundContents(mark); } catch { /* selection crosses boundaries, skip */ }
           break;
@@ -99,6 +102,26 @@ export function PautaComments({ pautaId, containerRef }: Props) {
     // Wait a tick so MarkdownView has rendered.
     const t = setTimeout(apply, 60);
     return () => clearTimeout(t);
+  }, [comments, containerRef]);
+
+  // Click handler on highlighted marks → open editor prefilled with the comment.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const onClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const mark = target?.closest?.('mark.pauta-comment-highlight') as HTMLElement | null;
+      if (!mark) return;
+      const id = mark.dataset.commentId;
+      const c = comments.find((x) => x.id === id);
+      if (!c) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const rect = mark.getBoundingClientRect();
+      openExisting(c, rect.left + rect.width / 2, rect.bottom);
+    };
+    container.addEventListener('click', onClick);
+    return () => container.removeEventListener('click', onClick);
   }, [comments, containerRef]);
 
   // Realtime updates
@@ -149,6 +172,17 @@ export function PautaComments({ pautaId, containerRef }: Props) {
     }, 30);
   };
 
+  const openExisting = (c: PautaComment, x: number, y: number) => {
+    setPopover(null);
+    setEditor({ x, y, selectedText: c.selected_text, editingId: c.id, initialHtml: c.comment_html });
+    setTimeout(() => {
+      if (editorRef.current) {
+        editorRef.current.innerHTML = c.comment_html || '';
+        editorRef.current.focus();
+      }
+    }, 30);
+  };
+
   const exec = (cmd: string, val?: string) => {
     document.execCommand(cmd, false, val);
     editorRef.current?.focus();
@@ -158,13 +192,20 @@ export function PautaComments({ pautaId, containerRef }: Props) {
     if (!editor || !pautaId) return;
     const html = editorRef.current?.innerHTML?.trim() || '';
     if (!html || html === '<br>') { toast.error('Escreva um comentário'); return; }
-    const { error } = await supabase.from('preprod_pauta_comments' as any).insert({
-      pauta_id: pautaId,
-      selected_text: editor.selectedText.slice(0, 4000),
-      comment_html: html,
-    });
-    if (error) { console.error('[comments] insert', error); toast.error('Erro ao salvar comentário'); return; }
-    toast.success('Comentário salvo');
+    if (editor.editingId) {
+      const { error } = await supabase.from('preprod_pauta_comments' as any)
+        .update({ comment_html: html }).eq('id', editor.editingId);
+      if (error) { console.error('[comments] update', error); toast.error('Erro ao atualizar'); return; }
+      toast.success('Comentário atualizado');
+    } else {
+      const { error } = await supabase.from('preprod_pauta_comments' as any).insert({
+        pauta_id: pautaId,
+        selected_text: editor.selectedText.slice(0, 4000),
+        comment_html: html,
+      });
+      if (error) { console.error('[comments] insert', error); toast.error('Erro ao salvar comentário'); return; }
+      toast.success('Comentário salvo');
+    }
     setEditor(null);
     loadComments();
   };
@@ -199,7 +240,15 @@ export function PautaComments({ pautaId, containerRef }: Props) {
           style={{ left: editor.x, top: Math.min(editor.y + 12, window.innerHeight - 320) }}
           onMouseDown={(e) => e.stopPropagation()}
         >
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Comentando trecho</div>
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">{editor.editingId ? 'Editando comentário' : 'Comentando trecho'}</div>
+            {editor.editingId && (
+              <button
+                onClick={async () => { await remove(editor.editingId!); setEditor(null); }}
+                className="text-[10px] text-destructive hover:underline"
+              >Excluir</button>
+            )}
+          </div>
           <div className="mb-2 line-clamp-2 border-l-2 border-primary/60 pl-2">
             <mark className="bg-yellow-400 text-neutral-900 px-1 py-0.5 rounded text-xs italic">{editor.selectedText}</mark>
           </div>
@@ -226,25 +275,47 @@ export function PautaComments({ pautaId, containerRef }: Props) {
         </div>
       )}
 
+      {/* Collapsed rail — click to expand */}
+      {collapsed && (
+        <button
+          onClick={() => setCollapsed(false)}
+          className="fixed right-4 top-16 z-[60] hidden lg:flex items-center gap-2 rounded-lg border border-border bg-card/95 backdrop-blur shadow-xl px-3 py-2 hover:bg-card"
+          title="Expandir comentários"
+        >
+          <MessageSquare className="h-4 w-4 text-primary" />
+          <span className="text-xs font-semibold">{comments.length}</span>
+        </button>
+      )}
+
       {/* Sidebar with existing comments */}
-      <aside className="fixed right-4 top-16 bottom-4 w-[320px] z-[60] hidden lg:flex flex-col rounded-lg border border-border bg-card/95 backdrop-blur shadow-xl">
+      <aside className={cn(
+        "fixed right-4 top-16 bottom-4 w-[320px] z-[60] flex-col rounded-lg border border-border bg-card/95 backdrop-blur shadow-xl",
+        collapsed ? "hidden" : "hidden lg:flex"
+      )}>
         <div className="px-3 py-2 border-b border-border flex items-center justify-between">
-          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comentários</div>
-          <div className="text-[10px] text-muted-foreground">{comments.length}</div>
+          <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Comentários · {comments.length}</div>
+          <button onClick={() => setCollapsed(true)} className="text-muted-foreground hover:text-foreground" title="Colapsar"><ChevronRight className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-3">
           {comments.length === 0 ? (
             <div className="text-xs text-muted-foreground italic">Selecione um trecho da pauta para comentar.</div>
           ) : (
             comments.map((c) => (
-              <div key={c.id} className="rounded-md border border-border bg-background p-2 text-xs space-y-1.5 group">
+              <div
+                key={c.id}
+                className="rounded-md border border-border bg-background p-2 text-xs space-y-1.5 group cursor-pointer hover:border-primary/60"
+                onClick={(e) => {
+                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                  openExisting(c, rect.left + rect.width / 2, rect.top);
+                }}
+              >
                 <div className="border-l-2 border-primary/60 pl-2 line-clamp-3">
                   <mark className="bg-yellow-400 text-neutral-900 px-1 py-0.5 rounded italic">{c.selected_text}</mark>
                 </div>
                 <div className="prose prose-xs max-w-none text-white [&_*]:text-white [&_*]:text-xs" dangerouslySetInnerHTML={{ __html: c.comment_html }} />
                 <div className="flex items-center justify-between pt-1">
                   <div className="text-[10px] text-muted-foreground">{format(new Date(c.created_at), "dd/MM HH:mm", { locale: ptBR })}</div>
-                  <button onClick={() => remove(c.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"><Trash2 className="h-3 w-3" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); remove(c.id); }} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition"><Trash2 className="h-3 w-3" /></button>
                 </div>
               </div>
             ))
