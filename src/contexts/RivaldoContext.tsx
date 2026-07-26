@@ -224,6 +224,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
   return (
     <RivaldoContext.Provider value={{
       isProcessing, progress, progressLabel, logs, trackReports, masterReport, currentFilename, lastUpload,
+      agenticStatus, agenticOutcome,
       startPipeline, addLog, clearState,
     }}>
       {children}
