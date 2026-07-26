@@ -10,13 +10,13 @@
 // local. Se a chamada não acontecer, `requestId` não existe.
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { zodToJsonSchema } from 'npm:zod-to-json-schema@3';
-import { AudioAnalysisReportV2Schema, TreatmentPlanV1Schema } from './_lib/schemas.ts';
-import { buildPlannerMessages } from './_lib/prompt.ts';
-import { validatePlan } from './_lib/validate.ts';
+import { EpisodePlanRequestSchema, EpisodePlanV1Schema } from './_lib/schemas.ts';
+import { buildEpisodePlannerMessages } from './_lib/prompt.ts';
+import { validateEpisodePlan } from './_lib/validate.ts';
 
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const MAX_REPORT_BYTES = 128 * 1024;      // 128 KB — relatório compacto v2
-const MAX_OUTPUT_TOKENS = 4096;
+const MAX_REPORT_BYTES = 512 * 1024;      // 512 KB — batch de até 16 tracks compactos
+const MAX_OUTPUT_TOKENS = 8192;
 const REQUEST_TIMEOUT_MS = 30_000;
 const TEMPERATURE = 0.15;                 // dentro de [0.1, 0.15]
 
@@ -87,15 +87,15 @@ Deno.serve(async (req) => {
   let body: unknown;
   try { body = JSON.parse(rawText); } catch { return json({ error: 'invalid_json' }, 400, cors); }
 
-  const reportParsed = AudioAnalysisReportV2Schema.safeParse(body);
-  if (!reportParsed.success) {
+  const reqParsed = EpisodePlanRequestSchema.safeParse(body);
+  if (!reqParsed.success) {
     return json({ error: 'invalid_report' }, 400, cors);
   }
-  const report = reportParsed.data;
+  const { episodeId, reports } = reqParsed.data;
 
   // 3) Chamada única ao OpenRouter (structured output, sem retry, com timeout).
-  const messages = buildPlannerMessages(report);
-  const jsonSchema = zodToJsonSchema(TreatmentPlanV1Schema, { name: 'TreatmentPlanV1', $refStrategy: 'none' });
+  const messages = buildEpisodePlannerMessages(episodeId, reports);
+  const jsonSchema = zodToJsonSchema(EpisodePlanV1Schema, { name: 'EpisodePlanV1', $refStrategy: 'none' });
   const openrouterBody = {
     model: PLANNER_MODEL,
     temperature: TEMPERATURE,
@@ -103,7 +103,7 @@ Deno.serve(async (req) => {
     messages,
     response_format: {
       type: 'json_schema',
-      json_schema: { name: 'TreatmentPlanV1', strict: true, schema: jsonSchema },
+      json_schema: { name: 'EpisodePlanV1', strict: true, schema: jsonSchema },
     },
   };
 
@@ -158,10 +158,10 @@ Deno.serve(async (req) => {
     rp.createdAtIso ??= new Date().toISOString();
     rp.version ??= 'v1';
     rp.planId ??= `plan-${requestId}`;
-    rp.reportId = report.reportId;
+    rp.episodeId = episodeId;
   }
 
-  const validation = validatePlan(rawPlan, report);
+  const validation = validateEpisodePlan(rawPlan, reports);
   if (!validation.ok || !validation.plan) {
     return json({ error: 'validation_failed', issues: validation.issues }, 422, cors);
   }
