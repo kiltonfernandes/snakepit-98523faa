@@ -5,6 +5,7 @@ import { DetailedLogger } from '@/lib/audio/detailed-logger';
 import { buildOneDriveFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
+import { agenticVoiceProcessor, loadAgenticFlag } from '@/lib/rivaldo-agent';
 
 export interface PipelineUploadOptions {
   enabled: boolean;
@@ -79,12 +80,22 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const uploadEnabled = upload?.enabled ?? false;
+      const agenticEnabled = await loadAgenticFlag().catch(() => false);
+      if (agenticEnabled) {
+        addLog('Rivaldo Agentic V1 ativo — voz roteada pelo executor local.', 'step');
+        dlog.log('pipeline', 'step', 'Rivaldo Agentic V1 ON: analyze → plan → validate → execute local');
+      }
       const result = await runPipeline(
         input,
         params,
         (value, label) => { setProgress(value); setProgressLabel(label); },
         (message, type) => { setLogs(prev => [...prev, { timestamp: Date.now(), message, type: type || 'info' }]); },
-        { exportMode: uploadEnabled ? 'blob' : 'download', returnFinalBuffer: false, logger: dlog }
+        {
+          exportMode: uploadEnabled ? 'blob' : 'download',
+          returnFinalBuffer: false,
+          logger: dlog,
+          ...(agenticEnabled ? { processVoiceBuffer: agenticVoiceProcessor } : {}),
+        }
       );
       setTrackReports(result.trackReports);
       setMasterReport(result.masterReport);
