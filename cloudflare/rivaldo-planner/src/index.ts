@@ -16,6 +16,7 @@ const MAX_REPORT_BYTES = 512 * 1024;
 const MAX_OUTPUT_TOKENS = 8192;
 const REQUEST_TIMEOUT_MS = 30_000;
 const TEMPERATURE = 0.15;
+const WORKER_VERSION = '2026-07-26.3';
 const PLAN_JSON_SCHEMA = zodToJsonSchema(EpisodePlanV1Schema, {
   name: 'EpisodePlanV1',
   $refStrategy: 'none',
@@ -49,7 +50,11 @@ function json(
 ): Response {
   return new Response(JSON.stringify(payload), {
     status,
-    headers: { ...cors, 'Content-Type': 'application/json' },
+    headers: {
+      ...cors,
+      'Content-Type': 'application/json',
+      'X-Rivaldo-Planner-Version': WORKER_VERSION,
+    },
   });
 }
 
@@ -156,7 +161,11 @@ export default {
         headers: { 'Content-Type': 'application/json' },
       });
     }
-    if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
+    if (request.method === 'OPTIONS') {
+      return new Response('ok', {
+        headers: { ...cors, 'X-Rivaldo-Planner-Version': WORKER_VERSION },
+      });
+    }
     if (request.method !== 'POST') {
       return json({ error: 'method_not_allowed' }, 405, cors);
     }
