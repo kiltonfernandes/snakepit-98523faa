@@ -2,23 +2,46 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { AudioAnalysisReportV2 } from '../contracts/report-v2';
 import type { PlannerEnvelope } from '../contracts/episode-plan-v1';
+import { PLANNER_REQUEST_HARD_LIMIT_BYTES } from './findings';
 
 export interface EpisodePlanRequestPayload {
   episodeId: string;
   reports: AudioAnalysisReportV2[];
 }
 
+function payloadBytes(payload: EpisodePlanRequestPayload): number {
+  return new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+}
+
 /**
- * Wave B: chamada ÚNICA por episódio para o planner. Retorna o envelope
- * completo (requestId real do OpenRouter, usage, trackPlans). Erros são
- * propagados como Error com `reasonCode` na message para o session
- * classificar o outcome (nunca engolir silenciosamente).
+ * Faz uma chamada por episódio para o planner. O limite local evita que um
+ * payload impossível seja entregue ao gateway e vire um erro de rede opaco.
  */
-export async function requestEpisodeTreatmentPlan(payload: EpisodePlanRequestPayload): Promise<PlannerEnvelope> {
-  const { data, error } = await supabase.functions.invoke('plan-rivaldo-treatment', { body: payload });
+export async function requestEpisodeTreatmentPlan(
+  payload: EpisodePlanRequestPayload,
+): Promise<PlannerEnvelope> {
+  const bytes = payloadBytes(payload);
+  if (bytes > PLANNER_REQUEST_HARD_LIMIT_BYTES) {
+    throw new Error(
+      `planner_payload_too_large:${bytes}>${PLANNER_REQUEST_HARD_LIMIT_BYTES}`,
+    );
+  }
+
+  const { data, error } = await supabase.functions.invoke(
+    'plan-rivaldo-treatment',
+    { body: payload },
+  );
   if (error) {
-    const details = error instanceof FunctionsHttpError ? await error.context.text().catch(() => '') : error.message;
-    throw new Error(`planner_failed: ${details || error.message}`);
+    const details =
+      error instanceof FunctionsHttpError
+        ? await error.context.text().catch(() => '')
+        : error.message;
+    const kind = error.constructor?.name ?? 'FunctionsError';
+    const origin =
+      typeof window !== 'undefined' ? window.location.origin : 'unknown-origin';
+    throw new Error(
+      `planner_failed:${kind}:${details || error.message}:origin=${origin}:payloadBytes=${bytes}`,
+    );
   }
   if (!data || typeof data !== 'object' || !('plan' in data) || !('requestId' in data)) {
     throw new Error('planner_bad_response');

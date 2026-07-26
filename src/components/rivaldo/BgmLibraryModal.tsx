@@ -74,6 +74,17 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
     });
   }, [tracks, query, activeGenres]);
 
+  // Mantém o painel de detalhes e suas ações disponível. Ao abrir o modal
+  // ou mudar os filtros, seleciona o primeiro resultado se a seleção anterior
+  // não estiver mais visível.
+  useEffect(() => {
+    if (!open || loading) return;
+    setSelectedId(current => {
+      if (current && filtered.some(track => track.id === current)) return current;
+      return filtered[0]?.id ?? null;
+    });
+  }, [open, loading, filtered]);
+
   const selected = useMemo(() => tracks.find(t => t.id === selectedId) ?? null, [tracks, selectedId]);
 
   const relatedReleases = useMemo(() => {
@@ -226,22 +237,22 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border">
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-5xl h-[calc(100dvh-1.5rem)] max-h-[760px] p-0 overflow-hidden flex flex-col gap-0">
+        <DialogHeader className="px-6 pt-6 pb-3 border-b border-border shrink-0">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Music className="w-4 h-4 text-primary" /> Biblioteca de BGM
           </DialogTitle>
           <DialogDescription className="text-xs">Envie, organize por gêneros e selecione a trilha do episódio.</DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_320px] h-[70vh]">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px] flex-1 min-h-0 overflow-y-auto md:overflow-hidden">
           {/* LEFT: search + list */}
           <div
-            className="flex flex-col min-w-0 border-r border-border"
+            className="flex flex-col min-w-0 min-h-[360px] md:min-h-0 md:border-r border-border"
             onDragOver={(e) => { e.preventDefault(); }}
             onDrop={(e) => { e.preventDefault(); if (e.dataTransfer.files.length) onDropFiles(e.dataTransfer.files); }}
           >
-            <div className="px-4 pt-3 pb-2 space-y-2 border-b border-border bg-muted/20">
+            <div className="px-4 pt-3 pb-2 space-y-2 border-b border-border bg-muted/20 shrink-0 max-h-[45%] overflow-y-auto overscroll-contain">
               <div className="flex items-center gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -278,7 +289,7 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
               {loading ? (
                 <div className="flex items-center justify-center h-full text-muted-foreground text-xs"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Carregando…</div>
               ) : filtered.length === 0 ? (
@@ -325,7 +336,7 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
           </div>
 
           {/* RIGHT: preview / actions */}
-          <div className="flex flex-col bg-muted/10 min-h-0">
+          <div className="flex flex-col bg-muted/10 min-h-[360px] md:min-h-0 border-t md:border-t-0 border-border">
             {selected ? (
               <div className="flex flex-col h-full min-h-0">
                 <div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
