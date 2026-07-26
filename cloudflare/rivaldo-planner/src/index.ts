@@ -5,8 +5,6 @@ import { validateEpisodePlan } from './lib/validate';
 
 interface Env {
   OPENROUTER_API_KEY?: string;
-  SUPABASE_URL: string;
-  SUPABASE_ANON_KEY: string;
   RIVALDO_AUDIO_PLANNER_MODEL?: string;
   RIVALDO_PLANNER_MODEL_ALLOWLIST?: string;
   RIVALDO_PLANNER_CORS_ORIGINS?: string;
@@ -35,11 +33,10 @@ function allowedOrigins(env: Env): string[] {
 
 function corsFor(origin: string | null, env: Env): Record<string, string> | null {
   const origins = allowedOrigins(env);
-  const allow = origin ?? origins[0];
-  if (!origins.includes(allow)) return null;
+  if (!origin || !origins.includes(origin)) return null;
   return {
-    'Access-Control-Allow-Origin': allow,
-    'Access-Control-Allow-Headers': 'authorization, apikey, content-type',
+    'Access-Control-Allow-Origin': origin,
+    'Access-Control-Allow-Headers': 'content-type',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     Vary: 'Origin',
   };
@@ -65,20 +62,6 @@ function plannerModel(env: Env): string {
   return allowlist.includes(requested) ? requested : DEFAULT_MODEL;
 }
 
-async function hasValidSupabaseSession(
-  authorization: string,
-  env: Env,
-): Promise<boolean> {
-  if (!authorization.toLowerCase().startsWith('bearer ')) return false;
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      Authorization: authorization,
-      apikey: env.SUPABASE_ANON_KEY,
-    },
-  });
-  return response.ok;
-}
-
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const cors = corsFor(request.headers.get('Origin'), env);
@@ -93,10 +76,6 @@ export default {
       return json({ error: 'method_not_allowed' }, 405, cors);
     }
 
-    const authorization = request.headers.get('Authorization') ?? '';
-    if (!(await hasValidSupabaseSession(authorization, env))) {
-      return json({ error: 'unauthorized' }, 401, cors);
-    }
     if (!env.OPENROUTER_API_KEY) {
       return json({ error: 'server_misconfigured' }, 500, cors);
     }
