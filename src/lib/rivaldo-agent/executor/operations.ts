@@ -139,12 +139,13 @@ export function applyDereverb(region: Float32Array, amount: number, sampleRate: 
 /** EQ paramétrico: cascata de biquads. */
 export function applyEq(
   region: Float32Array,
-  filters: Array<{ type: 'peak' | 'lowshelf' | 'highshelf' | 'lowpass' | 'highpass'; frequencyHz: number; gainDb: number; q: number }>,
+  filters: ReadonlyArray<{ type?: 'peak' | 'lowshelf' | 'highshelf' | 'lowpass' | 'highpass'; frequencyHz?: number; gainDb?: number; q?: number }>,
   sampleRate: number,
 ): Float32Array {
   let cur: Float32Array = new Float32Array(region);
   for (const f of filters) {
-    const coefs = makeBiquad(f.type, sampleRate, f.frequencyHz, f.q, f.gainDb);
+    if (!f.type || !f.frequencyHz) continue;
+    const coefs = makeBiquad(f.type, sampleRate, f.frequencyHz, f.q ?? 1, f.gainDb ?? 0);
     cur = applyBiquad(cur, coefs);
   }
   return cur;
