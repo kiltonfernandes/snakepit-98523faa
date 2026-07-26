@@ -16,7 +16,7 @@ import type { TrackReport } from '@/lib/audio/types';
 import { AnalyzerClient } from './analysis/analyzer-client';
 import { requestEpisodeTreatmentPlan } from './planner/client';
 import { validatePlan, type ValidationIssue } from './planner/validate';
-import { executePlan } from './executor/execute';
+import { ExecutorClient } from './executor/executor-client';
 import type { AudioAnalysisReportV2 } from './contracts/report-v2';
 import type { EpisodePlanV1, PlannerEnvelope } from './contracts/episode-plan-v1';
 
@@ -181,6 +181,7 @@ export async function runAgenticEpisode(
   onStatus({ status: 'executing', message: 'Executando tratamento local por track…', progress: 0.7 });
   const treatedByTrackId = new Map<string, AgenticTreatedTrack>();
   let acceptedOperations = 0;
+  const executor = new ExecutorClient();
   try {
     for (let i = 0; i < tracks.length; i++) {
       const track = tracks[i];
@@ -188,7 +189,16 @@ export async function runAgenticEpisode(
       const vplan = validatedTrackPlans.find((v) => v.reportId === report.reportId);
       if (!vplan) throw new Error(`missing_plan_for_${report.reportId}`);
       const before = new Float32Array(decodedMonos[i]);
-      const executed = executePlan(decodedMonos[i], AGENT_SR, vplan.plan, () => { /* progress per stage handled elsewhere */ });
+      // Wave D: executor em worker (transfer buffer). Preservamos `before` para o report.
+      const buf = new Float32Array(decodedMonos[i]);
+      const executed = await executor.execute(
+        { channelData: buf, sampleRate: AGENT_SR, plan: vplan.plan },
+        (p, stage) => onStatus({
+          status: 'executing',
+          message: `[${track.name}] ${stage}`,
+          progress: 0.7 + (i + p) / tracks.length * 0.28,
+        }),
+      );
       acceptedOperations += vplan.plan.stages.reduce((s, st) => s + st.operations.length, 0);
       const trackReport = trackReportFromExec(track.name, before, executed.channelData, AGENT_SR, report, executed.perStage);
       treatedByTrackId.set(track.id, {
@@ -197,8 +207,10 @@ export async function runAgenticEpisode(
       });
     }
   } catch (err) {
+    executor.terminate();
     return { mode: 'fallback', failedStage: 'execution', reasonCode: 'executor_error', message: err instanceof Error ? err.message : 'executor_error', partialReports: reports, envelope };
   }
+  executor.terminate();
 
   if (acceptedOperations === 0) {
     return { mode: 'fallback', failedStage: 'validation', reasonCode: 'no_accepted_operations', message: 'Planner devolveu zero operações válidas.', partialReports: reports, envelope };

@@ -73,6 +73,12 @@ export function applyDenoise(region: Float32Array, amount: number, sampleRate: n
   const noiseSampleFrames = Math.max(4, Math.floor((0.3 * sampleRate) / hopSize));
   const noiseMag = new Float32Array(bins);
   const framesForNoise = Math.min(noiseSampleFrames, stftRes.frames.length);
+  // Wave D conservador: só aplica denoise se a janela inicial é claramente
+  // ruído (RMS abaixo de -45 dBFS). Caso contrário devolve o buffer intocado
+  // — melhor não denoisar do que subtrair espectro de fala.
+  const noiseChunk = region.subarray(0, Math.min(region.length, Math.floor(0.3 * sampleRate)));
+  const noiseRmsDb = 20 * Math.log10(Math.max(rms(noiseChunk), 1e-9));
+  if (noiseRmsDb > -45) return new Float32Array(region);
   for (let f = 0; f < framesForNoise; f++) {
     const fr = stftRes.frames[f];
     for (let b = 0; b < bins; b++) {
@@ -174,12 +180,12 @@ export function applyDeEsser(region: Float32Array, amount: number, sampleRate: n
 
 /** De-plosive: high-pass 80 Hz apenas na região. amount modula ordem (repete). */
 export function applyDePlosive(region: Float32Array, amount: number, sampleRate: number): Float32Array {
+  // Wave D conservador: nunca repete HPF (evita fase acumulada / perda de graves).
+  // A "amount" agora modula a frequência de corte (80..110 Hz) em passe único.
   const strength = clamp01(amount / 100);
-  const passes = 1 + Math.round(strength * 2);
-  let cur: Float32Array = new Float32Array(region);
-  const coefs = makeBiquad('highpass', sampleRate, 80, 0.707);
-  for (let p = 0; p < passes; p++) cur = applyBiquad(cur, coefs);
-  return cur;
+  const cutoffHz = 80 + strength * 30;
+  const coefs = makeBiquad('highpass', sampleRate, cutoffHz, 0.707);
+  return applyBiquad(new Float32Array(region), coefs);
 }
 
 /** event_attenuate: gain fixo em dB (negativo). */
