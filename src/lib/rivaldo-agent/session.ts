@@ -11,7 +11,11 @@ import type { TrackReport } from '@/lib/audio/types';
 
 import { AnalyzerClient } from './analysis/analyzer-client';
 import { requestEpisodeTreatmentPlan } from './planner/client';
-import { buildPlannerDigest, type PlannerDigestStats } from './planner/findings';
+import {
+  buildPlannerDigest,
+  type PlannerDigestResult,
+  type PlannerDigestStats,
+} from './planner/findings';
 import { validatePlan, type ValidationIssue } from './planner/validate';
 import { ExecutorClient } from './executor/executor-client';
 import type { AudioAnalysisReportV2 } from './contracts/report-v2';
@@ -177,7 +181,7 @@ export async function runAgenticEpisode(
   }
   analyzer.terminate();
 
-  let plannerDigest;
+  let plannerDigest: PlannerDigestResult;
   try {
     plannerDigest = buildPlannerDigest(episodeId, reports);
   } catch (err) {
