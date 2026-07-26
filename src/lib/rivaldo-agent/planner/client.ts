@@ -1,18 +1,27 @@
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import type { AudioAnalysisReportV2 } from '../contracts/report-v2';
-import type { TreatmentPlanV1 } from '../contracts/treatment-plan-v1';
-import type { ValidationIssue } from './validate';
+import type { PlannerEnvelope } from '../contracts/episode-plan-v1';
 
-export interface PlanResponse {
-  plan: TreatmentPlanV1;
-  issues: ValidationIssue[];
-  usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
+export interface EpisodePlanRequestPayload {
+  episodeId: string;
+  reports: AudioAnalysisReportV2[];
 }
 
-/** Client bridge — main-thread invoca a Edge Function do planner. */
-export async function requestTreatmentPlan(report: AudioAnalysisReportV2): Promise<PlanResponse> {
-  const { data, error } = await supabase.functions.invoke('plan-rivaldo-treatment', { body: report });
-  if (error) throw new Error(`planner_failed: ${error.message}`);
-  if (!data || typeof data !== 'object' || !('plan' in data)) throw new Error('planner: resposta inválida');
-  return data as PlanResponse;
+/**
+ * Wave B: chamada ÚNICA por episódio para o planner. Retorna o envelope
+ * completo (requestId real do OpenRouter, usage, trackPlans). Erros são
+ * propagados como Error com `reasonCode` na message para o session
+ * classificar o outcome (nunca engolir silenciosamente).
+ */
+export async function requestEpisodeTreatmentPlan(payload: EpisodePlanRequestPayload): Promise<PlannerEnvelope> {
+  const { data, error } = await supabase.functions.invoke('plan-rivaldo-treatment', { body: payload });
+  if (error) {
+    const details = error instanceof FunctionsHttpError ? await error.context.text().catch(() => '') : error.message;
+    throw new Error(`planner_failed: ${details || error.message}`);
+  }
+  if (!data || typeof data !== 'object' || !('plan' in data) || !('requestId' in data)) {
+    throw new Error('planner_bad_response');
+  }
+  return data as PlannerEnvelope;
 }
