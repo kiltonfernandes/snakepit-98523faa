@@ -19,8 +19,8 @@ Sem essa variável, o cliente usa automaticamente o Worker de produção:
 
 `https://rivaldo-planner.kilton-fernandes.workers.dev`
 
-Para usar deliberadamente a Edge Function legada
-`plan-rivaldo-treatment`, defina `VITE_RIVALDO_PLANNER_URL=supabase`.
+O planner não depende de sessão, função ou JWT do Supabase. A chave do
+OpenRouter permanece armazenada exclusivamente como secret do Worker.
 
 ## Deploy
 
