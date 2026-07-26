@@ -5,7 +5,13 @@ import { DetailedLogger } from '@/lib/audio/detailed-logger';
 import { buildOneDriveFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
-import { agenticVoiceProcessor, loadAgenticFlag } from '@/lib/rivaldo-agent';
+import {
+  loadAgenticFlag, runAgenticEpisode, buildAgenticVoiceProcessorFromSession,
+  type AgenticOutcome, type AgenticStatus,
+} from '@/lib/rivaldo-agent';
+
+export type AgenticRunStatus =
+  | 'off' | 'enabled_idle' | AgenticStatus;
 
 export interface PipelineUploadOptions {
   enabled: boolean;
@@ -24,6 +30,8 @@ interface RivaldoState {
   masterReport: MasterReport | null;
   currentFilename: string;
   lastUpload: { fileId: string; webUrl: string; filename: string } | null;
+  agenticStatus: AgenticRunStatus;
+  agenticOutcome: AgenticOutcome | null;
 }
 
 interface RivaldoContextType extends RivaldoState {
@@ -45,6 +53,8 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
   const [masterReport, setMasterReport] = useState<MasterReport | null>(null);
   const [currentFilename, setCurrentFilename] = useState('');
   const [lastUpload, setLastUpload] = useState<{ fileId: string; webUrl: string; filename: string } | null>(null);
+  const [agenticStatus, setAgenticStatus] = useState<AgenticRunStatus>('off');
+  const [agenticOutcome, setAgenticOutcome] = useState<AgenticOutcome | null>(null);
   const processingRef = useRef(false);
 
   const addLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
@@ -59,6 +69,8 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
     setProgressLabel('');
     setCurrentFilename('');
     setLastUpload(null);
+    setAgenticOutcome(null);
+    setAgenticStatus('off');
   }, []);
 
   const startPipeline = useCallback(async (input: PipelineInput, params: AudioParams, upload?: PipelineUploadOptions) => {
@@ -71,6 +83,8 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
     setMasterReport(null);
     setLastUpload(null);
     setCurrentFilename(input.filename);
+    setAgenticOutcome(null);
+    setAgenticStatus('off');
 
     const dlog = new DetailedLogger();
     dlog.resetClock();
@@ -80,11 +94,50 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const uploadEnabled = upload?.enabled ?? false;
-      const agenticEnabled = await loadAgenticFlag().catch(() => false);
+      const agenticEnabled = await loadAgenticFlag().catch((e) => {
+        addLog(`Aviso: falha ao ler flag Agentic (${e instanceof Error ? e.message : 'erro'}) — usando OFF.`, 'error');
+        return false;
+      });
+
+      let agenticProcessor: ReturnType<typeof buildAgenticVoiceProcessorFromSession> = null;
+      let outcome: AgenticOutcome | null = null;
+
       if (agenticEnabled) {
-        addLog('Rivaldo Agentic V1 ativo — voz roteada pelo executor local.', 'step');
-        dlog.log('pipeline', 'step', 'Rivaldo Agentic V1 ON: analyze → plan → validate → execute local');
+        setAgenticStatus('enabled_idle');
+        addLog('Rivaldo Agentic V1 ativo — 1 chamada por episódio.', 'step');
+        dlog.log('pipeline', 'step', 'Rivaldo Agentic V1 ON: analyze all → 1 plan call → validate → execute local');
+
+        // Coleta as tracks de voz do input (multi ou single).
+        const trackFiles = input.masterMode === 'multi' && input.masterTracks?.length
+          ? input.masterTracks.map((f, i) => ({ id: `${i}-${f.name}`, name: f.name, file: f }))
+          : (input.master ? [{ id: 'single-master', name: input.master.name, file: input.master }] : []);
+
+        outcome = await runAgenticEpisode(
+          input.filename || `episode-${Date.now()}`,
+          trackFiles,
+          (evt) => {
+            setAgenticStatus(evt.status);
+            setProgressLabel(evt.message);
+            addLog(`[agentic] ${evt.message}`, evt.status === 'agentic_success' ? 'success' : 'info');
+            dlog.log('agentic', evt.status === 'agentic_success' ? 'success' : 'step', evt.message);
+          },
+        );
+        setAgenticOutcome(outcome);
+
+        if (outcome.mode === 'agentic') {
+          agenticProcessor = buildAgenticVoiceProcessorFromSession(outcome);
+          dlog.log('agentic', 'success', `Planner OK — requestId=${outcome.requestId}, ops=${outcome.acceptedOperations}, tracks=${outcome.analysisIds.length}, hash=${outcome.planHash}`, {
+            data: { model: outcome.envelope.model, usage: outcome.envelope.usage, durationMs: outcome.envelope.durationMs },
+          });
+        } else {
+          setAgenticStatus('legacy_fallback');
+          addLog(`Fallback legado: ${outcome.failedStage} — ${outcome.message}`, 'error');
+          dlog.log('agentic', 'error', `Fallback ${outcome.failedStage}/${outcome.reasonCode}: ${outcome.message}`, {
+            data: outcome.envelope ? { requestId: outcome.envelope.requestId } : undefined,
+          });
+        }
       }
+
       const result = await runPipeline(
         input,
         params,
@@ -94,7 +147,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           exportMode: uploadEnabled ? 'blob' : 'download',
           returnFinalBuffer: false,
           logger: dlog,
-          ...(agenticEnabled ? { processVoiceBuffer: agenticVoiceProcessor } : {}),
+          ...(agenticProcessor ? { processVoiceBuffer: agenticProcessor } : {}),
         }
       );
       setTrackReports(result.trackReports);
