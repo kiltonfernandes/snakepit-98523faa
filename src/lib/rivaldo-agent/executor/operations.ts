@@ -235,7 +235,6 @@ export function runOperation(op: Operation, region: Float32Array, sampleRate: nu
     case 'decrackle':       return applyDecrackle(region, op.amount);
     case 'denoise':         return applyDenoise(region, op.amount, sampleRate);
     case 'dehum':           return applyDehum(region, op.frequencyHz, op.strength, sampleRate);
-    case 'dereverb':        return applyDereverb(region, op.amount, sampleRate);
     case 'eq':              return applyEq(region, op.filters, sampleRate);
     case 'de_esser':        return applyDeEsser(region, op.amount, sampleRate);
     case 'de_plosive':      return applyDePlosive(region, op.amount, sampleRate);
