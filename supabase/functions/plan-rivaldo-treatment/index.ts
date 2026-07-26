@@ -1,41 +1,105 @@
-// Rivaldo Agentic V1 — Planner endpoint (Onda 3).
+// Rivaldo Agentic V1 — Planner endpoint (Wave A).
 //
-// Recebe AudioAnalysisReportV2 → chama OpenRouter (deepseek/deepseek-v4-pro)
-// com Structured Outputs → valida em 7 camadas → devolve TreatmentPlanV1
-// limpo. Nenhum áudio trafega — só métricas/eventos.
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
+// Fluxo:
+//   POST { report: AudioAnalysisReportV2 } → JWT check → validate Zod →
+//   1 chamada OpenRouter (structured output, timeout 30s, sem retry) →
+//   validação 7-layer → envelope { requestId, provider, model, usage, plan }.
+//
+// Regras: sem retry, sem segunda chamada, sem exposição de segredos ou
+// stack traces. `requestId` é o id retornado pelo OpenRouter — nunca um id
+// local. Se a chamada não acontecer, `requestId` não existe.
+import { createClient } from 'npm:@supabase/supabase-js@2';
 import { zodToJsonSchema } from 'npm:zod-to-json-schema@3';
 import { AudioAnalysisReportV2Schema, TreatmentPlanV1Schema } from './_lib/schemas.ts';
 import { buildPlannerMessages } from './_lib/prompt.ts';
 import { validatePlan } from './_lib/validate.ts';
 
-const PLANNER_MODEL = Deno.env.get('RIVALDO_AUDIO_PLANNER_MODEL') ?? 'deepseek/deepseek-v4-pro';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const MAX_REPORT_BYTES = 128 * 1024;      // 128 KB — relatório compacto v2
+const MAX_OUTPUT_TOKENS = 4096;
+const REQUEST_TIMEOUT_MS = 30_000;
+const TEMPERATURE = 0.15;                 // dentro de [0.1, 0.15]
+
+// Allowlist de modelos aceitos (env `RIVALDO_PLANNER_MODEL_ALLOWLIST`
+// vírgula-separada sobrescreve; default = deepseek-v4-pro apenas).
+const DEFAULT_ALLOWLIST = ['deepseek/deepseek-v4-pro'];
+const ALLOWLIST = (Deno.env.get('RIVALDO_PLANNER_MODEL_ALLOWLIST') ?? DEFAULT_ALLOWLIST.join(','))
+  .split(',').map((s) => s.trim()).filter(Boolean);
+const REQUESTED_MODEL = Deno.env.get('RIVALDO_AUDIO_PLANNER_MODEL') ?? DEFAULT_ALLOWLIST[0];
+const PLANNER_MODEL = ALLOWLIST.includes(REQUESTED_MODEL) ? REQUESTED_MODEL : DEFAULT_ALLOWLIST[0];
+
+// CORS restrito aos domínios do Snakepit (env `RIVALDO_PLANNER_CORS_ORIGINS`
+// vírgula-separada sobrescreve).
+const ALLOWED_ORIGINS = (Deno.env.get('RIVALDO_PLANNER_CORS_ORIGINS') ??
+  'https://snakepit.lovable.app,https://id-preview--d13cfcc7-4643-478b-858b-a6450182c64c.lovable.app,http://localhost:8080'
+).split(',').map((s) => s.trim()).filter(Boolean);
+
+function corsFor(origin: string | null): Record<string, string> {
+  const allow = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allow,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
+
+function json(payload: unknown, status: number, cors: Record<string, string>) {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+  });
+}
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  if (req.method !== 'POST') {
-    return json({ error: 'method_not_allowed' }, 405);
+  const cors = corsFor(req.headers.get('origin'));
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
+  if (req.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, cors);
+
+  // 1) JWT obrigatório — usa signing keys via getClaims.
+  const authHeader = req.headers.get('authorization') ?? '';
+  if (!authHeader.toLowerCase().startsWith('bearer ')) {
+    return json({ error: 'unauthorized' }, 401, cors);
+  }
+  const supaUrl = Deno.env.get('SUPABASE_URL');
+  const supaAnon = Deno.env.get('SUPABASE_ANON_KEY');
+  if (!supaUrl || !supaAnon) return json({ error: 'server_misconfigured' }, 500, cors);
+  const supabase = createClient(supaUrl, supaAnon, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const token = authHeader.slice('bearer '.length).trim();
+  const claimsRes = await supabase.auth.getClaims(token);
+  if (claimsRes.error || !claimsRes.data?.claims?.sub) {
+    return json({ error: 'unauthorized' }, 401, cors);
   }
 
+  // 2) Segredos + limite de payload.
   const apiKey = Deno.env.get('OPENROUTER_API_KEY');
-  if (!apiKey) return json({ error: 'OPENROUTER_API_KEY missing' }, 500);
-
+  if (!apiKey) return json({ error: 'server_misconfigured' }, 500, cors);
+  const contentLength = Number(req.headers.get('content-length') ?? '0');
+  if (contentLength && contentLength > MAX_REPORT_BYTES) {
+    return json({ error: 'report_too_large', maxBytes: MAX_REPORT_BYTES }, 413, cors);
+  }
+  const rawText = await req.text();
+  if (rawText.length > MAX_REPORT_BYTES) {
+    return json({ error: 'report_too_large', maxBytes: MAX_REPORT_BYTES }, 413, cors);
+  }
   let body: unknown;
-  try { body = await req.json(); } catch { return json({ error: 'invalid_json' }, 400); }
+  try { body = JSON.parse(rawText); } catch { return json({ error: 'invalid_json' }, 400, cors); }
 
   const reportParsed = AudioAnalysisReportV2Schema.safeParse(body);
   if (!reportParsed.success) {
-    return json({ error: 'invalid_report', issues: reportParsed.error.flatten() }, 400);
+    return json({ error: 'invalid_report' }, 400, cors);
   }
   const report = reportParsed.data;
 
+  // 3) Chamada única ao OpenRouter (structured output, sem retry, com timeout).
   const messages = buildPlannerMessages(report);
   const jsonSchema = zodToJsonSchema(TreatmentPlanV1Schema, { name: 'TreatmentPlanV1', $refStrategy: 'none' });
-
   const openrouterBody = {
     model: PLANNER_MODEL,
-    temperature: 0.15,
+    temperature: TEMPERATURE,
+    max_tokens: MAX_OUTPUT_TOKENS,
     messages,
     response_format: {
       type: 'json_schema',
@@ -43,105 +107,79 @@ Deno.serve(async (req) => {
     },
   };
 
-  const orRes = await fetch(OPENROUTER_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://snakepit.lovable.app',
-      'X-Title': 'Rivaldo Agentic V1',
-    },
-    body: JSON.stringify(openrouterBody),
-  });
+  const t0 = performance.now();
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), REQUEST_TIMEOUT_MS);
+  let orRes: Response;
+  try {
+    orRes = await fetch(OPENROUTER_URL, {
+      method: 'POST',
+      signal: abort.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://snakepit.lovable.app',
+        'X-Title': 'Rivaldo Agentic V1',
+      },
+      body: JSON.stringify(openrouterBody),
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    const reason = (err as Error)?.name === 'AbortError' ? 'planner_timeout' : 'planner_unreachable';
+    console.error('[plan-rivaldo-treatment]', reason, err);
+    return json({ error: reason }, 504, cors);
+  }
+  clearTimeout(timer);
+
   if (!orRes.ok) {
-    const text = await orRes.text();
-    return json({ error: 'openrouter_failed', status: orRes.status, details: text }, 502);
+    const details = await orRes.text().catch(() => '');
+    console.error('[plan-rivaldo-treatment] openrouter_failed', orRes.status, details.slice(0, 500));
+    return json({ error: 'planner_failed', status: orRes.status }, 502, cors);
   }
-  const orJson = await orRes.json();
-  const content = orJson?.choices?.[0]?.message?.content;
-  if (typeof content !== 'string') {
-    return json({ error: 'no_content', raw: orJson }, 502);
+
+  const orJson = await orRes.json().catch(() => null) as Record<string, unknown> | null;
+  if (!orJson) return json({ error: 'planner_bad_response' }, 502, cors);
+  const requestId = typeof orJson.id === 'string' ? orJson.id : null;
+  if (!requestId) {
+    console.error('[plan-rivaldo-treatment] missing_request_id', orJson);
+    return json({ error: 'planner_bad_response' }, 502, cors);
   }
+  const choices = orJson.choices as Array<{ message?: { content?: string } }> | undefined;
+  const content = choices?.[0]?.message?.content;
+  if (typeof content !== 'string') return json({ error: 'planner_bad_response' }, 502, cors);
 
   let rawPlan: unknown;
   try { rawPlan = JSON.parse(content); } catch {
-    return json({ error: 'plan_parse_failed', content }, 502);
+    return json({ error: 'plan_parse_failed' }, 502, cors);
   }
-  // Force server-side fields before validation.
   if (rawPlan && typeof rawPlan === 'object') {
-    (rawPlan as Record<string, unknown>).modelUsed = PLANNER_MODEL;
-    (rawPlan as Record<string, unknown>).createdAtIso ??= new Date().toISOString();
-    (rawPlan as Record<string, unknown>).version ??= 'v1';
-    (rawPlan as Record<string, unknown>).planId ??= `plan-${Date.now()}`;
-    (rawPlan as Record<string, unknown>).reportId = report.reportId;
+    const rp = rawPlan as Record<string, unknown>;
+    rp.modelUsed = PLANNER_MODEL;
+    rp.createdAtIso ??= new Date().toISOString();
+    rp.version ??= 'v1';
+    rp.planId ??= `plan-${requestId}`;
+    rp.reportId = report.reportId;
   }
 
   const validation = validatePlan(rawPlan, report);
   if (!validation.ok || !validation.plan) {
-    return json({ error: 'validation_failed', issues: validation.issues }, 422);
+    return json({ error: 'validation_failed', issues: validation.issues }, 422, cors);
   }
 
+  const durationMs = Math.round(performance.now() - t0);
+  const usage = (orJson.usage ?? {}) as Record<string, unknown>;
   return json({
+    requestId,
+    provider: 'openrouter',
+    model: PLANNER_MODEL,
+    createdAt: new Date().toISOString(),
+    durationMs,
+    usage: {
+      inputTokens: Number(usage.prompt_tokens ?? 0) || 0,
+      outputTokens: Number(usage.completion_tokens ?? 0) || 0,
+      costUsd: typeof usage.cost === 'number' ? usage.cost : undefined,
+    },
     plan: validation.plan,
     issues: validation.issues,
-    usage: orJson?.usage ?? null,
-  }, 200);
-});
-
-function json(payload: unknown, status: number) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
-}
-// Rivaldo Agentic V1 — Planner endpoint (Onda 1 stub).
-//
-// Recebe um AudioAnalysisReportV2 (JSON), chama o OpenRouter com Structured
-// Outputs e devolve um TreatmentPlanV1 validado. Nesta rodada só declaramos
-// o contrato HTTP e devolvemos 501 até a Onda 3 plugar o prompt + validação.
-import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-
-const PLANNER_MODEL = Deno.env.get('RIVALDO_AUDIO_PLANNER_MODEL') ?? 'deepseek/deepseek-v4-pro';
-
-Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
-  }
-  if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'method_not_allowed' }), {
-      status: 405,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const apiKey = Deno.env.get('OPENROUTER_API_KEY');
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'OPENROUTER_API_KEY missing' }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  let payload: unknown;
-  try {
-    payload = await req.json();
-  } catch {
-    return new Response(JSON.stringify({ error: 'invalid_json' }), {
-      status: 400,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Onda 1: contrato reservado. Validação Zod + chamada real do OpenRouter
-  // entram na Onda 3.
-  return new Response(JSON.stringify({
-    status: 'not_implemented',
-    stage: 'wave-1-scaffold',
-    plannerModel: PLANNER_MODEL,
-    receivedKeys: payload && typeof payload === 'object' ? Object.keys(payload as Record<string, unknown>) : [],
-    message: 'Planner stub. Voltará com plano validado quando a Onda 3 concluir.',
-  }), {
-    status: 501,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-  });
+  }, 200, cors);
 });
