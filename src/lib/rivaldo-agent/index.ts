@@ -8,6 +8,7 @@
 import type { VoiceProcessContext } from '@/lib/audio/pipeline';
 import type { TrackReport } from '@/lib/audio/types';
 import { loadAgenticFlag, saveAgenticFlag, RIVALDO_AGENTIC_SETTINGS_KEY } from './feature-flag';
+import { agenticVoiceProcessor } from './agentic-processor';
 
 export { loadAgenticFlag, saveAgenticFlag, RIVALDO_AGENTIC_SETTINGS_KEY };
 export * from './contracts/rivaldo-target-v1';
@@ -18,25 +19,26 @@ export { analyzeAudio } from './analysis/analyze';
 export { requestTreatmentPlan } from './planner/client';
 export { validatePlan } from './planner/validate';
 export type { ValidationIssue, ValidationResult } from './planner/validate';
+export { executePlan } from './executor/execute';
+export { verifyExecution } from './executor/verify';
+export { agenticVoiceProcessor };
 
 export interface AgenticVoiceProcessor {
   (context: VoiceProcessContext): Promise<{ buffer: AudioBuffer; report: TrackReport }>;
 }
 
 /**
- * Sinaliza ao pipeline se deve rotear pelo motor agentic.
- * Wave 1: sempre `false` até o executor estar pronto (Onda 4).
+ * Executor local pronto na Onda 4. O gating operacional segue no
+ * feature flag `rivaldo_agentic_v1_enabled` — o pipeline só roteia por
+ * aqui quando o flag estiver ON.
  */
 export function isAgenticReady(): boolean {
-  return false;
+  return true;
 }
 
-/**
- * Placeholder de execução agentic. Nunca chamado enquanto `isAgenticReady()`
- * retorna false — existe para deixar o ponto de integração explícito.
- */
+/** Entry-point público mantido por compatibilidade histórica. */
 export async function runAgenticVoiceProcessing(
-  _context: VoiceProcessContext,
+  context: VoiceProcessContext,
 ): Promise<{ buffer: AudioBuffer; report: TrackReport }> {
-  throw new Error('Rivaldo Agentic V1: executor ainda não disponível (Onda 4).');
+  return agenticVoiceProcessor(context);
 }
