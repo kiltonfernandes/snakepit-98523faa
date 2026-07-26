@@ -31,7 +31,7 @@ const PLANNER_MODEL = ALLOWLIST.includes(REQUESTED_MODEL) ? REQUESTED_MODEL : DE
 // CORS restrito aos domínios do Snakepit (env `RIVALDO_PLANNER_CORS_ORIGINS`
 // vírgula-separada sobrescreve).
 const ALLOWED_ORIGINS = (Deno.env.get('RIVALDO_PLANNER_CORS_ORIGINS') ??
-  'https://snakepit.lovable.app,https://id-preview--d13cfcc7-4643-478b-858b-a6450182c64c.lovable.app,http://localhost:8080'
+  'https://snakepit.lovable.app,https://id-preview--d13cfcc7-4643-478b-858b-a6450182c64c.lovable.app,https://kiltonfernandes.github.io,http://localhost:8080'
 ).split(',').map((s) => s.trim()).filter(Boolean);
 
 function corsFor(origin: string | null): Record<string, string> {

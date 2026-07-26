@@ -32,8 +32,9 @@ import {
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
 
-const INTRO_PRESETS = [{ label: 'Heavynauta', url: '/presets/Heavynauta_Intro.mp3' }];
-const OUTRO_PRESETS = [{ label: 'Heavynauta', url: '/presets/heavynaura_outro.mp3' }];
+const PUBLIC_BASE_URL = import.meta.env.BASE_URL;
+const INTRO_PRESETS = [{ label: 'Heavynauta', url: `${PUBLIC_BASE_URL}presets/Heavynauta_Intro.mp3` }];
+const OUTRO_PRESETS = [{ label: 'Heavynauta', url: `${PUBLIC_BASE_URL}presets/heavynaura_outro.mp3` }];
 
 const NON_MASTER_SLOTS = [
   { key: 'intro' as const, label: 'Intro', sublabel: 'A Abertura', presets: INTRO_PRESETS },
