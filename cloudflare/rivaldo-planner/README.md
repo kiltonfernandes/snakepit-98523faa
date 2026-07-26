@@ -17,3 +17,7 @@ O workflow do GitHub Pages injeta essa URL como
 
 Sem essa variável, o cliente preserva o fallback para a Edge Function
 `plan-rivaldo-treatment` existente.
+
+## Deploy
+
+O Worker é publicado automaticamente pelo GitHub Actions após mudanças nesta pasta. O workflow valida as três credenciais antes de executar o Wrangler.
