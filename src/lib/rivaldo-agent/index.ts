@@ -13,6 +13,8 @@ export { loadAgenticFlag, saveAgenticFlag, RIVALDO_AGENTIC_SETTINGS_KEY };
 export * from './contracts/rivaldo-target-v1';
 export * from './contracts/report-v2';
 export * from './contracts/treatment-plan-v1';
+export { AnalyzerClient } from './analysis/analyzer-client';
+export { analyzeAudio } from './analysis/analyze';
 
 export interface AgenticVoiceProcessor {
   (context: VoiceProcessContext): Promise<{ buffer: AudioBuffer; report: TrackReport }>;
