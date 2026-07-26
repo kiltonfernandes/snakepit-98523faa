@@ -62,6 +62,91 @@ function plannerModel(env: Env): string {
   return allowlist.includes(requested) ? requested : DEFAULT_MODEL;
 }
 
+function contentToText(content: unknown): string | null {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return null;
+  const parts = content
+    .map((part) => {
+      if (typeof part === 'string') return part;
+      if (!part || typeof part !== 'object') return '';
+      const record = part as Record<string, unknown>;
+      if (typeof record.text === 'string') return record.text;
+      if (typeof record.content === 'string') return record.content;
+      return '';
+    })
+    .filter(Boolean);
+  return parts.length ? parts.join('\n') : null;
+}
+
+function balancedJsonObjects(text: string): string[] {
+  const objects: string[] = [];
+  let start = -1;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = 0; index < text.length; index++) {
+    const char = text[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') {
+      if (depth === 0) start = index;
+      depth++;
+    } else if (char === '}' && depth > 0) {
+      depth--;
+      if (depth === 0 && start >= 0) {
+        objects.push(text.slice(start, index + 1));
+        start = -1;
+      }
+    }
+  }
+  return objects;
+}
+
+function parsePlanCandidates(message: Record<string, unknown>): unknown[] {
+  const candidates: unknown[] = [];
+  if (message.parsed && typeof message.parsed === 'object') {
+    candidates.push(message.parsed);
+  }
+  if (
+    message.content &&
+    typeof message.content === 'object' &&
+    !Array.isArray(message.content)
+  ) {
+    candidates.push(message.content);
+  }
+
+  const text = contentToText(message.content);
+  if (!text) return candidates;
+
+  const textCandidates = [
+    text.trim(),
+    ...Array.from(text.matchAll(/```(?:json)?\s*([\s\S]*?)```/gi)).map(
+      (match) => match[1].trim(),
+    ),
+    ...balancedJsonObjects(text),
+  ];
+  const seen = new Set<string>();
+  for (const candidate of textCandidates) {
+    if (!candidate || seen.has(candidate)) continue;
+    seen.add(candidate);
+    try {
+      candidates.push(JSON.parse(candidate));
+    } catch {
+      // O próximo candidato pode ser o JSON válido dentro do texto.
+    }
+  }
+  return candidates;
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const cors = corsFor(request.headers.get('Origin'), env);
@@ -166,32 +251,38 @@ export default {
         ? openrouterJson.id
         : null;
     const choices = openrouterJson?.choices as
-      | Array<{ message?: { content?: string } }>
+      | Array<{ message?: Record<string, unknown> }>
       | undefined;
-    const content = choices?.[0]?.message?.content;
-    if (!requestId || typeof content !== 'string') {
+    const message = choices?.[0]?.message;
+    if (!requestId || !message) {
       return json({ error: 'planner_bad_response' }, 502, cors);
     }
 
-    let rawPlan: unknown;
-    try {
-      rawPlan = JSON.parse(content);
-    } catch {
+    const rawCandidates = parsePlanCandidates(message);
+    if (rawCandidates.length === 0) {
       return json({ error: 'plan_parse_failed' }, 502, cors);
     }
-    if (rawPlan && typeof rawPlan === 'object') {
-      const plan = rawPlan as Record<string, unknown>;
+
+    let validation: ReturnType<typeof validateEpisodePlan> | null = null;
+    for (const rawCandidate of rawCandidates) {
+      if (!rawCandidate || typeof rawCandidate !== 'object') continue;
+      const plan = rawCandidate as Record<string, unknown>;
       plan.modelUsed = model;
       plan.createdAtIso ??= new Date().toISOString();
       plan.version ??= 'v1';
       plan.planId ??= `plan-${requestId}`;
       plan.episodeId = episodeId;
+      const candidateValidation = validateEpisodePlan(plan, reports);
+      if (candidateValidation.ok && candidateValidation.plan) {
+        validation = candidateValidation;
+        break;
+      }
+      validation ??= candidateValidation;
     }
 
-    const validation = validateEpisodePlan(rawPlan, reports);
-    if (!validation.ok || !validation.plan) {
+    if (!validation?.ok || !validation.plan) {
       return json(
-        { error: 'validation_failed', issues: validation.issues },
+        { error: 'validation_failed', issues: validation?.issues ?? [] },
         422,
         cors,
       );
