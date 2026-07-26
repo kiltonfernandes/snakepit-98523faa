@@ -27,10 +27,56 @@ export async function requestEpisodeTreatmentPlan(
     );
   }
 
-  const { data, error } = await supabase.functions.invoke(
-    'plan-rivaldo-treatment',
-    { body: payload },
-  );
+  const plannerUrl = import.meta.env.VITE_RIVALDO_PLANNER_URL?.trim();
+  if (plannerUrl) {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (sessionError || !accessToken) {
+      throw new Error('planner_failed:Unauthorized:no_active_session');
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(plannerUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'network_error';
+      throw new Error(
+        `planner_failed:WorkerNetworkError:${message}:origin=${window.location.origin}:payloadBytes=${bytes}`,
+      );
+    }
+
+    const responseText = await response.text();
+    let data: unknown = null;
+    try {
+      data = responseText ? JSON.parse(responseText) : null;
+    } catch {
+      throw new Error(`planner_failed:WorkerBadJson:status=${response.status}`);
+    }
+    if (!response.ok) {
+      const errorCode =
+        data && typeof data === 'object' && 'error' in data
+          ? String((data as { error: unknown }).error)
+          : response.statusText;
+      throw new Error(
+        `planner_failed:WorkerHttpError:${response.status}:${errorCode}:payloadBytes=${bytes}`,
+      );
+    }
+    if (!data || typeof data !== 'object' || !('plan' in data) || !('requestId' in data)) {
+      throw new Error('planner_bad_response');
+    }
+    return data as PlannerEnvelope;
+  }
+
+  const { data, error } = await supabase.functions.invoke('plan-rivaldo-treatment', {
+    body: payload,
+  });
   if (error) {
     const details =
       error instanceof FunctionsHttpError
