@@ -25,14 +25,50 @@ export interface LoudnessResult {
   truePeakDbtp: number;
 }
 
-/** True peak: 4x oversampling via linear interp + max abs. */
+/**
+ * True peak (dBTP) via 4x oversampling **band-limited** (polyphase FIR windowed-sinc).
+ * Substitui a interpolação linear anterior — que subestima inter-sample peaks.
+ */
+const TP_FACTOR = 4;
+const TP_TAPS = 24; // por fase
+// Kernel windowed-sinc (Hann) pré-computado para 4x oversampling.
+const TP_KERNELS: Float32Array[] = (() => {
+  const kernels: Float32Array[] = [];
+  const half = TP_TAPS / 2;
+  for (let phase = 0; phase < TP_FACTOR; phase++) {
+    const k = new Float32Array(TP_TAPS);
+    let sum = 0;
+    for (let n = 0; n < TP_TAPS; n++) {
+      const t = n - half + 1 - phase / TP_FACTOR;
+      const x = Math.PI * t;
+      const sinc = Math.abs(t) < 1e-9 ? 1 : Math.sin(x) / x;
+      const win = 0.5 - 0.5 * Math.cos((2 * Math.PI * n) / (TP_TAPS - 1));
+      const v = sinc * win;
+      k[n] = v; sum += v;
+    }
+    if (sum > 0) for (let n = 0; n < TP_TAPS; n++) k[n] /= sum;
+    kernels.push(k);
+  }
+  return kernels;
+})();
+
 function truePeakDbtp(data: Float32Array): number {
   let peak = 0;
-  for (let i = 0; i < data.length - 1; i++) {
-    const a = data[i], b = data[i + 1];
-    for (let s = 0; s < 4; s++) {
-      const t = s / 4;
-      const v = Math.abs(a + (b - a) * t);
+  const half = TP_TAPS / 2;
+  const N = data.length;
+  for (let i = 0; i < N; i++) {
+    // fase 0 = amostra original
+    const s0 = Math.abs(data[i]);
+    if (s0 > peak) peak = s0;
+    // fases 1..TP_FACTOR-1 = interpoladas band-limited
+    for (let phase = 1; phase < TP_FACTOR; phase++) {
+      const k = TP_KERNELS[phase];
+      let acc = 0;
+      for (let n = 0; n < TP_TAPS; n++) {
+        const idx = i + n - half + 1;
+        if (idx >= 0 && idx < N) acc += data[idx] * k[n];
+      }
+      const v = Math.abs(acc);
       if (v > peak) peak = v;
     }
   }

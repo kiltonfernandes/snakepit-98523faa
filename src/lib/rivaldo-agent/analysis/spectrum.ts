@@ -1,4 +1,5 @@
 import { stft, createHannWindow, resampleLinear } from '@/lib/audio/dsp';
+import type { SpeechRegion } from '@/lib/audio/dsp';
 
 /** LTAS + centroid + rolloff + tilt via STFT médio. */
 
@@ -20,13 +21,29 @@ function bandEdgesLog(lowHz: number, highHz: number, count: number): number[] {
   return edges;
 }
 
-export function measureSpectrum(data: Float32Array, sampleRate: number): SpectrumResult {
+export function measureSpectrum(
+  data: Float32Array,
+  sampleRate: number,
+  speechRegions?: SpeechRegion[],
+): SpectrumResult {
   const src = sampleRate === 48000 ? data : resampleLinear(data, sampleRate, 48000);
   const sr = 48000;
   const res = stft(src, FFT_SIZE, HOP);
   const bins = FFT_SIZE / 2 + 1;
   const avgMag = new Float32Array(bins);
-  const frames = res.frames;
+  const allFrames = res.frames;
+  // Gate LTAS por VAD: só considera frames cuja janela cai majoritariamente
+  // dentro de uma região de fala (evita contaminar tonal por silêncio/ruído).
+  const scale = src.length / Math.max(1, data.length); // regions em samples do src original
+  const gatedFrames = speechRegions && speechRegions.length > 0
+    ? allFrames.filter((_, idx) => {
+        const start = idx * HOP;
+        const end = start + FFT_SIZE;
+        const center = ((start + end) / 2) / scale;
+        return speechRegions.some((r) => center >= r.startSample && center <= r.endSample);
+      })
+    : allFrames;
+  const frames = gatedFrames.length >= 4 ? gatedFrames : allFrames;
   if (frames.length === 0) {
     return { centroidHz: 0, rolloff85Hz: 0, tiltDbPerOctave: 0, ltasBandsDb: new Array(10).fill(-100), humBins: { hum50HzDb: -100, hum60HzDb: -100 } };
   }

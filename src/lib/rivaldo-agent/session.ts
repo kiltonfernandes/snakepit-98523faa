@@ -13,7 +13,7 @@ import { decodeFile, audioBufferToMonoData, monoDataToAudioBuffer } from '@/lib/
 import { detectClippedSamples, gainToDb, peak, rms } from '@/lib/audio/dsp';
 import type { TrackReport } from '@/lib/audio/types';
 
-import { analyzeAudio } from './analysis/analyze';
+import { AnalyzerClient } from './analysis/analyzer-client';
 import { requestEpisodeTreatmentPlan } from './planner/client';
 import { validatePlan, type ValidationIssue } from './planner/validate';
 import { executePlan } from './executor/execute';
@@ -125,16 +125,26 @@ export async function runAgenticEpisode(
   onStatus({ status: 'analyzing', message: `Analisando ${tracks.length} track(s) localmente…`, progress: 0.05 });
   let reports: AudioAnalysisReportV2[] = [];
   let decodedMonos: Float32Array[] = [];
+  const analyzer = new AnalyzerClient();
   try {
     const decoded = await Promise.all(tracks.map((t) => decodeFile(t.file).then((buf) => audioBufferToMonoData(buf, AGENT_SR))));
     decodedMonos = decoded;
-    reports = decoded.map((mono, i) => analyzeAudio(
-      { channelData: mono, sampleRate: AGENT_SR, filename: tracks[i].name, channels: 1 },
-      () => { /* per-track progress omitted for Wave B */ },
-    ));
+    // Wave C: análise em worker (transfer buffer). Enviamos cópia para preservar
+    // o mono original para o executor local.
+    reports = await Promise.all(decoded.map((mono, i) => {
+      const copy = new Float32Array(mono); // transferable clone
+      return analyzer.analyze(
+        { channelData: copy, sampleRate: AGENT_SR, filename: tracks[i].name, channels: 1 },
+        (p, stage) => onStatus({ status: 'analyzing', message: `[${tracks[i].name}] ${stage}`, progress: 0.05 + p * 0.25 }),
+      );
+    }));
   } catch (err) {
+    analyzer.terminate();
     return { mode: 'fallback', failedStage: 'analysis', reasonCode: 'analyze_failed', message: err instanceof Error ? err.message : 'analyze_failed' };
+  } finally {
+    // worker liberado após análises paralelas
   }
+  analyzer.terminate();
 
   // --- Stage 2: 1 planner call ---
   onStatus({ status: 'planning', message: 'Chamando planner (1 requisição por episódio)…', progress: 0.35 });

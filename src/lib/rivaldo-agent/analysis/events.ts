@@ -37,6 +37,7 @@ export function detectClipping(data: Float32Array, sr: number): AudioEvent[] {
         id: nextId('clip'), type: 'clipping',
         startSec: samplesToSec(start, sr), endSec: samplesToSec(i, sr),
         severity: Math.min(1, run / (sr * 0.05)), confidence: 0.95,
+        meta: { runSamples: run, runMs: (run / sr) * 1000 },
       });
       run = 0;
     }
@@ -61,6 +62,7 @@ export function detectClicksAndCrackle(data: Float32Array, sr: number): { clicks
         startSec: samplesToSec(Math.max(0, i - 2), sr),
         endSec: samplesToSec(i + 2, sr),
         severity: Math.min(1, dev / (mean + 10 * std + 1e-6)), confidence: 0.7,
+        meta: { derivPeak: dev, localMean: mean, localStd: std, zScore: (dev - mean) / (std + 1e-9) },
       });
       i += win; // skip
     } else if (dev > mean + 3 * std) {
@@ -69,6 +71,7 @@ export function detectClicksAndCrackle(data: Float32Array, sr: number): { clicks
         startSec: samplesToSec(Math.max(0, i - 4), sr),
         endSec: samplesToSec(i + 4, sr),
         severity: Math.min(1, dev / (mean + 6 * std + 1e-6)), confidence: 0.55,
+        meta: { derivPeak: dev, localStd: std, zScore: (dev - mean) / (std + 1e-9) },
       });
       i += 32;
     }
@@ -95,6 +98,7 @@ export function detectBreathAndPlosive(data: Float32Array, sr: number, speech: S
             id: nextId('brt'), type: 'breath',
             startSec: samplesToSec(gapStart, sr), endSec: samplesToSec(gapEnd, sr),
             severity: Math.min(1, (eDb + 55) / 30), confidence: 0.6,
+            meta: { gapSec, rmsDbfs: eDb },
           });
         }
       }
@@ -110,6 +114,7 @@ export function detectBreathAndPlosive(data: Float32Array, sr: number, speech: S
         id: nextId('plo'), type: 'plosive',
         startSec: samplesToSec(onset, sr), endSec: samplesToSec(onsetEnd, sr),
         severity: Math.min(1, dcDrift * 4), confidence: 0.5,
+        meta: { dcDrift, windowMs: 40 },
       });
     }
   }
@@ -130,6 +135,7 @@ export function detectSibilance(data: Float32Array, sr: number, speech: SpeechRe
           id: nextId('sib'), type: 'sibilance',
           startSec: samplesToSec(s, sr), endSec: samplesToSec(s + win, sr),
           severity: Math.min(1, (ratio - 0.30) * 4), confidence: 0.5,
+          meta: { zeroCrossRatio: ratio, windowMs: 30 },
         });
       }
     }
@@ -167,7 +173,7 @@ export function detectLevelJumps(data: Float32Array, sr: number): AudioEvent[] {
         id: nextId('lvl'), type: 'level_jump',
         startSec: t, endSec: t + hop / sr,
         severity: Math.min(1, Math.abs(delta) / 18), confidence: 0.6,
-        meta: { deltaDb: delta },
+        meta: { deltaDb: delta, prevDbfs: levels[i - 1], currDbfs: levels[i] },
       });
     }
   }
@@ -186,6 +192,7 @@ export function detectDropouts(data: Float32Array, sr: number, speech: SpeechReg
           id: nextId('drop'), type: 'dropout',
           startSec: samplesToSec(s, sr), endSec: samplesToSec(s + win, sr),
           severity: 0.7, confidence: 0.5,
+          meta: { rmsDbfs: level, windowMs: 50 },
         });
       }
     }

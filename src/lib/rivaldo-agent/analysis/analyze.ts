@@ -29,10 +29,11 @@ export function analyzeAudio(input: AnalyzeInput, onProgress?: AnalyzeProgressCb
 
   step(0.05, 'loudness');
   const loudness = measureLoudness(data, sr);
-  step(0.25, 'spectrum');
-  const spectrum = measureSpectrum(data, sr);
-  step(0.45, 'vad');
+  step(0.30, 'vad');
   const vad = runVad(data, sr);
+  step(0.45, 'spectrum');
+  // Wave C: LTAS gated by VAD para tonal decisions sem contaminação de silêncio.
+  const spectrum = measureSpectrum(data, sr, vad.regions);
   step(0.60, 'noise');
   const noise = measureNoise(data, sr, vad.regions);
   step(0.72, 'acoustics');
