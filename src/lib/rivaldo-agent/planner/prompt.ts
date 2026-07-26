@@ -16,7 +16,7 @@ Retorne EXCLUSIVAMENTE JSON válido conforme o schema fornecido.
 ESTÁGIOS FIXOS (nesta ordem)
 1. repair    — declip, declick, decrackle
 2. noise     — denoise, dehum
-3. tone      — dereverb, eq, de_esser, de_plosive
+3. tone      — eq, de_esser, de_plosive
 4. events    — event_attenuate (respiração/plosiva pontual)
 5. dynamics  — compressor
 6. finish    — gain (ajuste final para alvo LUFS de voz)
@@ -26,7 +26,7 @@ ALVO GLOBAL (RIVALDO_TARGET_V1)
 - true peak ceiling: ${RIVALDO_TARGET_V1.loudness.truePeakCeilingDbtp} dBTP
 - SNR mínimo fala: ${RIVALDO_TARGET_V1.noise.minSpeechSnrDb} dB
 - centroid fala aceitável: ${RIVALDO_TARGET_V1.tone.speechCentroidHzRange[0]}-${RIVALDO_TARGET_V1.tone.speechCentroidHzRange[1]} Hz
-- RT60 máx tolerado: ${RIVALDO_TARGET_V1.reverb.maxRt60Sec}s (acima → aplicar dereverb)
+- RT60 máx tolerado: ${RIVALDO_TARGET_V1.reverb.maxRt60Sec}s (não aplicar dereverb nesta versão; apenas registrar)
 
 POLÍTICA DE SEGURANÇA (TREATMENT_POLICY_V1) — nunca violar:
 - gain: [${TREATMENT_POLICY_V1.gainDbRange[0]}, ${TREATMENT_POLICY_V1.gainDbRange[1]}] dB

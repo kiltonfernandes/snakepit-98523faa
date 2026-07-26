@@ -22,7 +22,7 @@ const STAGE_ORDER = ['repair','noise','tone','events','dynamics','finish'] as co
 const ALLOWED_OPS_BY_STAGE: Record<Stage['stage'], Set<Operation['kind']>> = {
   repair:   new Set(['declip','declick','decrackle']),
   noise:    new Set(['denoise','dehum']),
-  tone:     new Set(['dereverb','eq','de_esser','de_plosive']),
+  tone:     new Set(['eq','de_esser','de_plosive']),
   events:   new Set(['event_attenuate']),
   dynamics: new Set(['compressor']),
   finish:   new Set(['gain']),

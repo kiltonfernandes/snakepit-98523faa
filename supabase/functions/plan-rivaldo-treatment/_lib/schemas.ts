@@ -77,7 +77,6 @@ export const OperationSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('decrackle'), region: RegionSchema, amount: z.number().min(0).max(100) }),
   z.object({ kind: z.literal('denoise'),   region: RegionSchema, amount: z.number().min(0).max(100) }),
   z.object({ kind: z.literal('dehum'),     region: RegionSchema, frequencyHz: z.union([z.literal(50), z.literal(60)]), strength: z.number().min(0).max(100) }),
-  z.object({ kind: z.literal('dereverb'),  region: RegionSchema, amount: z.number().min(0).max(100) }),
   z.object({
     kind: z.literal('eq'), region: RegionSchema,
     filters: z.array(z.object({

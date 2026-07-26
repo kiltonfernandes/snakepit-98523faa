@@ -58,11 +58,6 @@ export const OperationSchema = z.discriminatedUnion('kind', [
     strength: z.number().min(0).max(100),
   }),
   z.object({
-    kind: z.literal('dereverb'),
-    region: RegionSchema,
-    amount: z.number().min(0).max(100),
-  }),
-  z.object({
     kind: z.literal('eq'),
     region: RegionSchema,
     /** Filtros parametricos: até 6 por operação. */

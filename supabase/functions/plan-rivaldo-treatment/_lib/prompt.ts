@@ -11,14 +11,14 @@ ESTÁGIOS FIXOS (nesta ordem):
 Operações permitidas por estágio:
   repair: declip, declick, decrackle
   noise:  denoise, dehum
-  tone:   dereverb, eq, de_esser, de_plosive
+  tone:   eq, de_esser, de_plosive
   events: event_attenuate (referenciar eventId de report.events)
   dynamics: compressor
   finish: gain (levar voz para ${TARGET.voiceLufs} LUFS)
 
 Alvo: voz ${TARGET.voiceLufs} LUFS, true peak ≤ ${TARGET.truePeakCeilingDbtp} dBTP,
 SNR fala ≥ ${TARGET.minSpeechSnrDb} dB, centroid fala ${TARGET.speechCentroidHzRange[0]}-${TARGET.speechCentroidHzRange[1]} Hz,
-RT60 máx ${TARGET.maxRt60Sec}s (acima → dereverb).
+RT60 máx ${TARGET.maxRt60Sec}s (não aplicar dereverb nesta versão; se acima, apenas registre).
 
 Política (jamais violar):
   gain [${POLICY.gainDbRange[0]}, ${POLICY.gainDbRange[1]}] dB, atenuação [${POLICY.eventAttenuationDbRange[0]}, 0] dB,
