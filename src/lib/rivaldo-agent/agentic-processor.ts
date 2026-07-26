@@ -130,7 +130,7 @@ export async function agenticVoiceProcessor(context: VoiceProcessContext): Promi
     step(0.55, 'validando plano');
     const validation = validatePlan(plan, report);
     if (!validation.ok || !validation.plan) {
-      throw new Error(`plan_invalid: ${validation.issues.map((i) => i.code).join(', ')}`);
+      throw new Error(`plan_invalid: ${validation.issues.map((i) => `${i.layer}/${i.severity}`).join(', ')}`);
     }
     for (const issue of [...plannerIssues, ...validation.issues]) {
       // eslint-disable-next-line no-console
