@@ -137,7 +137,9 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
             planHash: outcome.planHash,
             acceptedOperations: outcome.acceptedOperations,
             tracks: outcome.analysisIds.length,
+            plannerDigest: outcome.plannerDigest,
           });
+          dlog.attachData('[PLANNER DIGEST]', outcome.plannerDigest);
           dlog.attachData('[ANALYSIS]', outcome.envelope.plan.trackPlans.map((tp, i) => ({
             reportId: tp.reportId,
             operationsPlanned: tp.plan.stages.reduce((s, st) => s + st.operations.length, 0),
@@ -176,7 +178,11 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
             reasonCode: outcome.reasonCode,
             message: outcome.message,
             requestId: outcome.envelope?.requestId,
+            plannerDigest: outcome.plannerDigest,
           });
+          if (outcome.plannerDigest) {
+            dlog.attachData('[PLANNER DIGEST]', outcome.plannerDigest);
+          }
           if (outcome.partialReports) {
             dlog.attachData('[ANALYSIS]', outcome.partialReports.map((r) => ({
               reportId: r.reportId,
