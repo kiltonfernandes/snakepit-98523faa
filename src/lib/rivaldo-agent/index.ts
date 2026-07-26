@@ -15,6 +15,9 @@ export * from './contracts/report-v2';
 export * from './contracts/treatment-plan-v1';
 export { AnalyzerClient } from './analysis/analyzer-client';
 export { analyzeAudio } from './analysis/analyze';
+export { requestTreatmentPlan } from './planner/client';
+export { validatePlan } from './planner/validate';
+export type { ValidationIssue, ValidationResult } from './planner/validate';
 
 export interface AgenticVoiceProcessor {
   (context: VoiceProcessContext): Promise<{ buffer: AudioBuffer; report: TrackReport }>;
