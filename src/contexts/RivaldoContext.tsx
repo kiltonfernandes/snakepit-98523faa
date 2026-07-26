@@ -180,7 +180,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           if (outcome.partialReports) {
             dlog.attachData('[ANALYSIS]', outcome.partialReports.map((r) => ({
               reportId: r.reportId,
-              durationSec: r.durationSec,
+              durationSec: r.source.durationSec,
               speechRatio: r.speech.ratio,
               noiseFloorDbfs: r.noise.floorDbfs,
               events: r.events.length,
