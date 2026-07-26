@@ -19,6 +19,7 @@ import { ProcessingReportPanel } from '@/components/rivaldo/ProcessingReportPane
 import { DesktopJobsPanel } from '@/components/rivaldo/DesktopJobsPanel';
 import { HeavynautaBrand } from '@/components/rivaldo/HeavynautaBrand';
 import { EpisodePickerModal } from '@/components/rivaldo/EpisodePickerModal';
+import { AgenticToggle } from '@/components/rivaldo/AgenticToggle';
 import { ChevronDown } from 'lucide-react';
 import { mergeQueuedJobIntoState, prepareDesktopPipelinePayload } from '@/lib/desktop/queue';
 import {
@@ -226,6 +227,7 @@ const Rivaldo = () => {
           </button>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <AgenticToggle />
           {bulk.isProcessing && (
             <button
               type="button"
