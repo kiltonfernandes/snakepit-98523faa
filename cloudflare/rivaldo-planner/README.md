@@ -15,9 +15,14 @@ Depois do primeiro deploy, crie a variável de repositório
 O workflow do GitHub Pages injeta essa URL como
 `VITE_RIVALDO_PLANNER_URL` durante o build.
 
-Sem essa variável, o cliente preserva o fallback para a Edge Function
-`plan-rivaldo-treatment` existente.
+Sem essa variável, o cliente usa automaticamente o Worker de produção:
+
+`https://rivaldo-planner.kilton-fernandes.workers.dev`
+
+Para usar deliberadamente a Edge Function legada
+`plan-rivaldo-treatment`, defina `VITE_RIVALDO_PLANNER_URL=supabase`.
 
 ## Deploy
 
-O Worker é publicado automaticamente pelo GitHub Actions após mudanças nesta pasta. O workflow valida as três credenciais antes de executar o Wrangler.
+O Worker é publicado automaticamente pelo GitHub Actions após mudanças nesta
+pasta. O workflow valida as três credenciais antes de executar o Wrangler.
