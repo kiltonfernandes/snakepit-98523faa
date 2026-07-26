@@ -112,6 +112,27 @@ export const TreatmentPlanV1Schema = z.object({
 });
 export type TreatmentPlanV1 = z.infer<typeof TreatmentPlanV1Schema>;
 
+/** Wave B: episódio completo = N trackPlans em uma única resposta. */
+export const EpisodePlanV1Schema = z.object({
+  version: z.literal('v1'),
+  planId: z.string(),
+  episodeId: z.string(),
+  createdAtIso: z.string(),
+  modelUsed: z.string(),
+  summary: z.string().max(1200),
+  trackPlans: z.array(z.object({
+    reportId: z.string(),
+    plan: TreatmentPlanV1Schema,
+  })).min(1).max(16),
+});
+export type EpisodePlanV1 = z.infer<typeof EpisodePlanV1Schema>;
+
+export const EpisodePlanRequestSchema = z.object({
+  episodeId: z.string().min(1).max(200),
+  reports: z.array(AudioAnalysisReportV2Schema).min(1).max(16),
+});
+export type EpisodePlanRequest = z.infer<typeof EpisodePlanRequestSchema>;
+
 export const POLICY = {
   maxOperationsPerStage: 24,
   maxTotalOperations: 96,

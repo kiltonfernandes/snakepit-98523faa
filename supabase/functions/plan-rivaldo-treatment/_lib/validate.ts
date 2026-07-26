@@ -1,6 +1,7 @@
 import {
   TreatmentPlanV1Schema, POLICY,
   type TreatmentPlanV1, type Operation, type Stage,
+  EpisodePlanV1Schema, type EpisodePlanV1,
 } from './schemas.ts';
 import type { AudioAnalysisReportV2 } from './schemas.ts';
 
@@ -123,4 +124,47 @@ export function validatePlan(raw: unknown, report: AudioAnalysisReportV2): Valid
     return { ok: false, issues };
   }
   return { ok: true, plan: { ...plan, stages: cleanStages }, issues };
+}
+
+/** Wave B: valida o envelope de episódio (N trackPlans) reaproveitando validatePlan por track. */
+export interface EpisodeValidationResult {
+  ok: boolean;
+  plan?: EpisodePlanV1;
+  issues: (ValidationIssue & { trackReportId?: string })[];
+}
+
+export function validateEpisodePlan(raw: unknown, reports: AudioAnalysisReportV2[]): EpisodeValidationResult {
+  const parsed = EpisodePlanV1Schema.safeParse(raw);
+  if (!parsed.success) {
+    return { ok: false, issues: parsed.error.errors.map((e) => ({
+      layer: 'structural', severity: 'reject',
+      message: `${e.path.join('.') || '<root>'}: ${e.message}`,
+    })) };
+  }
+  const episode = parsed.data;
+  const byReportId = new Map(reports.map((r) => [r.reportId, r]));
+  const cleanTrackPlans: EpisodePlanV1['trackPlans'] = [];
+  const issues: (ValidationIssue & { trackReportId?: string })[] = [];
+  let acceptedOps = 0;
+
+  for (const tp of episode.trackPlans) {
+    const report = byReportId.get(tp.reportId);
+    if (!report) {
+      issues.push({ layer: 'identity', severity: 'drop', message: `trackPlan.reportId "${tp.reportId}" sem report`, trackReportId: tp.reportId });
+      continue;
+    }
+    const v = validatePlan(tp.plan, report);
+    for (const it of v.issues) issues.push({ ...it, trackReportId: tp.reportId });
+    if (!v.ok || !v.plan) continue;
+    const opsInTrack = v.plan.stages.reduce((s, st) => s + st.operations.length, 0);
+    acceptedOps += opsInTrack;
+    cleanTrackPlans.push({ reportId: tp.reportId, plan: v.plan });
+  }
+
+  // All reports must have produced a valid trackPlan for the batch to succeed.
+  if (cleanTrackPlans.length !== reports.length || acceptedOps === 0) {
+    return { ok: false, issues };
+  }
+
+  return { ok: true, plan: { ...episode, trackPlans: cleanTrackPlans }, issues };
 }
