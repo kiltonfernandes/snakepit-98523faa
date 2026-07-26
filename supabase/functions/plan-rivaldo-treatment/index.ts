@@ -4,11 +4,10 @@
 // com Structured Outputs → valida em 7 camadas → devolve TreatmentPlanV1
 // limpo. Nenhum áudio trafega — só métricas/eventos.
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
-import { AudioAnalysisReportV2Schema } from '../../../src/lib/rivaldo-agent/contracts/report-v2.ts';
-import { TreatmentPlanV1Schema } from '../../../src/lib/rivaldo-agent/contracts/treatment-plan-v1.ts';
-import { validatePlan } from '../../../src/lib/rivaldo-agent/planner/validate.ts';
-import { buildPlannerMessages } from '../../../src/lib/rivaldo-agent/planner/prompt.ts';
 import { zodToJsonSchema } from 'npm:zod-to-json-schema@3';
+import { AudioAnalysisReportV2Schema, TreatmentPlanV1Schema } from './_lib/schemas.ts';
+import { buildPlannerMessages } from './_lib/prompt.ts';
+import { validatePlan } from './_lib/validate.ts';
 
 const PLANNER_MODEL = Deno.env.get('RIVALDO_AUDIO_PLANNER_MODEL') ?? 'deepseek/deepseek-v4-pro';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
