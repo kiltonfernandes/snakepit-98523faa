@@ -26,11 +26,9 @@ export async function loadAgenticFlag(): Promise<boolean> {
 }
 
 export async function saveAgenticFlag(enabled: boolean): Promise<void> {
-  await supabase
-    .from('app_settings' as never)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    .update({ [SETTINGS_KEY]: enabled } as any)
-    .eq('singleton_id', 1);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = supabase as any;
+  await client.from('app_settings').update({ [SETTINGS_KEY]: enabled }).eq('singleton_id', 1);
 }
 
 export const RIVALDO_AGENTIC_SETTINGS_KEY = SETTINGS_KEY;
