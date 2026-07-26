@@ -9,6 +9,9 @@ export interface EpisodePlanRequestPayload {
   reports: AudioAnalysisReportV2[];
 }
 
+const DEFAULT_PLANNER_URL =
+  'https://rivaldo-planner.kilton-fernandes.workers.dev';
+
 function payloadBytes(payload: EpisodePlanRequestPayload): number {
   return new TextEncoder().encode(JSON.stringify(payload)).byteLength;
 }
@@ -27,7 +30,13 @@ export async function requestEpisodeTreatmentPlan(
     );
   }
 
-  const plannerUrl = import.meta.env.VITE_RIVALDO_PLANNER_URL?.trim();
+  const configuredPlannerUrl = import.meta.env.VITE_RIVALDO_PLANNER_URL?.trim();
+  // O Worker é o caminho de produção padrão. Defina explicitamente
+  // VITE_RIVALDO_PLANNER_URL=supabase apenas para usar a Edge Function legada.
+  const plannerUrl =
+    configuredPlannerUrl?.toLowerCase() === 'supabase'
+      ? ''
+      : configuredPlannerUrl || DEFAULT_PLANNER_URL;
   if (plannerUrl) {
     const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
