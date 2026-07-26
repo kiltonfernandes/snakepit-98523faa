@@ -129,13 +129,77 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           dlog.log('agentic', 'success', `Planner OK — requestId=${outcome.requestId}, ops=${outcome.acceptedOperations}, tracks=${outcome.analysisIds.length}, hash=${outcome.planHash}`, {
             data: { model: outcome.envelope.model, usage: outcome.envelope.usage, durationMs: outcome.envelope.durationMs },
           });
+          // Wave E: seções estruturadas no export log
+          dlog.attachData('[AGENTIC STATUS]', {
+            mode: 'agentic',
+            episodeId: outcome.episodeId,
+            requestId: outcome.requestId,
+            planHash: outcome.planHash,
+            acceptedOperations: outcome.acceptedOperations,
+            tracks: outcome.analysisIds.length,
+          });
+          dlog.attachData('[ANALYSIS]', outcome.envelope.plan.trackPlans.map((tp, i) => ({
+            reportId: tp.reportId,
+            operationsPlanned: tp.plan.stages.reduce((s, st) => s + st.operations.length, 0),
+          })));
+          dlog.attachData('[OPENROUTER PLANNING]', {
+            requestId: outcome.envelope.requestId,
+            model: outcome.envelope.model,
+            durationMs: outcome.envelope.durationMs,
+            usage: outcome.envelope.usage,
+          });
+          dlog.attachData('[VALIDATION]', {
+            issues: outcome.issues,
+            accepted: outcome.acceptedOperations,
+          });
+          dlog.attachData('[LOCAL EXECUTION]', Array.from(outcome.treatedByTrackId.entries()).map(([id, t]) => ({
+            trackId: id,
+            trackName: t.report.trackName,
+            metricsBefore: t.report.metricsBefore,
+            metricsAfter: t.report.metricsAfter,
+            events: t.report.events,
+          })));
+          dlog.attachData('[ARTIFACTS]', {
+            requestId: outcome.envelope.requestId,
+            planHash: outcome.planHash,
+            trackIds: Array.from(outcome.treatedByTrackId.keys()),
+          });
         } else {
           setAgenticStatus('legacy_fallback');
           addLog(`Fallback legado: ${outcome.failedStage} — ${outcome.message}`, 'error');
           dlog.log('agentic', 'error', `Fallback ${outcome.failedStage}/${outcome.reasonCode}: ${outcome.message}`, {
             data: outcome.envelope ? { requestId: outcome.envelope.requestId } : undefined,
           });
+          dlog.attachData('[AGENTIC STATUS]', {
+            mode: 'fallback',
+            failedStage: outcome.failedStage,
+            reasonCode: outcome.reasonCode,
+            message: outcome.message,
+            requestId: outcome.envelope?.requestId,
+          });
+          if (outcome.partialReports) {
+            dlog.attachData('[ANALYSIS]', outcome.partialReports.map((r) => ({
+              reportId: r.reportId,
+              durationSec: r.source.durationSec,
+              speechRatio: r.speech.ratio,
+              noiseFloorDbfs: r.noise.floorDbfs,
+              events: r.events.length,
+            })));
+          }
+          if (outcome.envelope) {
+            dlog.attachData('[OPENROUTER PLANNING]', {
+              requestId: outcome.envelope.requestId,
+              model: outcome.envelope.model,
+              durationMs: outcome.envelope.durationMs,
+              usage: outcome.envelope.usage,
+            });
+          }
+          dlog.attachData('[VALIDATION]', { failedAt: outcome.failedStage, reason: outcome.reasonCode });
+          dlog.attachData('[LOCAL EXECUTION]', { skipped: true, reason: 'fallback_to_legacy' });
+          dlog.attachData('[ARTIFACTS]', { fallback: true });
         }
+      } else {
+        dlog.attachData('[AGENTIC STATUS]', { mode: 'off', reason: 'flag_disabled' });
       }
 
       const result = await runPipeline(
