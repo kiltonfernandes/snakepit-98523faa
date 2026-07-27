@@ -16,7 +16,7 @@ const MAX_REPORT_BYTES = 512 * 1024;
 const MAX_OUTPUT_TOKENS = 8192;
 const REQUEST_TIMEOUT_MS = 30_000;
 const TEMPERATURE = 0.15;
-const WORKER_VERSION = '2026-07-26.3';
+const WORKER_VERSION = '2026-07-27.1';
 const PLAN_JSON_SCHEMA = zodToJsonSchema(EpisodePlanV1Schema, {
   name: 'EpisodePlanV1',
   $refStrategy: 'none',
@@ -25,7 +25,7 @@ const PLAN_JSON_SCHEMA = zodToJsonSchema(EpisodePlanV1Schema, {
 function allowedOrigins(env: Env): string[] {
   return (
     env.RIVALDO_PLANNER_CORS_ORIGINS ??
-    'https://kiltonfernandes.github.io,https://snakepit.lovable.app,http://localhost:8080'
+    'https://kiltonfernandes.github.io,https://snakepit.lovable.app,https://heavynauta.vercel.app,http://localhost:8080'
   )
     .split(',')
     .map((origin) => origin.trim())
@@ -222,7 +222,7 @@ export default {
         headers: {
           Authorization: `Bearer ${env.OPENROUTER_API_KEY}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://kiltonfernandes.github.io/snakepit-98523faa/',
+          'HTTP-Referer': 'https://heavynauta.vercel.app/',
           'X-Title': 'Rivaldo Agentic V1',
         },
         body: JSON.stringify(openrouterBody),
