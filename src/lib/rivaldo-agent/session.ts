@@ -39,6 +39,11 @@ export type AgenticOutcome =
       acceptedOperations: number;
       plannerDigest: PlannerDigestStats;
       envelope: PlannerEnvelope;
+      /** Planos que passaram pela validação local e foram enviados ao executor. */
+      executedPlans: Array<{
+        reportId: string;
+        plan: EpisodePlanV1['trackPlans'][number]['plan'];
+      }>;
       treatedByTrackId: Map<string, AgenticTreatedTrack>;
       issues: ValidationIssue[];
     }
@@ -360,6 +365,7 @@ export async function runAgenticEpisode(
     acceptedOperations,
     plannerDigest: plannerDigest.stats,
     envelope,
+    executedPlans: validatedTrackPlans,
     treatedByTrackId,
     issues: collectedIssues,
   };
