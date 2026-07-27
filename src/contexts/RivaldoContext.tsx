@@ -144,6 +144,42 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
             reportId: tp.reportId,
             operationsPlanned: tp.plan.stages.reduce((s, st) => s + st.operations.length, 0),
           })));
+          dlog.attachData('[PLANNER PLAN]', {
+            episodeSummary: outcome.envelope.plan.summary,
+            model: outcome.envelope.plan.modelUsed,
+            tracks: outcome.envelope.plan.trackPlans.map((trackPlan) => ({
+              reportId: trackPlan.reportId,
+              planId: trackPlan.plan.planId,
+              summary: trackPlan.plan.summary,
+              predictedFinalLoudness: trackPlan.plan.predictedFinalLoudness,
+              stages: trackPlan.plan.stages.map((stage) => ({
+                stage: stage.stage,
+                operationCount: stage.operations.length,
+                operations: stage.operations.map((operation, operationIndex) => ({
+                  operationIndex,
+                  ...operation,
+                })),
+              })),
+            })),
+          });
+          const appliedOperations = outcome.executedPlans.flatMap((trackPlan) =>
+            trackPlan.plan.stages.flatMap((stage) =>
+              stage.operations.map((operation, operationIndex) => ({
+                reportId: trackPlan.reportId,
+                stage: stage.stage,
+                operationIndex,
+                ...operation,
+              })),
+            ),
+          );
+          dlog.attachData('[APPLIED OPERATIONS]', {
+            total: appliedOperations.length,
+            byKind: appliedOperations.reduce<Record<string, number>>((counts, operation) => {
+              counts[operation.kind] = (counts[operation.kind] ?? 0) + 1;
+              return counts;
+            }, {}),
+            operations: appliedOperations,
+          });
           dlog.attachData('[OPENROUTER PLANNING]', {
             requestId: outcome.envelope.requestId,
             model: outcome.envelope.model,
