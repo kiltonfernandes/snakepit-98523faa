@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -33,6 +33,7 @@ import { YouTubeEmbeds } from '@/components/shared/YouTubeEmbeds';
 import { ReleaseLinkBar } from '@/components/shared/ReleaseLinkBar';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -60,7 +61,9 @@ import type { StandaloneTopic } from '@/lib/types';
 import { NovaPautaWizard } from '@/components/pautas/NovaPautaWizard';
 import {
   PREPROD_KIND_LABEL,
+  applyPreprodReviewTitleLabel,
   getPreprodLabel,
+  getPreprodReviewTitlePrefix,
   getPreprodStatusClass,
   getPreprodStatusLabel,
   inferPreprodStatus,
@@ -114,6 +117,7 @@ export default function CalendarView() {
   const [viewMode, setViewMode] = useState<'month' | 'week' | 'day'>('month');
   const [selectedMaterial, setSelectedMaterial] = useState<EpisodeMaterial | null>(null);
   const [selectedPauta, setSelectedPauta] = useState<Pauta | null>(null);
+  const [selectedPreprod, setSelectedPreprod] = useState<PreprodPauta | null>(null);
   const [selectedRelease, setSelectedRelease] = useState<Release | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
@@ -249,23 +253,77 @@ export default function CalendarView() {
 
   const fmt = (d: Date) => preprodDate(d);
 
-  const getPautasForDate = (dateStr: string) => pautas.filter((p) => p.publication_date === dateStr);
-  const getPreprodForDate = (dateStr: string) => preprodPautas.filter((p) => preprodDate(p.publication_date) === dateStr);
+  const calendarIndex = useMemo(() => {
+    const pautasByDate = new Map<string, Pauta[]>();
+    const pautasById = new Map<string, Pauta>();
+    pautas.forEach((pauta) => {
+      pautasById.set(pauta.id, pauta);
+      const list = pautasByDate.get(pauta.publication_date) || [];
+      list.push(pauta);
+      pautasByDate.set(pauta.publication_date, list);
+    });
 
-  const getUnlinkedMaterialsForDate = (dateStr: string) =>
-    materials.filter((m) => m.episode_date === dateStr && !m.source_pauta_id);
+    const preprodByDate = new Map<string, PreprodPauta[]>();
+    const preprodById = new Map<string, PreprodPauta>();
+    preprodPautas.forEach((pauta) => {
+      preprodById.set(pauta.id, pauta);
+      const dateKey = preprodDate(pauta.publication_date);
+      const list = preprodByDate.get(dateKey) || [];
+      list.push(pauta);
+      preprodByDate.set(dateKey, list);
+    });
+
+    const materialsByDate = new Map<string, EpisodeMaterial[]>();
+    const unlinkedMaterialsByDate = new Map<string, EpisodeMaterial[]>();
+    const materialByPautaId = new Map<string, EpisodeMaterial>();
+    const materialByPreprodId = new Map<string, EpisodeMaterial>();
+    materials.forEach((material) => {
+      const dateList = materialsByDate.get(material.episode_date) || [];
+      dateList.push(material);
+      materialsByDate.set(material.episode_date, dateList);
+      if (material.source_pauta_id) materialByPautaId.set(material.source_pauta_id, material);
+      else {
+        const unlinked = unlinkedMaterialsByDate.get(material.episode_date) || [];
+        unlinked.push(material);
+        unlinkedMaterialsByDate.set(material.episode_date, unlinked);
+      }
+      if (material.preprod_pauta_id) materialByPreprodId.set(material.preprod_pauta_id, material);
+    });
+
+    const releasesByDate = new Map<string, Release[]>();
+    releases.forEach((release) => {
+      const list = releasesByDate.get(release.release_date) || [];
+      list.push(release);
+      releasesByDate.set(release.release_date, list);
+    });
+
+    return {
+      pautasByDate,
+      pautasById,
+      preprodByDate,
+      preprodById,
+      materialsByDate,
+      unlinkedMaterialsByDate,
+      materialByPautaId,
+      materialByPreprodId,
+      releasesByDate,
+    };
+  }, [materials, pautas, preprodPautas, releases]);
+
+  const getPautasForDate = (dateStr: string) => calendarIndex.pautasByDate.get(dateStr) || [];
+  const getPreprodForDate = (dateStr: string) => calendarIndex.preprodByDate.get(dateStr) || [];
 
   const getMaterialForPauta = (pauta: Pauta) => {
-    const linkedMaterial = materials.find((m) => m.source_pauta_id === pauta.id);
+    const linkedMaterial = calendarIndex.materialByPautaId.get(pauta.id);
     if (linkedMaterial) return linkedMaterial;
 
-    const unlinkedMaterials = getUnlinkedMaterialsForDate(pauta.publication_date);
+    const unlinkedMaterials = calendarIndex.unlinkedMaterialsByDate.get(pauta.publication_date) || [];
     return unlinkedMaterials.length === 1 ? unlinkedMaterials[0] : null;
   };
 
   const getPautaForMaterial = (material: EpisodeMaterial) => {
     if (material.source_pauta_id) {
-      return pautas.find((p) => p.id === material.source_pauta_id) || null;
+      return calendarIndex.pautasById.get(material.source_pauta_id) || null;
     }
 
     const sameDayPautas = getPautasForDate(material.episode_date);
@@ -273,7 +331,7 @@ export default function CalendarView() {
   };
 
   const getMaterialForPreprod = (preprod: PreprodPauta) =>
-    materials.find((material) => material.preprod_pauta_id === preprod.id) || null;
+    calendarIndex.materialByPreprodId.get(preprod.id) || null;
 
   const getItemsForDate = (dateStr: string) => {
     const items: {
@@ -308,9 +366,8 @@ export default function CalendarView() {
           material: getMaterialForPauta(p),
         });
       });
-      materials
+      (calendarIndex.materialsByDate.get(dateStr) || [])
         .filter((m) => {
-          if (m.episode_date !== dateStr) return false;
           // Skip if the material's regular pauta is already rendered
           if (m.source_pauta_id && dayPautaIds.has(m.source_pauta_id)) return false;
           // Skip if the material is linked to a preprod pauta already rendered on this day
@@ -329,7 +386,7 @@ export default function CalendarView() {
     }
 
     if (showReleases) {
-      releases.filter((r) => r.release_date === dateStr).forEach((r) => items.push({
+      (calendarIndex.releasesByDate.get(dateStr) || []).forEach((r) => items.push({
         key: `release-${r.id}`,
         type: 'release',
         data: r,
@@ -341,9 +398,14 @@ export default function CalendarView() {
     return items;
   };
 
-  const openMaterialModal = (mat: EpisodeMaterial, pauta: Pauta | null = null) => {
+  const openMaterialModal = (
+    mat: EpisodeMaterial,
+    pauta: Pauta | null = null,
+    preprod: PreprodPauta | null = null,
+  ) => {
     setSelectedMaterial(mat);
     setSelectedPauta(pauta);
+    setSelectedPreprod(preprod || (mat.preprod_pauta_id ? calendarIndex.preprodById.get(mat.preprod_pauta_id) || null : null));
     setSpotifyInput(mat.spotify_link || '');
     setMentionedInput(mat.mentioned_in_episode || '');
     setModalOpen(true);
@@ -361,6 +423,51 @@ export default function CalendarView() {
       return options[mat.selected_title_index]?.text || mat.slot_key;
     }
     return options[0]?.text || mat.slot_key;
+  };
+
+  const handleToggleReviewLabel = async (enabled: boolean) => {
+    if (!selectedMaterial || !selectedPreprod) return;
+    const prefix = getPreprodReviewTitlePrefix(selectedPreprod.data);
+    if (!prefix) return;
+
+    const currentTitle = getSelectedTitle(selectedMaterial);
+    const nextTitle = applyPreprodReviewTitleLabel(currentTitle, prefix, enabled);
+    const options = [...(selectedMaterial.title_options_json || [])];
+    const currentIndex = selectedMaterial.selected_title_index ?? 0;
+    let nextIndex = currentIndex;
+    if (options[currentIndex]) {
+      options[currentIndex] = { ...options[currentIndex], text: nextTitle };
+    } else {
+      options.unshift({ text: nextTitle, style: 'impacto' });
+      nextIndex = 0;
+    }
+    const nextMaterial = {
+      ...selectedMaterial,
+      title_options_json: options,
+      selected_title_index: nextIndex,
+    };
+    const nextData = {
+      ...(selectedPreprod.data || {}),
+      title_label_on: enabled,
+      selected_title: nextTitle,
+    };
+
+    const { error } = await supabase
+      .from('preprod_pautas')
+      .update({ data: nextData })
+      .eq('id', selectedPreprod.id);
+    if (error) {
+      toast.error('Falha ao atualizar a label: ' + error.message);
+      return;
+    }
+    setSelectedMaterial(nextMaterial);
+    setSelectedPreprod({ ...selectedPreprod, data: nextData });
+    setPreprodPautas((prev) => prev.map((p) => p.id === selectedPreprod.id ? { ...p, data: nextData } : p));
+    updateMaterial(selectedMaterial.id, {
+      title_options_json: nextMaterial.title_options_json,
+      selected_title_index: nextMaterial.selected_title_index,
+    });
+    toast.success(enabled ? 'Label Resenha adicionada' : 'Label Resenha removida');
   };
 
   const copyText = async (value: string, label: string) => {
@@ -675,43 +782,40 @@ export default function CalendarView() {
               : '';
             if (item.type === 'preprod') {
               const status = inferPreprodStatus(item.data);
+              const title = relatedMat ? getSelectedTitle(relatedMat) : getPreprodLabel(item.data);
+              const thumbUrl = relatedMat ? coverThumbnails[relatedMat.id] : item.data.data?.cover_url;
               return (
-                <div key={item.key} className="overflow-hidden rounded-lg border border-border bg-primary/5">
-                  <button
-                    type="button"
-                    className="w-full px-2 py-1.5 text-left transition-colors hover:bg-primary/10"
-                    onClick={() => navigate(`/pre-producao?preprod=${item.data.id}`)}
-                  >
-                    <div className="flex items-start gap-1.5">
-                      {item.data.data?.cover_url ? (
-                        <img src={item.data.data.cover_url} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded-sm object-cover" />
-                      ) : (
-                        <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <span className="block truncate text-[10px] font-semibold text-foreground">{getPreprodLabel(item.data)}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`h-2 w-2 shrink-0 rounded-full ${getPreprodStatusClass(status)}`} />
-                          <span className="truncate text-[10px] font-medium text-foreground">
-                            Pré-prod · {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
-                          </span>
-                        </div>
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`w-full rounded-lg border border-border bg-primary/5 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 ${haloClass}`}
+                  onClick={() => {
+                    if (relatedMat) openMaterialModal(relatedMat, null, item.data);
+                    else navigate(`/pre-producao?preprod=${item.data.id}`);
+                  }}
+                  title={relatedMat ? 'Abrir episódio com informações da pauta' : 'Abrir pauta de pré-produção'}
+                >
+                  <div className="flex items-start gap-1.5">
+                    {thumbUrl ? (
+                      <img src={thumbUrl} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded-sm object-cover" />
+                    ) : (
+                      <Badge variant="secondary" className="mt-0.5 h-5 shrink-0 rounded-full px-1.5 text-[9px] uppercase tracking-wide">
+                        EP
+                      </Badge>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${getPreprodStatusClass(status)}`} />
+                        <span className="truncate text-[9px] font-medium text-muted-foreground">
+                          {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
+                        </span>
+                        {hasOneDrive && <Cloud className="ml-auto h-3 w-3 shrink-0 text-[#1e90ff]" />}
+                        {hasSpotify && <LinkIcon className="h-3 w-3 shrink-0 text-[#39ff14]" />}
                       </div>
                     </div>
-                  </button>
-                  {relatedMat && (
-                    <button
-                      type="button"
-                      className={`flex w-full items-center gap-2 border-t border-primary/15 bg-background/50 px-2 py-1.5 text-left transition-colors hover:bg-muted/70 ${haloClass}`}
-                      onClick={() => openMaterialModal(relatedMat)}
-                      title="Abrir pacote de publicação"
-                    >
-                      <Badge variant="secondary" className="h-5 rounded-full px-1.5 text-[9px] uppercase tracking-wide">EP</Badge>
-                      <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-foreground">{getSelectedTitle(relatedMat)}</span>
-                      <span className="text-[9px] text-muted-foreground">Pacote</span>
-                    </button>
-                  )}
-                </div>
+                  </div>
+                </button>
               );
             }
             return (
@@ -872,12 +976,19 @@ export default function CalendarView() {
       {/* Episode package modal */}
       <Dialog open={modalOpen} onOpenChange={(open) => {
         setModalOpen(open);
-        if (!open) setSelectedPauta(null);
+        if (!open) {
+          setSelectedPauta(null);
+          setSelectedPreprod(null);
+        }
       }}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Pacote do episódio</DialogTitle>
-            <DialogDescription>Copie título e HTML, baixe a capa e atualize o link do Spotify.</DialogDescription>
+            <DialogTitle>{selectedPreprod ? 'Episódio + pauta' : 'Pacote do episódio'}</DialogTitle>
+            <DialogDescription>
+              {selectedPreprod
+                ? 'Título, pauta editorial, OneDrive e Spotify reunidos no mesmo registro.'
+                : 'Copie título e HTML, baixe a capa e atualize o link do Spotify.'}
+            </DialogDescription>
           </DialogHeader>
           {selectedMaterial && (
             <div className="grid gap-6 lg:grid-cols-[1.35fr_0.9fr]">
@@ -889,6 +1000,49 @@ export default function CalendarView() {
                   {selectedMaterial.cover_url && <Badge variant="secondary" className="text-xs">Capa pronta</Badge>}
                 </div>
 
+                {selectedPreprod && (
+                  <section className="space-y-3 rounded-xl border border-primary/25 bg-primary/5 p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px]">
+                            {PREPROD_KIND_LABEL[String(selectedPreprod.kind || '')] || 'Pauta'}
+                          </Badge>
+                          <Badge variant="outline" className="text-[10px]">
+                            {getPreprodStatusLabel(inferPreprodStatus(selectedPreprod))}
+                          </Badge>
+                        </div>
+                        <h3 className="truncate text-sm font-semibold">
+                          {[selectedPreprod.data?.artist, selectedPreprod.data?.album].filter(Boolean).join(' - ') || 'Pauta vinculada'}
+                        </h3>
+                        <p className="text-xs text-muted-foreground">
+                          Informações editoriais vinculadas a este episódio.
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2"
+                        onClick={() => navigate(`/pre-producao?preprod=${selectedPreprod.id}`)}
+                      >
+                        <FileText className="h-3.5 w-3.5" /> Editar pauta
+                      </Button>
+                    </div>
+                    {selectedPreprod.data?.result_markdown && (
+                      <details className="rounded-lg border border-border/70 bg-background/60">
+                        <summary className="cursor-pointer px-3 py-2 text-xs font-medium">
+                          Ler pauta completa
+                        </summary>
+                        <div className="max-h-72 overflow-y-auto border-t border-border/70 px-4 py-3 text-sm">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {selectedPreprod.data.result_markdown}
+                          </ReactMarkdown>
+                        </div>
+                      </details>
+                    )}
+                  </section>
+                )}
+
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <div className="flex items-center justify-between gap-3">
                     <Label className="text-sm font-medium">Título selecionado</Label>
@@ -896,6 +1050,25 @@ export default function CalendarView() {
                       <Copy className="h-3.5 w-3.5" /> Copy to clipboard
                     </Button>
                   </div>
+                  {selectedPreprod && getPreprodReviewTitlePrefix(selectedPreprod.data) && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                      <div className="min-w-0">
+                        <Label htmlFor="calendar-title-label-toggle" className="cursor-pointer text-xs font-medium">
+                          Adicionar label "Resenha: [Banda] - [Álbum]"
+                        </Label>
+                        <p className="truncate text-[10px] text-muted-foreground">
+                          {selectedPreprod.data?.title_label_on
+                            ? `Prefixo aplicado: ${getPreprodReviewTitlePrefix(selectedPreprod.data).trim()}`
+                            : 'Desativada'}
+                        </p>
+                      </div>
+                      <Switch
+                        id="calendar-title-label-toggle"
+                        checked={!!selectedPreprod.data?.title_label_on}
+                        onCheckedChange={(enabled) => { void handleToggleReviewLabel(enabled); }}
+                      />
+                    </div>
+                  )}
                   <Textarea readOnly value={getSelectedTitle(selectedMaterial)} className="min-h-[88px] resize-none text-sm" />
                 </section>
 
@@ -1092,11 +1265,15 @@ export default function CalendarView() {
                 <section className="space-y-2 rounded-xl border border-border bg-card p-4">
                   <h3 className="text-sm font-semibold">Ações rápidas</h3>
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={() => {
+                    if (selectedPreprod) {
+                      navigate(`/pre-producao?preprod=${selectedPreprod.id}`);
+                      return;
+                    }
                     const pauta = selectedPauta || getPautaForMaterial(selectedMaterial);
                     if (pauta) setPreviewPauta(pauta);
                     else toast.info('Nenhuma pauta para este episódio');
                   }}>
-                    <Eye className="h-4 w-4" /> Visualizar pauta
+                    <Eye className="h-4 w-4" /> {selectedPreprod ? 'Abrir pauta original' : 'Visualizar pauta'}
                   </Button>
                   <Button variant="outline" className="w-full justify-start gap-2" onClick={handleCopyShareLink}>
                     <Share2 className="h-4 w-4" /> Copiar link compartilhável

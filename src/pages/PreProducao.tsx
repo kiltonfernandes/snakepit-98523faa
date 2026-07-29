@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Hammer, ChevronLeft, ChevronRight, Plus, Newspaper, Star, Trash2, Loader2, Search, Disc, X, ExternalLink, ArrowRight, Globe, Sparkles, ArrowLeft, Copy, Image as ImageIcon, Download, Check, Package, Eye, Share2, FileText, ZoomIn, ZoomOut, Music } from 'lucide-react';
@@ -55,6 +55,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   PREPROD_KIND_LABEL,
   getPreprodLabel,
+  getPreprodReviewTitlePrefix,
   getPreprodStatusClass,
   getPreprodStatusLabel,
   inferPreprodStatus,
@@ -140,7 +141,24 @@ async function backfillPreprodMirrors(pautas: PreprodPauta[]) {
     const hasTitles = Array.isArray(d.titles) && d.titles.length > 0;
     return hasTitles || !!d.selected_title;
   });
-  await Promise.allSettled(eligible.map((p) =>
+  if (eligible.length === 0) return;
+
+  const eligibleIds = eligible.map((p) => p.id);
+  const { data: existingRows, error } = await supabase
+    .from('episode_materials')
+    .select('preprod_pauta_id')
+    .in('preprod_pauta_id', eligibleIds);
+  if (error) {
+    console.warn('[preprod] falha ao verificar espelhos existentes', error);
+    return;
+  }
+  const existingIds = new Set(
+    (existingRows || [])
+      .map((row) => row.preprod_pauta_id)
+      .filter(Boolean),
+  );
+  const missing = eligible.filter((p) => !existingIds.has(p.id));
+  await Promise.allSettled(missing.map((p) =>
     syncPreprodToEpisodeMaterial(p.id, preprodDate(p.publication_date), (p as any).data || {})
   ));
 }
@@ -172,7 +190,9 @@ export default function PreProducao() {
   // Backfill on mount: repara episode_materials de preprods já existentes.
   useEffect(() => {
     if (preprodPautas.length === 0) return;
-    void backfillPreprodMirrors(preprodPautas);
+    const run = () => { void backfillPreprodMirrors(preprodPautas); };
+    const timer = globalThis.setTimeout(run, 250);
+    return () => globalThis.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preprodPautas.length]);
 
@@ -338,7 +358,6 @@ export default function PreProducao() {
         date={newPautaDate}
         item={editingPauta}
         onClose={() => { void refreshAndClose(); }}
-        onChanged={loadPreprodPautas}
         onSaved={upsertPreprodPauta}
       />
     </motion.div>
@@ -429,7 +448,7 @@ function countItemsInMonth(month: Date, itemsByDate: Record<string, PreprodPauta
   }, 0);
 }
 
-function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (item: PreprodPauta) => void }) {
+const PreprodCalendarItem = memo(function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (item: PreprodPauta) => void }) {
   const status = inferPreprodStatus(item);
   return (
     <button
@@ -455,7 +474,7 @@ function PreprodCalendarItem({ item, onOpen }: { item: PreprodPauta; onOpen: (it
       </div>
     </button>
   );
-}
+});
 
 // ---------- Month ----------
 function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
@@ -583,13 +602,11 @@ function NewPautaDialog({
   date,
   item,
   onClose,
-  onChanged,
   onSaved,
 }: {
   date: Date | null;
   item: PreprodPauta | null;
   onClose: () => void;
-  onChanged: () => void | Promise<void>;
   onSaved?: (row: PreprodPauta) => void;
 }) {
   const navigate = useNavigate();
@@ -629,7 +646,6 @@ function NewPautaDialog({
   const [coverGenerating, setCoverGenerating] = useState(false);
   const [persistedData, setPersistedData] = useState<Record<string, any>>({});
   const latestDataRef = useRef<Record<string, any>>({});
-  const saveSeqRef = useRef(0);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFontSize, setPreviewFontSize] = useState(16);
 
@@ -710,7 +726,6 @@ function NewPautaDialog({
       setPersistedData({});
       latestDataRef.current = {};
       onSaved?.(normalizePreprodPauta(data));
-      void onChanged();
     })();
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -733,7 +748,6 @@ function NewPautaDialog({
     if (error) toast.error('Falha ao salvar tipo: ' + error.message);
     else {
       onSaved?.(data ? normalizePreprodPauta(data) : ({ ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind: k, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta));
-      void onChanged();
     }
   };
 
@@ -759,7 +773,6 @@ function NewPautaDialog({
     if (error) toast.error('Falha ao salvar disco: ' + error.message);
     else {
       onSaved?.(data ? normalizePreprodPauta(data) : ({ ...(item || {}), id: pautaId, publication_date: preprodDate(effectiveDate!), kind, status: inferPreprodStatus({ status: 'draft', data: nextData }), data: nextData, created_at: item?.created_at || new Date().toISOString(), updated_at: new Date().toISOString() } as PreprodPauta));
-      void onChanged();
     }
   };
 
@@ -796,7 +809,6 @@ function NewPautaDialog({
   const persistData = async (patch: Record<string, any>, explicitStatus?: string) => {
     if (!pautaId) return;
     const nextStep = (patch.step || step) as Step;
-    const seq = ++saveSeqRef.current;
     const base: Record<string, any> = {
       release_id: releaseId ?? latestDataRef.current.release_id,
       artist: selectedRelease?.artist ?? latestDataRef.current.artist,
@@ -837,7 +849,6 @@ function NewPautaDialog({
     if (error) toast.error('Falha ao salvar: ' + error.message);
     else {
       if (data) onSaved?.(normalizePreprodPauta(data));
-      if (seq === saveSeqRef.current) void onChanged();
       try {
         await syncPreprodToEpisodeMaterial(pautaId, preprodDate(effectiveDate!), nextData);
       } catch (e) {
@@ -1060,7 +1071,7 @@ function NewPautaDialog({
   };
 
   const titleLabelPrefix = selectedRelease
-    ? `Resenha: ${selectedRelease.artist} - ${selectedRelease.album} `
+    ? getPreprodReviewTitlePrefix(selectedRelease)
     : '';
   const applyTitleLabel = (text: string) =>
     titleLabelOn && titleLabelPrefix ? `${titleLabelPrefix}${text}` : text;

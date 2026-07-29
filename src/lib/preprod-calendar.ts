@@ -50,6 +50,19 @@ export function getPreprodLabel(item: Pick<PreprodPauta, 'kind' | 'data'>): stri
   );
 }
 
+export function getPreprodReviewTitlePrefix(data?: { artist?: unknown; album?: unknown } | null): string {
+  const artist = String(data?.artist || '').trim();
+  const album = String(data?.album || '').trim();
+  return artist && album ? `Resenha: ${artist} - ${album} ` : '';
+}
+
+export function applyPreprodReviewTitleLabel(title: string, prefix: string, enabled: boolean): string {
+  const cleanTitle = prefix && title.startsWith(prefix)
+    ? title.slice(prefix.length)
+    : title;
+  return enabled && prefix ? `${prefix}${cleanTitle}` : cleanTitle;
+}
+
 export function getPreprodStatusLabel(status?: string): string {
   switch (status) {
     case 'ready':
