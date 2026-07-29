@@ -70,6 +70,7 @@ export interface EpisodeMaterial {
   slot_key: DaySlot;
   episode_date: string;
   source_pauta_id: string | null;
+  preprod_pauta_id?: string | null;
   title_options_json: TitleOption[];
   selected_title_index: number | null;
   description_html: string | null;
