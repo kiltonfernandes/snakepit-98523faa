@@ -4,6 +4,14 @@ import { AppSidebar } from './Sidebar';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useRivaldoBulk } from '@/contexts/RivaldoBulkContext';
 import { Layers } from 'lucide-react';
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { APP_VERSION } from '@/lib/app-version';
 
 export function AppLayout() {
   const location = useLocation();
@@ -18,6 +26,17 @@ export function AppLayout() {
         <div className="flex-1 flex flex-col">
           <header className="h-12 flex items-center border-b px-4 bg-background/80 backdrop-blur-sm sticky top-0 z-10">
             <SidebarTrigger className="mr-4" />
+            <Breadcrumb className="ml-auto" aria-label="Versão da aplicação">
+              <BreadcrumbList className="gap-1.5 text-xs">
+                <BreadcrumbItem className="text-muted-foreground">Snakepit</BreadcrumbItem>
+                <BreadcrumbSeparator className="[&>svg]:h-3 [&>svg]:w-3" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 font-mono text-xs font-semibold text-primary">
+                    v{APP_VERSION}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
           </header>
           <main className="flex-1 p-6 overflow-auto">
             <AnimatePresence mode="wait">
