@@ -13,10 +13,10 @@ interface Env {
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const DEFAULT_MODEL = 'deepseek/deepseek-v4-pro';
 const MAX_REPORT_BYTES = 512 * 1024;
-const MAX_OUTPUT_TOKENS = 8192;
-const REQUEST_TIMEOUT_MS = 30_000;
+const MAX_OUTPUT_TOKENS = 16_384;
+const REQUEST_TIMEOUT_MS = 180_000;
 const TEMPERATURE = 0.15;
-const WORKER_VERSION = '2026-07-27.1';
+const WORKER_VERSION = '2026-07-29.1';
 const PLAN_JSON_SCHEMA = zodToJsonSchema(EpisodePlanV1Schema, {
   name: 'EpisodePlanV1',
   $refStrategy: 'none',
@@ -200,6 +200,9 @@ export default {
       model,
       temperature: TEMPERATURE,
       max_tokens: MAX_OUTPUT_TOKENS,
+      reasoning: { effort: 'low' },
+      provider: { require_parameters: true },
+      plugins: [{ id: 'response-healing' }],
       messages: buildEpisodePlannerMessages(episodeId, reports),
       response_format: {
         type: 'json_schema',
@@ -260,16 +263,35 @@ export default {
         ? openrouterJson.id
         : null;
     const choices = openrouterJson?.choices as
-      | Array<{ message?: Record<string, unknown> }>
+      | Array<{
+          finish_reason?: unknown;
+          native_finish_reason?: unknown;
+          message?: Record<string, unknown>;
+        }>
       | undefined;
-    const message = choices?.[0]?.message;
+    const firstChoice = choices?.[0];
+    const message = firstChoice?.message;
+    const usage = (openrouterJson?.usage ?? {}) as Record<string, unknown>;
+    const diagnostics = {
+      finishReason:
+        typeof firstChoice?.finish_reason === 'string'
+          ? firstChoice.finish_reason
+          : undefined,
+      nativeFinishReason:
+        typeof firstChoice?.native_finish_reason === 'string'
+          ? firstChoice.native_finish_reason
+          : undefined,
+      inputTokens: Number(usage.prompt_tokens ?? 0) || 0,
+      outputTokens: Number(usage.completion_tokens ?? 0) || 0,
+      reasoningTokens: Number(usage.reasoning_tokens ?? 0) || 0,
+    };
     if (!requestId || !message) {
-      return json({ error: 'planner_bad_response' }, 502, cors);
+      return json({ error: 'planner_bad_response', diagnostics }, 502, cors);
     }
 
     const rawCandidates = parsePlanCandidates(message);
     if (rawCandidates.length === 0) {
-      return json({ error: 'plan_parse_failed' }, 502, cors);
+      return json({ error: 'plan_parse_failed', diagnostics }, 502, cors);
     }
 
     let validation: ReturnType<typeof validateEpisodePlan> | null = null;
@@ -297,7 +319,6 @@ export default {
       );
     }
 
-    const usage = (openrouterJson?.usage ?? {}) as Record<string, unknown>;
     return json(
       {
         requestId,
