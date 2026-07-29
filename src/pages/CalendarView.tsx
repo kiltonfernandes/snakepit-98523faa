@@ -272,6 +272,9 @@ export default function CalendarView() {
     return sameDayPautas.length === 1 ? sameDayPautas[0] : null;
   };
 
+  const getMaterialForPreprod = (preprod: PreprodPauta) =>
+    materials.find((material) => material.preprod_pauta_id === preprod.id) || null;
+
   const getItemsForDate = (dateStr: string) => {
     const items: {
       key: string;
@@ -290,7 +293,7 @@ export default function CalendarView() {
           type: 'preprod',
           data: p,
           pauta: null,
-          material: null,
+          material: getMaterialForPreprod(p),
         });
       });
 
@@ -311,7 +314,7 @@ export default function CalendarView() {
           // Skip if the material's regular pauta is already rendered
           if (m.source_pauta_id && dayPautaIds.has(m.source_pauta_id)) return false;
           // Skip if the material is linked to a preprod pauta already rendered on this day
-          if ((m as any).preprod_pauta_id && dayPreprodIds.has((m as any).preprod_pauta_id)) return false;
+          if (m.preprod_pauta_id && dayPreprodIds.has(m.preprod_pauta_id)) return false;
           return true;
         })
         .forEach((m) => {
@@ -669,14 +672,53 @@ export default function CalendarView() {
               ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]'
               : hasOneDrive
                 ? 'ring-2 ring-[#1e90ff] border-[#1e90ff] shadow-[0_0_8px_#1e90ffaa]'
-                : '';
+              : '';
+            if (item.type === 'preprod') {
+              const status = inferPreprodStatus(item.data);
+              return (
+                <div key={item.key} className="overflow-hidden rounded-lg border border-border bg-primary/5">
+                  <button
+                    type="button"
+                    className="w-full px-2 py-1.5 text-left transition-colors hover:bg-primary/10"
+                    onClick={() => navigate(`/pre-producao?preprod=${item.data.id}`)}
+                  >
+                    <div className="flex items-start gap-1.5">
+                      {item.data.data?.cover_url ? (
+                        <img src={item.data.data.cover_url} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded-sm object-cover" />
+                      ) : (
+                        <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-[10px] font-semibold text-foreground">{getPreprodLabel(item.data)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 shrink-0 rounded-full ${getPreprodStatusClass(status)}`} />
+                          <span className="truncate text-[10px] font-medium text-foreground">
+                            Pré-prod · {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                  {relatedMat && (
+                    <button
+                      type="button"
+                      className={`flex w-full items-center gap-2 border-t border-primary/15 bg-background/50 px-2 py-1.5 text-left transition-colors hover:bg-muted/70 ${haloClass}`}
+                      onClick={() => openMaterialModal(relatedMat)}
+                      title="Abrir pacote de publicação"
+                    >
+                      <Badge variant="secondary" className="h-5 rounded-full px-1.5 text-[9px] uppercase tracking-wide">EP</Badge>
+                      <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-foreground">{getSelectedTitle(relatedMat)}</span>
+                      <span className="text-[9px] text-muted-foreground">Pacote</span>
+                    </button>
+                  )}
+                </div>
+              );
+            }
             return (
             <button
               key={item.key}
               className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
-                item.type === 'preprod'
-                  ? 'border-border bg-primary/5 hover:border-primary/40 hover:bg-primary/10'
-                  : item.type === 'pauta'
+                item.type === 'pauta'
                   ? 'border-border bg-muted/60 hover:border-primary/40 hover:bg-muted'
                   : item.type === 'release'
                     ? 'border-border bg-secondary/40 hover:border-primary/30 hover:bg-secondary/60'
@@ -687,36 +729,11 @@ export default function CalendarView() {
                   if (relatedMat) openMaterialModal(relatedMat, item.pauta);
                   else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
                 }
-                else if (item.type === 'preprod') navigate(`/pre-producao?preprod=${item.data.id}`);
                 else if (item.type === 'material') openMaterialModal(item.data, item.pauta);
                 else openReleaseModal(item.data);
               }}
             >
-              {item.type === 'preprod' ? (
-                <div className="space-y-1">
-                  {(() => {
-                    const status = inferPreprodStatus(item.data);
-                    return (
-                      <div className="flex items-start gap-1.5">
-                        {item.data.data?.cover_url ? (
-                          <img src={item.data.data.cover_url} alt="" className="h-7 w-7 rounded-sm object-cover shrink-0" />
-                        ) : (
-                          <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          <span className="block truncate text-[10px] font-semibold text-foreground">{getPreprodLabel(item.data)}</span>
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full shrink-0 ${getPreprodStatusClass(status)}`} />
-                            <span className="truncate text-[10px] font-medium text-foreground">
-                              Pré-prod · {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : item.type === 'pauta' ? (
+              {item.type === 'pauta' ? (
                 <div className="space-y-1">
                   {(() => {
                     const mat = relatedMat;
