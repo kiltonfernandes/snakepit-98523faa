@@ -40,6 +40,7 @@ interface AppContextType {
   logActivity: (action: string, details: string) => void;
   importReleases: (data: Release[]) => void;
   loadReleases: () => Promise<void>;
+  refreshMaterials: () => Promise<void>;
   savePromptSession: (session: { id: string; scope: string; prompt_text: string; target_json: any; status?: string }) => void;
 }
 
@@ -116,7 +117,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await fetchAllRows<any>(
         'episode_materials',
-        'id,week_id,slot_key,episode_date,source_pauta_id,preprod_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,repository_url,repository_file_id,repository_provider,repository_uploaded_at,mentioned_in_episode,cover_saved_at,created_at,updated_at',
+        'id,week_id,slot_key,episode_date,source_pauta_id,preprod_pauta_id,title_options_json,selected_title_index,description_html,spotify_link,cover_source_url,repository_url,repository_file_id,repository_provider,repository_uploaded_at,mentioned_in_episode,cover_saved_at,is_standalone,created_at,updated_at',
       );
       // Preserve any cover_url already in local state (loaded on demand)
       setMaterials(prev => {
@@ -462,7 +463,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       addWeek, updateWeek, deleteWeek, recalcWeekStatus,
       addPauta, updatePauta, deletePauta, getPautasForWeek,
       addMaterial, updateMaterial, getMaterialsForWeek, loadMaterialCover,
-      updateSettings, logActivity, importReleases, loadReleases,
+      updateSettings, logActivity, importReleases, loadReleases, refreshMaterials: loadMaterials,
       savePromptSession,
     }}>
       {children}

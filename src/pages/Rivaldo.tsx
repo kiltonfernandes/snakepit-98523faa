@@ -31,6 +31,7 @@ import {
 } from '@/lib/audio/types';
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
+import { isRivaldoStandaloneMaterial } from '@/lib/rivaldo-episodes';
 
 const PUBLIC_BASE_URL = import.meta.env.BASE_URL;
 const INTRO_PRESETS = [{ label: 'Heavynauta', url: `${PUBLIC_BASE_URL}presets/Heavynauta_Intro.mp3` }];
@@ -45,7 +46,7 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
-  const { materials, pautas, weeks } = useApp();
+  const { materials, weeks, refreshMaterials } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
@@ -53,6 +54,12 @@ const Rivaldo = () => {
   const [filename, setFilename] = useState('');
 
   const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
+
+  // Pré-produção grava os espelhos depois do carregamento global inicial.
+  // Atualizar ao entrar no Rivaldo evita que a lista use um snapshot antigo.
+  useEffect(() => {
+    void refreshMaterials();
+  }, [refreshMaterials]);
 
   // Episode titles from all materials that have generated titles
   const episodeGroups = useMemo(() => {
@@ -72,11 +79,11 @@ const Rivaldo = () => {
         const dayName = DAY_NAMES[d.getDay()] || '';
         const dd = String(d.getDate()).padStart(2, '0');
         const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const isStandalone = !!m.is_standalone;
+        const isStandalone = isRivaldoStandaloneMaterial(m);
         const label = isStandalone
           ? `[Avulso ${dd}/${mm}] - ${title}`
           : `[${dayName}] - ${title}`;
-        return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url, isStandalone: !!m.is_standalone };
+        return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url, isStandalone };
       })
       .filter(o => o.value);
 
@@ -110,7 +117,7 @@ const Rivaldo = () => {
     }
 
     return groups;
-  }, [materials, pautas, weeks]);
+  }, [materials, weeks]);
   const rivaldo = useRivaldo();
   const bulk = useRivaldoBulk();
   const [bulkOpen, setBulkOpen] = useState(false);

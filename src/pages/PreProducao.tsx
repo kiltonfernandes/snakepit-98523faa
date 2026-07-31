@@ -97,10 +97,12 @@ async function syncPreprodToEpisodeMaterial(
 ) {
   const titles = Array.isArray(data.titles) ? data.titles as { kind?: string; text: string }[] : [];
   const selectedTitle: string = data.selected_title || '';
-  if (!selectedTitle && titles.length === 0) return;
-  const titleOptions = titles.length > 0
+  const generatedTitleOptions = titles.length > 0
     ? titles.map(t => ({ text: String(t.text || '').trim() })).filter(t => t.text)
-    : [{ text: selectedTitle }];
+    : [];
+  const titleOptions = generatedTitleOptions.length > 0
+    ? generatedTitleOptions
+    : [{ text: selectedTitle || `Pauta de ${publicationDate.split('-').reverse().join('/')}` }];
   let selectedIndex = 0;
   if (selectedTitle) {
     const idx = titleOptions.findIndex(t => t.text === selectedTitle);
@@ -134,13 +136,9 @@ async function syncPreprodToEpisodeMaterial(
   if (emErr) { console.error('[preprod] episode_materials upsert falhou', emErr, payload); throw emErr; }
 }
 
-// Backfill: garante que toda preprod pauta com título esteja espelhada.
+// Backfill: garante que toda pauta de pré-produção esteja disponível no Rivaldo.
 async function backfillPreprodMirrors(pautas: PreprodPauta[]) {
-  const eligible = pautas.filter((p) => {
-    const d = (p as any).data || {};
-    const hasTitles = Array.isArray(d.titles) && d.titles.length > 0;
-    return hasTitles || !!d.selected_title;
-  });
+  const eligible = pautas;
   if (eligible.length === 0) return;
 
   const eligibleIds = eligible.map((p) => p.id);
