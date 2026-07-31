@@ -31,8 +31,10 @@ import {
 } from '@/lib/audio/types';
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
-import { isRivaldoStandaloneMaterial } from '@/lib/rivaldo-episodes';
+import { buildRivaldoPreprodGroups, type RivaldoPreprodEpisode } from '@/lib/rivaldo-episodes';
 import { syncAllPreprodToRivaldo } from '@/lib/preprod-rivaldo-sync';
+import { normalizePreprodPauta, type PreprodPauta } from '@/lib/preprod-calendar';
+import { supabase } from '@/integrations/supabase/client';
 
 const PUBLIC_BASE_URL = import.meta.env.BASE_URL;
 const INTRO_PRESETS = [{ label: 'Heavynauta', url: `${PUBLIC_BASE_URL}presets/Heavynauta_Intro.mp3` }];
@@ -47,90 +49,57 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
-  const { materials, weeks, refreshMaterials } = useApp();
+  const { materials, refreshMaterials } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
   const [masterTracks, setMasterTracks] = useState<File[]>([]);
   const [filename, setFilename] = useState('');
+  const [preprodPautas, setPreprodPautas] = useState<PreprodPauta[]>([]);
+  const [selectedPreprodId, setSelectedPreprodId] = useState<string | null>(null);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerError, setPickerError] = useState<string | null>(null);
 
-  const DAY_NAMES: Record<number, string> = { 0: 'Domingo', 1: 'Segunda', 2: 'Terça', 3: 'Quarta', 4: 'Quinta', 5: 'Sexta', 6: 'Sábado' };
+  const loadPreprodPautas = useCallback(async () => {
+    setPickerLoading(true);
+    setPickerError(null);
+    const { data, error } = await supabase
+      .from('preprod_pautas')
+      .select('*')
+      .order('publication_date', { ascending: true })
+      .order('created_at', { ascending: true });
+    setPickerLoading(false);
+    if (error) {
+      setPickerError(`Falha ao carregar Pré-produção: ${error.message}`);
+      return;
+    }
+    setPreprodPautas((data || []).map(normalizePreprodPauta));
+  }, []);
 
   // Pré-produção grava os espelhos depois do carregamento global inicial.
   // Atualizar ao entrar no Rivaldo evita que a lista use um snapshot antigo.
   useEffect(() => {
+    void loadPreprodPautas();
     void syncAllPreprodToRivaldo()
       .catch((error) => console.warn('[rivaldo] falha ao sincronizar pré-produção', error))
       .finally(() => void refreshMaterials());
-  }, [refreshMaterials]);
+  }, [loadPreprodPautas, refreshMaterials]);
 
   const openEpisodePicker = useCallback(async () => {
+    setPickerOpen(true);
+    await loadPreprodPautas();
     try {
       await syncAllPreprodToRivaldo();
     } catch (error) {
       console.warn('[rivaldo] falha ao sincronizar pré-produção', error);
     }
     await refreshMaterials();
-    setPickerOpen(true);
-  }, [refreshMaterials]);
+  }, [loadPreprodPautas, refreshMaterials]);
 
-  // Episode titles from all materials that have generated titles
-  const episodeGroups = useMemo(() => {
-    const eligibleMaterials = materials
-      .filter(m => {
-        const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
-        // Skip episodes already uploaded to OneDrive
-        if (m.repository_url) return false;
-        return opts.length > 0 && opts.some(o => o.text);
-      })
-      .map(m => {
-        const opts = Array.isArray(m.title_options_json) ? m.title_options_json as { text: string }[] : [];
-        const title = (m.selected_title_index != null && opts[m.selected_title_index]?.text)
-          ? opts[m.selected_title_index].text
-          : opts[0]?.text || `Episódio ${m.slot_key}`;
-        const d = new Date(`${m.episode_date}T12:00:00`);
-        const dayName = DAY_NAMES[d.getDay()] || '';
-        const dd = String(d.getDate()).padStart(2, '0');
-        const mm = String(d.getMonth() + 1).padStart(2, '0');
-        const isStandalone = isRivaldoStandaloneMaterial(m);
-        const label = isStandalone
-          ? `[Avulso ${dd}/${mm}] - ${title}`
-          : `[${dayName}] - ${title}`;
-        return { value: title, label, date: m.episode_date, week_id: m.week_id, materialId: m.id, repositoryUrl: m.repository_url, isStandalone };
-      })
-      .filter(o => o.value);
-
-    // Group by week; standalones are bucketed into a single "Avulsos" group regardless of synthetic week_id
-    const groups: { weekLabel: string; weekId: string; items: typeof eligibleMaterials }[] = [];
-    const byWeek = new Map<string, typeof eligibleMaterials>();
-    const standalones: typeof eligibleMaterials = [];
-    for (const item of eligibleMaterials) {
-      if (item.isStandalone) { standalones.push(item); continue; }
-      if (!byWeek.has(item.week_id)) byWeek.set(item.week_id, []);
-      byWeek.get(item.week_id)!.push(item);
-    }
-
-    for (const [weekId, items] of byWeek) {
-      items.sort((a, b) => a.date.localeCompare(b.date));
-      const week = weeks.find(w => w.id === weekId);
-      const weekLabel = week ? `Semana de ${new Date(`${week.start_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : weekId;
-      groups.push({ weekLabel, weekId, items });
-    }
-
-    groups.sort((a, b) => {
-      const wa = weeks.find(w => w.id === a.weekId);
-      const wb = weeks.find(w => w.id === b.weekId);
-      // Oldest → newest
-      return (wa?.start_date || '').localeCompare(wb?.start_date || '');
-    });
-
-    if (standalones.length > 0) {
-      standalones.sort((a, b) => a.date.localeCompare(b.date));
-      groups.push({ weekLabel: 'Episódios Avulsos', weekId: '__standalone__', items: standalones });
-    }
-
-    return groups;
-  }, [materials, weeks]);
+  const episodeGroups = useMemo(
+    () => buildRivaldoPreprodGroups(preprodPautas, materials),
+    [materials, preprodPautas],
+  );
   const rivaldo = useRivaldo();
   const bulk = useRivaldoBulk();
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -150,11 +119,16 @@ const Rivaldo = () => {
   // Find the matching material/episode for the selected filename
   const selectedEpisode = useMemo(() => {
     for (const group of episodeGroups) {
-      const found = group.items.find(it => it.value === filename);
+      const found = group.items.find((item) => item.id === selectedPreprodId);
       if (found) return found;
     }
     return null;
-  }, [episodeGroups, filename]);
+  }, [episodeGroups, selectedPreprodId]);
+
+  const selectEpisode = useCallback((episode: RivaldoPreprodEpisode) => {
+    setSelectedPreprodId(episode.id);
+    setFilename(episode.value);
+  }, []);
 
   // Use context state for browser mode, local state for desktop mode
   const progress = desktopMode ? (desktopState?.jobs[0]?.progress ?? 0) : rivaldo.progress;
@@ -235,10 +209,13 @@ const Rivaldo = () => {
       <div className="px-6 py-4 flex items-center gap-4 border-b border-border">
         <HeavynautaBrand compact />
         <div className="flex-1 max-w-md ml-8">
+          <Label className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
+            Nome do episódio
+          </Label>
           <button
             type="button"
             onClick={() => void openEpisodePicker()}
-            className="w-full flex items-center justify-between gap-2 border-0 border-b border-border bg-transparent py-2 text-left text-sm font-mono hover:border-primary/60 focus:outline-none"
+            className="w-full flex items-center justify-between gap-2 border-0 border-b border-border bg-transparent pb-2 pt-1 text-left text-sm font-mono hover:border-primary/60 focus:outline-none"
             title="Selecionar episódio"
           >
             <span className={filename ? 'truncate' : 'truncate text-muted-foreground'}>
@@ -388,7 +365,15 @@ const Rivaldo = () => {
       </div>
 
       <BulkModal open={bulkOpen} onOpenChange={setBulkOpen} introFile={files.intro} outroFile={files.outro} audioParams={audioParams} processingProfile={processingProfile} desktopMode={desktopMode} desktopState={desktopState} desktopQueueAvailable={queueAvailable} desktopQueueStatusMessage={queueStatusMessage} onDesktopJobQueued={(job) => { setDesktopState((prev) => mergeQueuedJobIntoState(prev, job)); setQueueFeedback({ type: 'success', message: `Job ${job.name} enfileirado.` }); addUiLog(`Job ${job.name} enfileirado.`, 'success'); }} />
-      <EpisodePickerModal open={pickerOpen} onClose={() => setPickerOpen(false)} onSelect={setFilename} selected={filename} groups={episodeGroups} />
+      <EpisodePickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={selectEpisode}
+        selectedId={selectedPreprodId}
+        groups={episodeGroups}
+        loading={pickerLoading}
+        error={pickerError}
+      />
       <BgmLibraryModal open={bgmLibraryOpen} onOpenChange={setBgmLibraryOpen} onPick={(file) => handleFileChange('bgm', file)} />
     </div>
   );
