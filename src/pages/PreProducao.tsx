@@ -65,6 +65,7 @@ import {
   type PreprodKind,
   type PreprodPauta,
 } from '@/lib/preprod-calendar';
+import { backfillPreprodMirrors, syncPreprodToEpisodeMaterial } from '@/lib/preprod-rivaldo-sync';
 
 type View = 'year' | 'quarter' | 'month' | 'week' | 'day';
 
@@ -77,89 +78,6 @@ const VIEW_LABELS: Record<View, string> = {
 };
 
 const WEEKDAYS_SHORT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
-
-// ─── Rivaldo bridge ──────────────────────────────────────────────────────────
-// Preprod pautas precisam aparecer no seletor de episódios do Rivaldo. Para
-// isso espelhamos a informação editorial em `episode_materials` sempre que já
-// existe pelo menos um título. `preprod_pauta_id` amarra o registro ao
-// rascunho de origem (unique index) para o upsert ser idempotente.
-//
-// Usamos week_id/slot_key ÚNICOS por pauta (`preprod-<id>`) para nunca colidir
-// com a constraint UNIQUE(week_id, slot_key) — mesmo se houver várias avulsas
-// no mesmo dia da semana. O Rivaldo agrupa por `is_standalone` mesmo assim.
-function preprodWeekId(pautaId: string) { return `preprod-${pautaId}`; }
-function preprodSlotKey(pautaId: string) { return `preprod-${pautaId.slice(0, 8)}`; }
-
-async function syncPreprodToEpisodeMaterial(
-  pautaId: string,
-  publicationDate: string,
-  data: Record<string, any>,
-) {
-  const titles = Array.isArray(data.titles) ? data.titles as { kind?: string; text: string }[] : [];
-  const selectedTitle: string = data.selected_title || '';
-  const generatedTitleOptions = titles.length > 0
-    ? titles.map(t => ({ text: String(t.text || '').trim() })).filter(t => t.text)
-    : [];
-  const titleOptions = generatedTitleOptions.length > 0
-    ? generatedTitleOptions
-    : [{ text: selectedTitle || `Pauta de ${publicationDate.split('-').reverse().join('/')}` }];
-  let selectedIndex = 0;
-  if (selectedTitle) {
-    const idx = titleOptions.findIndex(t => t.text === selectedTitle);
-    selectedIndex = idx >= 0 ? idx : 0;
-    if (idx < 0) titleOptions.unshift({ text: selectedTitle });
-  }
-  const weekId = preprodWeekId(pautaId);
-  const slotKey = preprodSlotKey(pautaId);
-  const { error: weekErr } = await supabase.from('editorial_weeks' as any).upsert({
-    id: weekId, start_date: publicationDate, status: 'draft',
-  } as any, { onConflict: 'id' });
-  if (weekErr) { console.error('[preprod] editorial_weeks upsert falhou', weekErr); throw weekErr; }
-  const coverUrl = typeof data.cover_url === 'string' && !data.cover_url.startsWith('data:')
-    ? data.cover_url : null;
-  const payload: Record<string, any> = {
-    preprod_pauta_id: pautaId,
-    week_id: weekId,
-    slot_key: slotKey,
-    episode_date: publicationDate,
-    title_options_json: titleOptions,
-    selected_title_index: selectedIndex,
-    description_html: data.description_html || null,
-    cover_url: coverUrl,
-    cover_source_url: data.cover_source_url || null,
-    mentioned_in_episode: data.mentioned || null,
-    is_standalone: true,
-    updated_at: new Date().toISOString(),
-  };
-  const { error: emErr } = await supabase.from('episode_materials' as any)
-    .upsert(payload as any, { onConflict: 'preprod_pauta_id' });
-  if (emErr) { console.error('[preprod] episode_materials upsert falhou', emErr, payload); throw emErr; }
-}
-
-// Backfill: garante que toda pauta de pré-produção esteja disponível no Rivaldo.
-async function backfillPreprodMirrors(pautas: PreprodPauta[]) {
-  const eligible = pautas;
-  if (eligible.length === 0) return;
-
-  const eligibleIds = eligible.map((p) => p.id);
-  const { data: existingRows, error } = await supabase
-    .from('episode_materials')
-    .select('preprod_pauta_id')
-    .in('preprod_pauta_id', eligibleIds);
-  if (error) {
-    console.warn('[preprod] falha ao verificar espelhos existentes', error);
-    return;
-  }
-  const existingIds = new Set(
-    (existingRows || [])
-      .map((row) => row.preprod_pauta_id)
-      .filter(Boolean),
-  );
-  const missing = eligible.filter((p) => !existingIds.has(p.id));
-  await Promise.allSettled(missing.map((p) =>
-    syncPreprodToEpisodeMaterial(p.id, preprodDate(p.publication_date), (p as any).data || {})
-  ));
-}
 
 export default function PreProducao() {
   const [searchParams, setSearchParams] = useSearchParams();

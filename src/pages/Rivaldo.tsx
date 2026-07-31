@@ -32,6 +32,7 @@ import {
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
 import { isRivaldoStandaloneMaterial } from '@/lib/rivaldo-episodes';
+import { syncAllPreprodToRivaldo } from '@/lib/preprod-rivaldo-sync';
 
 const PUBLIC_BASE_URL = import.meta.env.BASE_URL;
 const INTRO_PRESETS = [{ label: 'Heavynauta', url: `${PUBLIC_BASE_URL}presets/Heavynauta_Intro.mp3` }];
@@ -58,7 +59,19 @@ const Rivaldo = () => {
   // Pré-produção grava os espelhos depois do carregamento global inicial.
   // Atualizar ao entrar no Rivaldo evita que a lista use um snapshot antigo.
   useEffect(() => {
-    void refreshMaterials();
+    void syncAllPreprodToRivaldo()
+      .catch((error) => console.warn('[rivaldo] falha ao sincronizar pré-produção', error))
+      .finally(() => void refreshMaterials());
+  }, [refreshMaterials]);
+
+  const openEpisodePicker = useCallback(async () => {
+    try {
+      await syncAllPreprodToRivaldo();
+    } catch (error) {
+      console.warn('[rivaldo] falha ao sincronizar pré-produção', error);
+    }
+    await refreshMaterials();
+    setPickerOpen(true);
   }, [refreshMaterials]);
 
   // Episode titles from all materials that have generated titles
@@ -224,7 +237,7 @@ const Rivaldo = () => {
         <div className="flex-1 max-w-md ml-8">
           <button
             type="button"
-            onClick={() => setPickerOpen(true)}
+            onClick={() => void openEpisodePicker()}
             className="w-full flex items-center justify-between gap-2 border-0 border-b border-border bg-transparent py-2 text-left text-sm font-mono hover:border-primary/60 focus:outline-none"
             title="Selecionar episódio"
           >
