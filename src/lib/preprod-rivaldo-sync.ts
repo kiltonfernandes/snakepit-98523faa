@@ -3,12 +3,13 @@ import { normalizePreprodPauta, preprodDate, type PreprodPauta } from '@/lib/pre
 
 function preprodWeekId(pautaId: string) { return `preprod-${pautaId}`; }
 function preprodSlotKey(pautaId: string) { return `preprod-${pautaId.slice(0, 8)}`; }
+function preprodMaterialId(pautaId: string) { return `preprod-material-${pautaId}`; }
 
 export async function syncPreprodToEpisodeMaterial(
   pautaId: string,
   publicationDate: string,
   data: Record<string, any>,
-) {
+): Promise<string> {
   const titles = Array.isArray(data.titles) ? data.titles as { kind?: string; text: string }[] : [];
   const selectedTitle = String(data.selected_title || '').trim();
   const generatedTitleOptions = titles
@@ -24,18 +25,38 @@ export async function syncPreprodToEpisodeMaterial(
     if (index < 0) titleOptions.unshift({ text: selectedTitle });
   }
 
-  const weekId = preprodWeekId(pautaId);
-  const { error: weekError } = await supabase.from('editorial_weeks' as any).upsert({
-    id: weekId,
-    start_date: publicationDate,
-    status: 'draft',
-  } as any, { onConflict: 'id' });
-  if (weekError) throw weekError;
+  const { data: existingWeek, error: existingWeekError } = await supabase
+    .from('editorial_weeks' as any)
+    .select('id')
+    .eq('start_date', publicationDate)
+    .limit(1)
+    .maybeSingle();
+  if (existingWeekError) throw existingWeekError;
+
+  let weekId = (existingWeek as { id?: string } | null)?.id;
+  if (!weekId) {
+    weekId = preprodWeekId(pautaId);
+    const { error: weekError } = await supabase.from('editorial_weeks' as any).upsert({
+      id: weekId,
+      start_date: publicationDate,
+      status: 'draft',
+    } as any, { onConflict: 'id' });
+    if (weekError) throw weekError;
+  }
+
+  const { data: existingMaterial, error: existingMaterialError } = await supabase
+    .from('episode_materials' as any)
+    .select('id')
+    .eq('preprod_pauta_id', pautaId)
+    .limit(1)
+    .maybeSingle();
+  if (existingMaterialError) throw existingMaterialError;
+  const materialId = (existingMaterial as { id?: string } | null)?.id || preprodMaterialId(pautaId);
 
   const coverUrl = typeof data.cover_url === 'string' && !data.cover_url.startsWith('data:')
     ? data.cover_url
     : null;
-  const { error: materialError } = await supabase.from('episode_materials' as any).upsert({
+  const materialPayload = {
     preprod_pauta_id: pautaId,
     week_id: weekId,
     slot_key: preprodSlotKey(pautaId),
@@ -48,8 +69,13 @@ export async function syncPreprodToEpisodeMaterial(
     mentioned_in_episode: data.mentioned || null,
     is_standalone: true,
     updated_at: new Date().toISOString(),
-  } as any, { onConflict: 'preprod_pauta_id' });
+  };
+  const materialWrite = existingMaterial
+    ? await supabase.from('episode_materials' as any).update(materialPayload as any).eq('id', materialId)
+    : await supabase.from('episode_materials' as any).insert({ id: materialId, ...materialPayload } as any);
+  const { error: materialError } = materialWrite;
   if (materialError) throw materialError;
+  return materialId;
 }
 
 /** Rewrites every mirror so legacy and incomplete rows are repaired too. */

@@ -5,6 +5,7 @@ import { DetailedLogger } from '@/lib/audio/detailed-logger';
 import { buildOneDriveFolderPath, sanitizeFilename, uploadEpisodeToOneDrive } from '@/lib/storage/onedrive';
 import { supabase } from '@/integrations/supabase/client';
 import { useApp } from '@/contexts/AppContext';
+import { syncPreprodToEpisodeMaterial } from '@/lib/preprod-rivaldo-sync';
 import {
   loadAgenticFlag, runAgenticEpisode, buildAgenticVoiceProcessorFromSession,
   type AgenticOutcome, type AgenticStatus,
@@ -16,6 +17,7 @@ export type AgenticRunStatus =
 export interface PipelineUploadOptions {
   enabled: boolean;
   episodeMaterialId?: string;
+  preprodPautaId?: string;
   episodeDate?: string; // YYYY-MM-DD
   /** When true, route the upload to Snakepit/Avulsos/YYYY-MM instead of the weekly folder. */
   isStandalone?: boolean;
@@ -44,7 +46,7 @@ interface RivaldoContextType extends RivaldoState {
 const RivaldoContext = createContext<RivaldoContextType | null>(null);
 
 export function RivaldoProvider({ children }: { children: React.ReactNode }) {
-  const { updateMaterial } = useApp();
+  const { updateMaterial, refreshMaterials } = useApp();
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState('');
@@ -279,16 +281,44 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
           addLog(`OneDrive: ${uploaded.filename} (${(uploaded.size / 1024 / 1024).toFixed(1)} MB)`, 'success');
           dlog.log('upload', 'success', `OneDrive: ${uploaded.filename} (${(uploaded.size / 1024 / 1024).toFixed(2)} MB)`, { data: { folderPath, webUrl: uploaded.webUrl, fileId: uploaded.fileId } });
 
-          if (upload?.episodeMaterialId) {
+          if (upload?.episodeMaterialId || upload?.preprodPautaId) {
             try {
-              updateMaterial(upload.episodeMaterialId, {
+              let materialId = upload.episodeMaterialId;
+              if (!materialId && upload.preprodPautaId) {
+                const { data: pauta, error: pautaError } = await supabase
+                  .from('preprod_pautas')
+                  .select('publication_date,data')
+                  .eq('id', upload.preprodPautaId)
+                  .maybeSingle();
+                if (pautaError) throw pautaError;
+                if (!pauta) throw new Error(`Pauta ${upload.preprodPautaId} não encontrada`);
+                materialId = await syncPreprodToEpisodeMaterial(
+                  upload.preprodPautaId,
+                  upload.episodeDate || pauta.publication_date,
+                  (pauta.data || {}) as Record<string, unknown>,
+                );
+              }
+              if (!materialId) throw new Error('Episódio sem vínculo de Pré-produção');
+
+              const repositoryPatch = {
                 repository_provider: 'onedrive',
                 repository_url: uploaded.webUrl,
                 repository_file_id: uploaded.fileId,
                 repository_uploaded_at: new Date().toISOString(),
-              });
+              };
+              const { data: savedMaterial, error: saveError } = await supabase
+                .from('episode_materials')
+                .update({ ...repositoryPatch, updated_at: new Date().toISOString() })
+                .eq('id', materialId)
+                .select('id')
+                .maybeSingle();
+              if (saveError) throw saveError;
+              if (!savedMaterial) throw new Error(`Nenhum episódio atualizado para ${materialId}`);
+
+              updateMaterial(materialId, repositoryPatch);
+              await refreshMaterials();
               addLog('Link salvo no episódio', 'success');
-              dlog.log('materials', 'success', `Link salvo no episode_material ${upload.episodeMaterialId}`);
+              dlog.log('materials', 'success', `Link salvo no episode_material ${materialId}`);
             } catch (e) {
               const msg = e instanceof Error ? e.message : 'erro desconhecido';
               addLog(`Aviso: falha em sincronizar materials (${msg})`, 'error');
@@ -325,7 +355,7 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
         errorMessage,
       });
     }
-  }, [addLog, updateMaterial]);
+  }, [addLog, refreshMaterials, updateMaterial]);
 
   return (
     <RivaldoContext.Provider value={{

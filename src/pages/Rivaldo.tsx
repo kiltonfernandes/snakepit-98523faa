@@ -193,7 +193,13 @@ const Rivaldo = () => {
     await rivaldo.startPipeline(
       { masterMode, master: masterMode === 'single' ? masterFile : null, masterTracks: masterMode === 'multi' ? masterTracks : undefined, processingProfile, bgm: files.bgm!, intro: files.intro!, outro: files.outro!, filename: filename.trim() },
       audioParams,
-      { enabled: uploadToCloud, episodeMaterialId: selectedEpisode?.materialId, episodeDate: selectedEpisode?.date, isStandalone: selectedEpisode?.isStandalone }
+      {
+        enabled: uploadToCloud,
+        episodeMaterialId: selectedEpisode?.materialId,
+        preprodPautaId: selectedEpisode?.preprodPautaId,
+        episodeDate: selectedEpisode?.date,
+        isStandalone: selectedEpisode?.isStandalone,
+      }
     );
 
     // Memory purge: clear file references after export

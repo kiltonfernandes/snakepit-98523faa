@@ -74,6 +74,7 @@ import {
 import JSZip from 'jszip';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { getEpisodeCardVisualState } from '@/lib/episode-card-visual-state';
 
 // Week starts on Monday
 const DAYS_OF_WEEK = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -110,7 +111,7 @@ function dayOfWeekLabel(d: Date): string {
 }
 
 export default function CalendarView() {
-  const { materials, pautas, releases, updateMaterial, updateRelease, loadMaterialCover, dataReady, weeks } = useApp();
+  const { materials, pautas, releases, updateMaterial, updateRelease, loadMaterialCover, refreshMaterials, dataReady, weeks } = useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [date, setDate] = useState(new Date());
@@ -147,6 +148,7 @@ export default function CalendarView() {
   }, []);
 
   useEffect(() => { void loadPreprodPautas(); }, [loadPreprodPautas]);
+  useEffect(() => { void refreshMaterials(); }, [refreshMaterials]);
 
   useEffect(() => {
     const channel = supabase
@@ -773,13 +775,7 @@ export default function CalendarView() {
         <div className="mt-2 space-y-1.5">
           {items.map((item) => {
             const relatedMat = item.material;
-            const hasOneDrive = !!relatedMat && (!!relatedMat.repository_url || !!relatedMat.repository_file_id);
-            const hasSpotify = !!relatedMat && !!relatedMat.spotify_link;
-            const haloClass = hasSpotify
-              ? 'ring-2 ring-[#39ff14] border-[#39ff14] shadow-[0_0_8px_#39ff14aa]'
-              : hasOneDrive
-                ? 'ring-2 ring-[#1e90ff] border-[#1e90ff] shadow-[0_0_8px_#1e90ffaa]'
-              : '';
+            const { hasOneDrive, hasSpotify, haloClass } = getEpisodeCardVisualState(relatedMat);
             if (item.type === 'preprod') {
               const status = inferPreprodStatus(item.data);
               const title = relatedMat ? getSelectedTitle(relatedMat) : getPreprodLabel(item.data);
