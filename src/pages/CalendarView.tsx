@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { memo, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -110,6 +110,261 @@ function dayOfWeekLabel(d: Date): string {
   return DAYS_OF_WEEK[idx];
 }
 
+type CalendarEntryBase = {
+  key: string;
+  pauta: Pauta | null;
+  material: EpisodeMaterial | null;
+};
+
+type CalendarEntry =
+  | (CalendarEntryBase & { type: 'pauta'; data: Pauta })
+  | (CalendarEntryBase & { type: 'material'; data: EpisodeMaterial })
+  | (CalendarEntryBase & { type: 'release'; data: Release })
+  | (CalendarEntryBase & { type: 'preprod'; data: PreprodPauta });
+
+function getSelectedTitle(mat: EpisodeMaterial) {
+  const options = Array.isArray(mat.title_options_json) ? mat.title_options_json : [];
+  if (mat.selected_title_index != null && options[mat.selected_title_index]) {
+    return options[mat.selected_title_index]?.text || mat.slot_key;
+  }
+  return options[0]?.text || mat.slot_key;
+}
+
+function pautaStatusColor(status: string) {
+  if (status === 'publicado') return 'bg-violet-500';
+  if (status === 'agendado') return 'bg-cyan-500';
+  if (status === 'finalized') return 'bg-primary';
+  if (status === 'generated' || status === 'needs_review') return 'bg-accent';
+  if (status === 'in_progress') return 'bg-secondary';
+  return 'bg-muted-foreground/40';
+}
+
+function pautaStatusLabel(status: string) {
+  if (status === 'publicado') return 'Publicado';
+  if (status === 'agendado') return 'Agendado';
+  if (status === 'pronto_agendar') return 'Pronto p/ agendar';
+  if (status === 'pronto_gravar') return 'Pronto p/ gravar';
+  if (status === 'criando_materiais') return 'Criando materiais';
+  if (status === 'revisao') return 'Revisão';
+  if (status === 'pesquisa') return 'Pesquisa';
+  if (status === 'finalized') return 'Finalizada';
+  if (status === 'generated') return 'Gerada';
+  if (status === 'needs_review') return 'Revisão';
+  if (status === 'in_progress') return 'Em Progresso';
+  return 'Rascunho';
+}
+
+interface CalendarSurfaceProps {
+  date: Date;
+  viewMode: 'month' | 'week' | 'day';
+  coverThumbnails: Record<string, string>;
+  getItemsForDate: (dateStr: string) => CalendarEntry[];
+  onPrev: () => void;
+  onNext: () => void;
+  onViewModeChange: (mode: 'month' | 'week' | 'day') => void;
+  onCreateDate: (dateStr: string) => void;
+  onOpenMaterial: (material: EpisodeMaterial, pauta?: Pauta | null, preprod?: PreprodPauta | null) => void;
+  onOpenRelease: (release: Release) => void;
+  onOpenPreprod: (id: string) => void;
+}
+
+const CalendarSurface = memo(function CalendarSurface({
+  date,
+  viewMode,
+  coverThumbnails,
+  getItemsForDate,
+  onPrev,
+  onNext,
+  onViewModeChange,
+  onCreateDate,
+  onOpenMaterial,
+  onOpenRelease,
+  onOpenPreprod,
+}: CalendarSurfaceProps) {
+  const year = date.getFullYear();
+  const month = date.getMonth();
+  const today = new Date();
+  const fmt = (value: Date) => preprodDate(value);
+
+  const headerLabel = () => {
+    if (viewMode === 'month') return `${MONTHS[month]} ${year}`;
+    if (viewMode === 'week') {
+      const weekDays = getWeekDays(date);
+      return `${weekDays[0].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} - ${weekDays[6].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
+    }
+    return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+  };
+
+  const renderDayCell = (dateObj: Date, isToday: boolean, className = '') => {
+    const dateStr = fmt(dateObj);
+    const items = getItemsForDate(dateStr);
+
+    return (
+      <div
+        className={`group min-h-[88px] rounded-xl border p-2.5 text-xs transition-all ${
+          isToday
+            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+            : items.length > 0
+              ? 'border-border bg-card shadow-sm'
+              : 'border-border/60 bg-card/60 hover:border-primary/30'
+        } ${className}`}
+      >
+        <div className="flex items-center justify-between">
+          <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onCreateDate(dateStr);
+            }}
+            title="Criar nova pauta neste dia"
+            className="flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground opacity-0 transition-all hover:border-primary hover:bg-primary/10 hover:text-primary group-hover:opacity-100"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        </div>
+        <div className="mt-2 space-y-1.5">
+          {items.map((item) => {
+            const relatedMat = item.material;
+            const { hasOneDrive, hasSpotify, haloClass } = getEpisodeCardVisualState(relatedMat);
+            if (item.type === 'preprod') {
+              const status = inferPreprodStatus(item.data);
+              const title = relatedMat ? getSelectedTitle(relatedMat) : getPreprodLabel(item.data);
+              const thumbUrl = relatedMat ? coverThumbnails[relatedMat.id] : item.data.data?.cover_url;
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`w-full rounded-lg border border-border bg-primary/5 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 ${haloClass}`}
+                  onClick={() => relatedMat ? onOpenMaterial(relatedMat, null, item.data) : onOpenPreprod(item.data.id)}
+                  title={relatedMat ? 'Abrir episódio com informações da pauta' : 'Abrir pauta de pré-produção'}
+                >
+                  <div className="flex items-start gap-1.5">
+                    {thumbUrl ? (
+                      <img src={thumbUrl} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded-sm object-cover" />
+                    ) : (
+                      <Badge variant="secondary" className="mt-0.5 h-5 shrink-0 rounded-full px-1.5 text-[9px] uppercase tracking-wide">EP</Badge>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`h-2 w-2 shrink-0 rounded-full ${getPreprodStatusClass(status)}`} />
+                        <span className="truncate text-[9px] font-medium text-muted-foreground">
+                          {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
+                        </span>
+                        {hasOneDrive && <Cloud className="ml-auto h-3 w-3 shrink-0 text-[#1e90ff]" />}
+                        {hasSpotify && <LinkIcon className="h-3 w-3 shrink-0 text-[#39ff14]" />}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              );
+            }
+
+            return (
+              <button
+                key={item.key}
+                className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
+                  item.type === 'pauta'
+                    ? 'border-border bg-muted/60 hover:border-primary/40 hover:bg-muted'
+                    : item.type === 'release'
+                      ? 'border-border bg-secondary/40 hover:border-primary/30 hover:bg-secondary/60'
+                      : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
+                } ${haloClass}`}
+                onClick={() => {
+                  if (item.type === 'pauta') {
+                    if (relatedMat) onOpenMaterial(relatedMat, item.pauta);
+                    else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
+                  } else if (item.type === 'material') onOpenMaterial(item.data, item.pauta);
+                  else onOpenRelease(item.data);
+                }}
+              >
+                {item.type === 'pauta' ? (
+                  <div className="space-y-1">
+                    <div className="flex items-start gap-1.5">
+                      {relatedMat && coverThumbnails[relatedMat.id] && (
+                        <img src={coverThumbnails[relatedMat.id]} alt="" className="h-7 w-7 rounded-sm object-cover shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        {relatedMat && <span className="block truncate text-[10px] font-semibold text-foreground">{getSelectedTitle(relatedMat)}</span>}
+                        <div className="flex items-center gap-2">
+                          <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(getEffectivePautaStatus(item.data, relatedMat))}`} />
+                          <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(getEffectivePautaStatus(item.data, relatedMat))}</span>
+                          <FileText className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ) : item.type === 'release' ? (
+                  <div className="flex items-center gap-2">
+                    <Disc className="h-3 w-3 shrink-0 text-primary/70" />
+                    <span className="truncate text-[10px] font-medium text-foreground">{item.data.artist}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary" className="h-5 rounded-full px-1.5 text-[9px] uppercase tracking-wide">EP</Badge>
+                    <span className="truncate text-[10px] font-medium text-foreground">{getSelectedTitle(item.data)}</span>
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <Card className="border-border/60 hover:shadow-lg transition-all duration-200">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="icon" onClick={onPrev}><ChevronLeft className="h-4 w-4" /></Button>
+          <div className="flex items-center gap-3">
+            <CardTitle className="text-base font-bold">{headerLabel()}</CardTitle>
+            <div className="flex gap-1">
+              {(['month', 'week', 'day'] as const).map((mode) => (
+                <Button key={mode} variant={viewMode === mode ? 'default' : 'ghost'} size="sm" className="h-7 px-2.5 text-xs" onClick={() => onViewModeChange(mode)}>
+                  {mode === 'month' ? 'Mês' : mode === 'week' ? 'Semana' : 'Dia'}
+                </Button>
+              ))}
+            </div>
+          </div>
+          <Button variant="ghost" size="icon" onClick={onNext}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {viewMode === 'month' && (
+          <div className="grid grid-cols-7 gap-1.5">
+            {DAYS_OF_WEEK.map((day) => <div key={day} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{day}</div>)}
+            {getDaysInMonth(year, month).map((day, index) => {
+              if (day === null) return <div key={index} className="min-h-[88px]" />;
+              const dateObj = new Date(year, month, day);
+              const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+              return <div key={index}>{renderDayCell(dateObj, isToday)}</div>;
+            })}
+          </div>
+        )}
+        {viewMode === 'week' && (
+          <div className="grid grid-cols-7 gap-2">
+            {getWeekDays(date).map((weekDay, index) => {
+              const isToday = fmt(weekDay) === fmt(today);
+              return (
+                <div key={index}>
+                  <div className={`mb-1.5 rounded-md py-1.5 text-center text-[11px] font-semibold ${isToday ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
+                    {dayOfWeekLabel(weekDay)} {weekDay.getDate()}
+                  </div>
+                  {renderDayCell(weekDay, isToday, 'min-h-[220px]')}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {viewMode === 'day' && <div className="mx-auto max-w-xl">{renderDayCell(date, fmt(date) === fmt(today), 'min-h-[420px]')}</div>}
+      </CardContent>
+    </Card>
+  );
+});
+
 export default function CalendarView() {
   const { materials, pautas, releases, updateMaterial, updateRelease, loadMaterialCover, refreshMaterials, dataReady, weeks } = useApp();
   const navigate = useNavigate();
@@ -127,6 +382,7 @@ export default function CalendarView() {
   const [showPautas, setShowPautas] = useState(true);
   const [editForm, setEditForm] = useState({ artist: '', album: '', release_date: '', comments: '' });
   const [previewPauta, setPreviewPauta] = useState<Pauta | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFontSize, setPreviewFontSize] = useState(16);
   const [coverThumbnails, setCoverThumbnails] = useState<Record<string, string>>({});
   const [preprodPautas, setPreprodPautas] = useState<PreprodPauta[]>([]);
@@ -227,7 +483,7 @@ export default function CalendarView() {
     }
   }, [dataReady, materials, searchParams, setSearchParams]);
 
-  const prev = () => {
+  const prev = useCallback(() => {
     if (viewMode === 'month') setDate(new Date(year, month - 1, 1));
     else if (viewMode === 'week') {
       const d = new Date(date);
@@ -238,9 +494,9 @@ export default function CalendarView() {
       d.setDate(d.getDate() - 1);
       setDate(d);
     }
-  };
+  }, [date, month, viewMode, year]);
 
-  const next = () => {
+  const next = useCallback(() => {
     if (viewMode === 'month') setDate(new Date(year, month + 1, 1));
     else if (viewMode === 'week') {
       const d = new Date(date);
@@ -251,7 +507,7 @@ export default function CalendarView() {
       d.setDate(d.getDate() + 1);
       setDate(d);
     }
-  };
+  }, [date, month, viewMode, year]);
 
   const fmt = (d: Date) => preprodDate(d);
 
@@ -335,17 +591,22 @@ export default function CalendarView() {
   const getMaterialForPreprod = (preprod: PreprodPauta) =>
     calendarIndex.materialByPreprodId.get(preprod.id) || null;
 
-  const getItemsForDate = (dateStr: string) => {
-    const items: {
-      key: string;
-      type: 'pauta' | 'material' | 'release' | 'preprod';
-      data: any;
-      pauta: Pauta | null;
-      material: EpisodeMaterial | null;
-    }[] = [];
+  const getItemsForDate = useCallback((dateStr: string) => {
+    const items: CalendarEntry[] = [];
+    const materialForPauta = (pauta: Pauta) => {
+      const linked = calendarIndex.materialByPautaId.get(pauta.id);
+      if (linked) return linked;
+      const unlinked = calendarIndex.unlinkedMaterialsByDate.get(pauta.publication_date) || [];
+      return unlinked.length === 1 ? unlinked[0] : null;
+    };
+    const pautaForMaterial = (material: EpisodeMaterial) => {
+      if (material.source_pauta_id) return calendarIndex.pautasById.get(material.source_pauta_id) || null;
+      const sameDay = calendarIndex.pautasByDate.get(material.episode_date) || [];
+      return sameDay.length === 1 ? sameDay[0] : null;
+    };
 
     if (showPautas) {
-      const dayPreprod = getPreprodForDate(dateStr);
+      const dayPreprod = calendarIndex.preprodByDate.get(dateStr) || [];
       const dayPreprodIds = new Set(dayPreprod.map((p) => p.id));
       dayPreprod.forEach((p) => {
         items.push({
@@ -353,11 +614,11 @@ export default function CalendarView() {
           type: 'preprod',
           data: p,
           pauta: null,
-          material: getMaterialForPreprod(p),
+          material: calendarIndex.materialByPreprodId.get(p.id) || null,
         });
       });
 
-      const dayPautas = getPautasForDate(dateStr);
+      const dayPautas = calendarIndex.pautasByDate.get(dateStr) || [];
       const dayPautaIds = new Set(dayPautas.map((p) => p.id));
       dayPautas.forEach((p) => {
         items.push({
@@ -365,7 +626,7 @@ export default function CalendarView() {
           type: 'pauta',
           data: p,
           pauta: p,
-          material: getMaterialForPauta(p),
+          material: materialForPauta(p),
         });
       });
       (calendarIndex.materialsByDate.get(dateStr) || [])
@@ -381,7 +642,7 @@ export default function CalendarView() {
             key: `material-${m.id}`,
             type: 'material',
             data: m,
-            pauta: getPautaForMaterial(m),
+            pauta: pautaForMaterial(m),
             material: m,
           });
         });
@@ -398,9 +659,9 @@ export default function CalendarView() {
     }
 
     return items;
-  };
+  }, [calendarIndex, showPautas, showReleases]);
 
-  const openMaterialModal = (
+  const openMaterialModal = useCallback((
     mat: EpisodeMaterial,
     pauta: Pauta | null = null,
     preprod: PreprodPauta | null = null,
@@ -411,21 +672,17 @@ export default function CalendarView() {
     setSpotifyInput(mat.spotify_link || '');
     setMentionedInput(mat.mentioned_in_episode || '');
     setModalOpen(true);
-  };
+  }, [calendarIndex]);
 
-  const openReleaseModal = (rel: Release) => {
+  const openReleaseModal = useCallback((rel: Release) => {
     setSelectedRelease(rel);
     setEditForm({ artist: rel.artist, album: rel.album, release_date: rel.release_date, comments: rel.comments || '' });
     setReleaseModalOpen(true);
-  };
+  }, []);
 
-  const getSelectedTitle = (mat: EpisodeMaterial) => {
-    const options = Array.isArray(mat.title_options_json) ? mat.title_options_json : [];
-    if (mat.selected_title_index != null && options[mat.selected_title_index]) {
-      return options[mat.selected_title_index]?.text || mat.slot_key;
-    }
-    return options[0]?.text || mat.slot_key;
-  };
+  const openPreprod = useCallback((id: string) => {
+    navigate(`/pre-producao?preprod=${id}`);
+  }, [navigate]);
 
   const handleToggleReviewLabel = async (enabled: boolean) => {
     if (!selectedMaterial || !selectedPreprod) return;
@@ -709,176 +966,7 @@ export default function CalendarView() {
     }
   };
 
-  const pautaStatusColor = (status: string) => {
-    if (status === 'publicado') return 'bg-violet-500';
-    if (status === 'agendado') return 'bg-cyan-500';
-    if (status === 'finalized') return 'bg-primary';
-    if (status === 'generated' || status === 'needs_review') return 'bg-accent';
-    if (status === 'in_progress') return 'bg-secondary';
-    return 'bg-muted-foreground/40';
-  };
-
-  const pautaStatusLabel = (status: string) => {
-    if (status === 'publicado') return 'Publicado';
-    if (status === 'agendado') return 'Agendado';
-    if (status === 'pronto_agendar') return 'Pronto p/ agendar';
-    if (status === 'pronto_gravar') return 'Pronto p/ gravar';
-    if (status === 'criando_materiais') return 'Criando materiais';
-    if (status === 'revisao') return 'Revisão';
-    if (status === 'pesquisa') return 'Pesquisa';
-    if (status === 'finalized') return 'Finalizada';
-    if (status === 'generated') return 'Gerada';
-    if (status === 'needs_review') return 'Revisão';
-    if (status === 'in_progress') return 'Em Progresso';
-    return 'Rascunho';
-  };
-
   const goToWorkspace = () => navigate('/pautas');
-
-  const headerLabel = () => {
-    if (viewMode === 'month') return `${MONTHS[month]} ${year}`;
-    if (viewMode === 'week') {
-      const wd = getWeekDays(date);
-      return `${wd[0].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} – ${wd[6].toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}`;
-    }
-    return date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
-  };
-
-  const DayCell = ({ dateObj, isToday, className = '' }: { dateObj: Date; isToday: boolean; className?: string }) => {
-    const dateStr = fmt(dateObj);
-    const items = getItemsForDate(dateStr);
-
-    return (
-      <div
-        className={`group min-h-[88px] rounded-xl border p-2.5 text-xs transition-all ${
-          isToday
-            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
-            : items.length > 0
-              ? 'border-border bg-card shadow-sm'
-              : 'border-border/60 bg-card/60 hover:border-primary/30'
-        } ${className}`}
-      >
-        <div className="flex items-center justify-between">
-          <span className={`text-[11px] font-semibold ${isToday ? 'text-primary' : 'text-foreground'}`}>{dateObj.getDate()}</span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              setCreateDate(dateStr);
-            }}
-            title="Criar nova pauta neste dia"
-            className="flex h-5 w-5 items-center justify-center rounded-md border border-border/60 bg-background/60 text-muted-foreground opacity-0 transition-all hover:border-primary hover:bg-primary/10 hover:text-primary group-hover:opacity-100"
-          >
-            <Plus className="h-3 w-3" />
-          </button>
-        </div>
-        <div className="mt-2 space-y-1.5">
-          {items.map((item) => {
-            const relatedMat = item.material;
-            const { hasOneDrive, hasSpotify, haloClass } = getEpisodeCardVisualState(relatedMat);
-            if (item.type === 'preprod') {
-              const status = inferPreprodStatus(item.data);
-              const title = relatedMat ? getSelectedTitle(relatedMat) : getPreprodLabel(item.data);
-              const thumbUrl = relatedMat ? coverThumbnails[relatedMat.id] : item.data.data?.cover_url;
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`w-full rounded-lg border border-border bg-primary/5 px-2 py-1.5 text-left transition-colors hover:border-primary/40 hover:bg-primary/10 ${haloClass}`}
-                  onClick={() => {
-                    if (relatedMat) openMaterialModal(relatedMat, null, item.data);
-                    else navigate(`/pre-producao?preprod=${item.data.id}`);
-                  }}
-                  title={relatedMat ? 'Abrir episódio com informações da pauta' : 'Abrir pauta de pré-produção'}
-                >
-                  <div className="flex items-start gap-1.5">
-                    {thumbUrl ? (
-                      <img src={thumbUrl} alt="" className="mt-0.5 h-7 w-7 shrink-0 rounded-sm object-cover" />
-                    ) : (
-                      <Badge variant="secondary" className="mt-0.5 h-5 shrink-0 rounded-full px-1.5 text-[9px] uppercase tracking-wide">
-                        EP
-                      </Badge>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`h-2 w-2 shrink-0 rounded-full ${getPreprodStatusClass(status)}`} />
-                        <span className="truncate text-[9px] font-medium text-muted-foreground">
-                          {PREPROD_KIND_LABEL[String(item.data.kind || '')] || 'Pauta'} · {getPreprodStatusLabel(status)}
-                        </span>
-                        {hasOneDrive && <Cloud className="ml-auto h-3 w-3 shrink-0 text-[#1e90ff]" />}
-                        {hasSpotify && <LinkIcon className="h-3 w-3 shrink-0 text-[#39ff14]" />}
-                      </div>
-                    </div>
-                  </div>
-                </button>
-              );
-            }
-            return (
-            <button
-              key={item.key}
-              className={`w-full rounded-lg border px-2 py-1.5 text-left transition-colors ${
-                item.type === 'pauta'
-                  ? 'border-border bg-muted/60 hover:border-primary/40 hover:bg-muted'
-                  : item.type === 'release'
-                    ? 'border-border bg-secondary/40 hover:border-primary/30 hover:bg-secondary/60'
-                    : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
-              } ${haloClass}`}
-              onClick={() => {
-                if (item.type === 'pauta') {
-                  if (relatedMat) openMaterialModal(relatedMat, item.pauta);
-                  else toast.info('Nenhum material gerado. Crie em Materiais primeiro.');
-                }
-                else if (item.type === 'material') openMaterialModal(item.data, item.pauta);
-                else openReleaseModal(item.data);
-              }}
-            >
-              {item.type === 'pauta' ? (
-                <div className="space-y-1">
-                  {(() => {
-                    const mat = relatedMat;
-                    const title = mat ? getSelectedTitle(mat) : '';
-                    const thumbUrl = mat ? coverThumbnails[mat.id] : undefined;
-                    const effStatus = getEffectivePautaStatus(item.data, mat);
-                    return (
-                      <div className="flex items-start gap-1.5">
-                        {thumbUrl && (
-                          <img src={thumbUrl} alt="" className="h-7 w-7 rounded-sm object-cover shrink-0" />
-                        )}
-                        <div className="min-w-0 flex-1">
-                          {title && <span className="block truncate text-[10px] font-semibold text-foreground">{title}</span>}
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full shrink-0 ${pautaStatusColor(effStatus)}`} />
-                            <span className="truncate text-[10px] font-medium text-foreground">{pautaStatusLabel(effStatus)}</span>
-                            <FileText className="ml-auto h-3 w-3 shrink-0 text-muted-foreground" />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              ) : item.type === 'release' ? (
-                <div className="flex items-center gap-2">
-                  <Disc className="h-3 w-3 shrink-0 text-primary/70" />
-                  <span className="truncate text-[10px] font-medium text-foreground">{item.data.artist}</span>
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="h-5 rounded-full px-1.5 text-[9px] uppercase tracking-wide">
-                      EP
-                    </Badge>
-                    <span className="truncate text-[10px] font-medium text-foreground">{getSelectedTitle(item.data)}</span>
-                  </div>
-                </div>
-              )}
-            </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div className="space-y-6">
@@ -900,67 +988,19 @@ export default function CalendarView() {
         </div>
       </div>
 
-      <Card className="border-border/60 hover:shadow-lg transition-all duration-200">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon" onClick={prev}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-3">
-              <CardTitle className="text-base font-bold">{headerLabel()}</CardTitle>
-              <div className="flex gap-1">
-                {(['month', 'week', 'day'] as const).map((mode) => (
-                  <Button key={mode} variant={viewMode === mode ? 'default' : 'ghost'} size="sm" className="h-7 px-2.5 text-xs" onClick={() => setViewMode(mode)}>
-                    {mode === 'month' ? 'Mês' : mode === 'week' ? 'Semana' : 'Dia'}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <Button variant="ghost" size="icon" onClick={next}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {viewMode === 'month' && (
-            <div className="grid grid-cols-7 gap-1.5">
-              {DAYS_OF_WEEK.map((day) => (
-                <div key={day} className="py-2 text-center text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {day}
-                </div>
-              ))}
-              {getDaysInMonth(year, month).map((day, i) => {
-                if (day === null) return <div key={i} className="min-h-[88px]" />;
-                const dateObj = new Date(year, month, day);
-                const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-                return <DayCell key={i} dateObj={dateObj} isToday={isToday} />;
-              })}
-            </div>
-          )}
-
-          {viewMode === 'week' && (
-            <div className="grid grid-cols-7 gap-2">
-              {getWeekDays(date).map((wd, i) => {
-                const isToday = fmt(wd) === fmt(today);
-                return (
-                  <div key={i}>
-                    <div className={`mb-1.5 rounded-md py-1.5 text-center text-[11px] font-semibold ${isToday ? 'bg-primary/10 text-primary' : 'text-muted-foreground'}`}>
-                      {dayOfWeekLabel(wd)} {wd.getDate()}
-                    </div>
-                    <DayCell dateObj={wd} isToday={isToday} className="min-h-[220px]" />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {viewMode === 'day' && (
-            <div className="mx-auto max-w-xl">
-              <DayCell dateObj={date} isToday={fmt(date) === fmt(today)} className="min-h-[420px]" />
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <CalendarSurface
+        date={date}
+        viewMode={viewMode}
+        coverThumbnails={coverThumbnails}
+        getItemsForDate={getItemsForDate}
+        onPrev={prev}
+        onNext={next}
+        onViewModeChange={setViewMode}
+        onCreateDate={setCreateDate}
+        onOpenMaterial={openMaterialModal}
+        onOpenRelease={openReleaseModal}
+        onOpenPreprod={openPreprod}
+      />
 
       <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
         <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-primary" /> Finalizada</span>
@@ -970,13 +1010,7 @@ export default function CalendarView() {
       </div>
 
       {/* Episode package modal */}
-      <Dialog open={modalOpen} onOpenChange={(open) => {
-        setModalOpen(open);
-        if (!open) {
-          setSelectedPauta(null);
-          setSelectedPreprod(null);
-        }
-      }}>
+      <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{selectedPreprod ? 'Episódio + pauta' : 'Pacote do episódio'}</DialogTitle>
@@ -1266,7 +1300,10 @@ export default function CalendarView() {
                       return;
                     }
                     const pauta = selectedPauta || getPautaForMaterial(selectedMaterial);
-                    if (pauta) setPreviewPauta(pauta);
+                    if (pauta) {
+                      setPreviewPauta(pauta);
+                      setPreviewOpen(true);
+                    }
                     else toast.info('Nenhuma pauta para este episódio');
                   }}>
                     <Eye className="h-4 w-4" /> {selectedPreprod ? 'Abrir pauta original' : 'Visualizar pauta'}
@@ -1304,7 +1341,7 @@ export default function CalendarView() {
       </Dialog>
 
       {/* Pauta preview dialog */}
-      <Dialog open={!!previewPauta} onOpenChange={(open) => !open && setPreviewPauta(null)}>
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <DialogContent className="max-w-none w-screen h-screen sm:rounded-none p-0 bg-black border-border/30 flex flex-col gap-0">
           <DialogHeader className="sr-only">
             <DialogTitle>Visualização da Pauta</DialogTitle>
@@ -1320,7 +1357,7 @@ export default function CalendarView() {
               <Button variant="ghost" size="icon" className="h-8 w-8 text-white" onClick={() => setPreviewFontSize(s => Math.min(48, s + 2))} title="Aumentar fonte">
                 <ZoomIn className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="sm" className="ml-2" onClick={() => setPreviewPauta(null)}>Fechar</Button>
+              <Button variant="outline" size="sm" className="ml-2" onClick={() => setPreviewOpen(false)}>Fechar</Button>
             </div>
           </div>
           <div className="flex-1 overflow-y-auto">

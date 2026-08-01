@@ -1,26 +1,23 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { AlertCircle, CheckCircle2, Cloud, CloudUpload, ExternalLink, Layers, RefreshCw, Sparkles } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Cloud, CloudUpload, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { useApp } from '@/contexts/AppContext';
 import { useRivaldo } from '@/contexts/RivaldoContext';
-import { useRivaldoBulk } from '@/contexts/RivaldoBulkContext';
 import { GranularProgress } from '@/components/rivaldo/GranularProgress';
 import { UploadSlot } from '@/components/rivaldo/UploadSlot';
-import { BgmLibraryModal } from '@/components/rivaldo/BgmLibraryModal';
 import { ProcessLog } from '@/components/rivaldo/ProcessLog';
 import { ParametersSidebar } from '@/components/rivaldo/ParametersSidebar';
 import { MultiTrackMaster } from '@/components/rivaldo/MultiTrackMaster';
-import { BulkModal } from '@/components/rivaldo/BulkModal';
 import { ElapsedTimer } from '@/components/rivaldo/ElapsedTimer';
 import { ProcessingReportPanel } from '@/components/rivaldo/ProcessingReportPanel';
 import { DesktopJobsPanel } from '@/components/rivaldo/DesktopJobsPanel';
 import { HeavynautaBrand } from '@/components/rivaldo/HeavynautaBrand';
-import { EpisodePickerModal } from '@/components/rivaldo/EpisodePickerModal';
+import { EpisodePickerControl } from '@/components/rivaldo/EpisodePickerControl';
+import { BgmPickerCard } from '@/components/rivaldo/BgmPickerCard';
+import { BulkControls } from '@/components/rivaldo/BulkControls';
 import { AgenticToggle } from '@/components/rivaldo/AgenticToggle';
-import { ChevronDown } from 'lucide-react';
 import { mergeQueuedJobIntoState, prepareDesktopPipelinePayload } from '@/lib/desktop/queue';
 import {
   AudioParams,
@@ -31,10 +28,7 @@ import {
 } from '@/lib/audio/types';
 import { getDesktopApi, isDesktopRuntime } from '@/lib/desktop/runtime';
 import { DesktopState } from '@/lib/desktop/types';
-import { buildRivaldoPreprodGroups, type RivaldoPreprodEpisode } from '@/lib/rivaldo-episodes';
-import { syncAllPreprodToRivaldo } from '@/lib/preprod-rivaldo-sync';
-import { normalizePreprodPauta, type PreprodPauta } from '@/lib/preprod-calendar';
-import { supabase } from '@/integrations/supabase/client';
+import type { RivaldoPreprodEpisode } from '@/lib/rivaldo-episodes';
 
 const PUBLIC_BASE_URL = import.meta.env.BASE_URL;
 const INTRO_PRESETS = [{ label: 'Heavynauta', url: `${PUBLIC_BASE_URL}presets/Heavynauta_Intro.mp3` }];
@@ -49,62 +43,13 @@ type SlotKey = 'bgm' | 'intro' | 'outro';
 type QueueFeedback = { type: 'info' | 'success' | 'error'; message: string } | null;
 
 const Rivaldo = () => {
-  const { materials, refreshMaterials } = useApp();
   const [files, setFiles] = useState<Record<SlotKey, File | null>>({ bgm: null, intro: null, outro: null });
   const [masterMode, setMasterMode] = useState<'single' | 'multi'>('single');
   const [masterFile, setMasterFile] = useState<File | null>(null);
   const [masterTracks, setMasterTracks] = useState<File[]>([]);
   const [filename, setFilename] = useState('');
-  const [preprodPautas, setPreprodPautas] = useState<PreprodPauta[]>([]);
-  const [selectedPreprodId, setSelectedPreprodId] = useState<string | null>(null);
-  const [pickerLoading, setPickerLoading] = useState(false);
-  const [pickerError, setPickerError] = useState<string | null>(null);
-
-  const loadPreprodPautas = useCallback(async () => {
-    setPickerLoading(true);
-    setPickerError(null);
-    const { data, error } = await supabase
-      .from('preprod_pautas')
-      .select('*')
-      .order('publication_date', { ascending: true })
-      .order('created_at', { ascending: true });
-    setPickerLoading(false);
-    if (error) {
-      setPickerError(`Falha ao carregar Pré-produção: ${error.message}`);
-      return;
-    }
-    setPreprodPautas((data || []).map(normalizePreprodPauta));
-  }, []);
-
-  // Pré-produção grava os espelhos depois do carregamento global inicial.
-  // Atualizar ao entrar no Rivaldo evita que a lista use um snapshot antigo.
-  useEffect(() => {
-    void loadPreprodPautas();
-    void syncAllPreprodToRivaldo()
-      .catch((error) => console.warn('[rivaldo] falha ao sincronizar pré-produção', error))
-      .finally(() => void refreshMaterials());
-  }, [loadPreprodPautas, refreshMaterials]);
-
-  const openEpisodePicker = useCallback(async () => {
-    setPickerOpen(true);
-    await loadPreprodPautas();
-    try {
-      await syncAllPreprodToRivaldo();
-    } catch (error) {
-      console.warn('[rivaldo] falha ao sincronizar pré-produção', error);
-    }
-    await refreshMaterials();
-  }, [loadPreprodPautas, refreshMaterials]);
-
-  const episodeGroups = useMemo(
-    () => buildRivaldoPreprodGroups(preprodPautas, materials),
-    [materials, preprodPautas],
-  );
+  const [selectedEpisode, setSelectedEpisode] = useState<RivaldoPreprodEpisode | null>(null);
   const rivaldo = useRivaldo();
-  const bulk = useRivaldoBulk();
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [bgmLibraryOpen, setBgmLibraryOpen] = useState(false);
   const [uploadToCloud, setUploadToCloud] = useState(true); // default ON per user preference
   const [audioParams, setAudioParams] = useState<AudioParams>({ ...DEFAULT_PARAMS });
   const [processingProfile, setProcessingProfile] = useState<ProcessingProfile>({ ...DEFAULT_PROCESSING_PROFILE });
@@ -116,17 +61,8 @@ const Rivaldo = () => {
   const desktopMode = isDesktopRuntime();
   const desktopApi = getDesktopApi();
 
-  // Find the matching material/episode for the selected filename
-  const selectedEpisode = useMemo(() => {
-    for (const group of episodeGroups) {
-      const found = group.items.find((item) => item.id === selectedPreprodId);
-      if (found) return found;
-    }
-    return null;
-  }, [episodeGroups, selectedPreprodId]);
-
   const selectEpisode = useCallback((episode: RivaldoPreprodEpisode) => {
-    setSelectedPreprodId(episode.id);
+    setSelectedEpisode(episode);
     setFilename(episode.value);
   }, []);
 
@@ -145,6 +81,12 @@ const Rivaldo = () => {
   const addUiLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setUiLogs((prev) => [...prev, { timestamp: Date.now(), message, type }].slice(-60));
   }, []);
+
+  const handleDesktopJobQueued = useCallback((job: DesktopState['jobs'][number]) => {
+    setDesktopState((prev) => mergeQueuedJobIntoState(prev, job));
+    setQueueFeedback({ type: 'success', message: `Job ${job.name} enfileirado.` });
+    addUiLog(`Job ${job.name} enfileirado.`, 'success');
+  }, [addUiLog]);
 
   const masterReady = masterMode === 'single' ? !!masterFile : masterTracks.length > 0;
   const allFilesReady = masterReady && files.bgm && files.intro && files.outro && filename.trim();
@@ -214,43 +156,20 @@ const Rivaldo = () => {
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 flex items-center gap-4 border-b border-border">
         <HeavynautaBrand compact />
-        <div className="flex-1 max-w-md ml-8">
-          <Label className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">
-            Nome do episódio
-          </Label>
-          <button
-            type="button"
-            onClick={() => void openEpisodePicker()}
-            className="w-full flex items-center justify-between gap-2 border-0 border-b border-border bg-transparent pb-2 pt-1 text-left text-sm font-mono hover:border-primary/60 focus:outline-none"
-            title="Selecionar episódio"
-          >
-            <span className={filename ? 'truncate' : 'truncate text-muted-foreground'}>
-              {filename || 'Selecione o episódio...'}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-          </button>
-        </div>
+        <EpisodePickerControl filename={filename} selectedId={selectedEpisode?.id ?? null} onSelect={selectEpisode} />
         <div className="ml-auto flex items-center gap-2">
           <AgenticToggle />
-          {bulk.isProcessing && (
-            <button
-              type="button"
-              onClick={() => setBulkOpen(true)}
-              className="flex items-center gap-2 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-xs font-mono text-primary hover:bg-primary/20 transition-colors"
-              title="Reabrir modal do bulk em andamento"
-            >
-              <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1, ease: 'linear' }}
-                className="w-3 h-3 border-2 border-primary/30 border-t-primary rounded-full"
-              />
-              <span className="truncate max-w-[160px]">{bulk.currentBatchName ?? 'Bulk em andamento'}</span>
-              <span className="font-semibold">{Math.round(bulk.progress)}%</span>
-            </button>
-          )}
-          <Button variant="outline" size="sm" onClick={() => setBulkOpen(true)} className="flex items-center gap-1.5">
-            <Layers className="w-4 h-4" /> Bulk 3.2
-          </Button>
+          <BulkControls
+            introFile={files.intro}
+            outroFile={files.outro}
+            audioParams={audioParams}
+            processingProfile={processingProfile}
+            desktopMode={desktopMode}
+            desktopState={desktopState}
+            desktopQueueAvailable={queueAvailable}
+            desktopQueueStatusMessage={queueStatusMessage}
+            onDesktopJobQueued={handleDesktopJobQueued}
+          />
         </div>
       </div>
 
@@ -259,49 +178,7 @@ const Rivaldo = () => {
           <MultiTrackMaster mode={masterMode} onModeChange={setMasterMode} singleFile={masterFile} onSingleFileChange={setMasterFile} multiFiles={masterTracks} onMultiFilesChange={setMasterTracks} processingProfile={processingProfile} disabled={isProcessing} />
 
           <div className="grid grid-cols-3 gap-4">
-            {/* BGM slot — backed by the library */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.1, duration: 0.4 }}
-              className={`relative group rounded-lg p-6 transition-all duration-200 bg-card hover:bg-accent/10 ${files.bgm ? 'ring-1 ring-primary/30' : ''}`}
-              style={{ boxShadow: '0 4px 20px -4px hsl(220 15% 0% / 0.5)' }}
-            >
-              <div className="absolute top-2 left-3">
-                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">BGM</span>
-              </div>
-              <div className="flex flex-col items-center gap-3 justify-center min-h-[80px]">
-                {files.bgm ? (
-                  <>
-                    <div className="w-8 h-8 rounded-full bg-primary/15 flex items-center justify-center"><Sparkles className="w-4 h-4 text-primary" /></div>
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-foreground truncate max-w-[180px]">{files.bgm.name}</p>
-                      <p className="text-xs text-muted-foreground font-mono mt-1">{(files.bgm.size / (1024 * 1024)).toFixed(1)} MB</p>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <Layers className="w-8 h-8 text-muted-foreground group-hover:text-primary transition-colors" />
-                    <div className="text-center">
-                      <p className="text-sm font-medium text-foreground">BGM</p>
-                      <p className="text-xs text-muted-foreground">A Trilha</p>
-                    </div>
-                  </>
-                )}
-                <Button size="sm" variant={files.bgm ? 'outline' : 'default'} onClick={() => setBgmLibraryOpen(true)}>
-                  {files.bgm ? 'Trocar BGM' : 'Selecionar BGM'}
-                </Button>
-              </div>
-              {files.bgm && (
-                <button
-                  onClick={() => handleFileChange('bgm', null)}
-                  className="absolute top-2 right-2 p-1 rounded-full bg-secondary hover:bg-destructive/20 transition-colors"
-                  aria-label="Remover BGM"
-                >
-                  <span className="text-xs">×</span>
-                </button>
-              )}
-            </motion.div>
+            <BgmPickerCard file={files.bgm} onFileChange={(file) => handleFileChange('bgm', file)} />
 
             {NON_MASTER_SLOTS.map((slot, index) => (
               <UploadSlot key={slot.key} label={slot.label} sublabel={slot.sublabel} file={files[slot.key]} onFileChange={(file) => handleFileChange(slot.key, file)} index={index + 2} presets={slot.presets} />
@@ -370,17 +247,6 @@ const Rivaldo = () => {
         </div>
       </div>
 
-      <BulkModal open={bulkOpen} onOpenChange={setBulkOpen} introFile={files.intro} outroFile={files.outro} audioParams={audioParams} processingProfile={processingProfile} desktopMode={desktopMode} desktopState={desktopState} desktopQueueAvailable={queueAvailable} desktopQueueStatusMessage={queueStatusMessage} onDesktopJobQueued={(job) => { setDesktopState((prev) => mergeQueuedJobIntoState(prev, job)); setQueueFeedback({ type: 'success', message: `Job ${job.name} enfileirado.` }); addUiLog(`Job ${job.name} enfileirado.`, 'success'); }} />
-      <EpisodePickerModal
-        open={pickerOpen}
-        onClose={() => setPickerOpen(false)}
-        onSelect={selectEpisode}
-        selectedId={selectedPreprodId}
-        groups={episodeGroups}
-        loading={pickerLoading}
-        error={pickerError}
-      />
-      <BgmLibraryModal open={bgmLibraryOpen} onOpenChange={setBgmLibraryOpen} onPick={(file) => handleFileChange('bgm', file)} />
     </div>
   );
 };

@@ -188,10 +188,15 @@ export default function PreProducao() {
     setEditingPauta(null);
   };
 
-  const refreshAndClose = async () => {
-    await loadPreprodPautas();
-    closeDialog();
-  };
+  const pickMonth = useCallback((nextMonth: Date) => {
+    setAnchor(nextMonth);
+    setView('month');
+  }, []);
+
+  const pickDay = useCallback((nextDay: Date) => {
+    setAnchor(nextDay);
+    setView('day');
+  }, []);
 
   const title = useMemo(() => {
     switch (view) {
@@ -263,17 +268,17 @@ export default function PreProducao() {
 
       <div className="rounded-lg border border-border bg-card p-4">
         {loadingPautas && <div className="mb-3 text-xs text-muted-foreground">Carregando pautas salvas…</div>}
-        {view === 'year' && <YearGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'quarter' && <QuarterGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={(d) => { setAnchor(d); setView('month'); }} />}
-        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} onMove={moveItem} />}
-        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={(d) => { setAnchor(d); setView('day'); }} onAdd={setNewPautaDate} onMove={moveItem} />}
+        {view === 'year' && <YearGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={pickMonth} />}
+        {view === 'quarter' && <QuarterGrid anchor={anchor} itemsByDate={pautasByDate} onPickMonth={pickMonth} />}
+        {view === 'month' && <MonthGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={pickDay} onAdd={setNewPautaDate} onMove={moveItem} />}
+        {view === 'week' && <WeekGrid anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onPickDay={pickDay} onAdd={setNewPautaDate} onMove={moveItem} />}
         {view === 'day' && <DayView anchor={anchor} itemsByDate={pautasByDate} onOpen={setEditingPauta} onAdd={setNewPautaDate} />}
       </div>
 
       <NewPautaDialog
         date={newPautaDate}
         item={editingPauta}
-        onClose={() => { void refreshAndClose(); }}
+        onClose={closeDialog}
         onSaved={upsertPreprodPauta}
       />
     </motion.div>
@@ -281,7 +286,7 @@ export default function PreProducao() {
 }
 
 // ---------- Year ----------
-function YearGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onPickMonth: (d: Date) => void }) {
+const YearGrid = memo(function YearGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onPickMonth: (d: Date) => void }) {
   const yearStart = startOfYear(anchor);
   const months = Array.from({ length: 12 }, (_, i) => addMonths(yearStart, i));
   return (
@@ -304,9 +309,9 @@ function YearGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByD
       })}
     </div>
   );
-}
+});
 
-function QuarterGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onPickMonth: (d: Date) => void }) {
+const QuarterGrid = memo(function QuarterGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onPickMonth: (d: Date) => void }) {
   const qs = startOfQuarter(anchor);
   const months = [qs, addMonths(qs, 1), addMonths(qs, 2)];
   return (
@@ -329,9 +334,9 @@ function QuarterGrid({ anchor, itemsByDate, onPickMonth }: { anchor: Date; items
       })}
     </div>
   );
-}
+});
 
-function MiniMonth({ month, itemsByDate = {} }: { month: Date; itemsByDate?: Record<string, PreprodPauta[]> }) {
+const MiniMonth = memo(function MiniMonth({ month, itemsByDate = {} }: { month: Date; itemsByDate?: Record<string, PreprodPauta[]> }) {
   const start = startOfWeek(startOfMonth(month), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
@@ -355,7 +360,7 @@ function MiniMonth({ month, itemsByDate = {} }: { month: Date; itemsByDate?: Rec
       })}
     </div>
   );
-}
+});
 
 function countItemsInMonth(month: Date, itemsByDate: Record<string, PreprodPauta[]>) {
   return Object.entries(itemsByDate).reduce((total, [dateKey, items]) => {
@@ -393,7 +398,7 @@ const PreprodCalendarItem = memo(function PreprodCalendarItem({ item, onOpen }: 
 });
 
 // ---------- Month ----------
-function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
+const MonthGrid = memo(function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
   const start = startOfWeek(startOfMonth(anchor), { weekStartsOn: 1 });
   const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
   return (
@@ -437,10 +442,10 @@ function MonthGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { 
       </div>
     </div>
   );
-}
+});
 
 // ---------- Week ----------
-function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
+const WeekGrid = memo(function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onPickDay: (d: Date) => void; onAdd: (d: Date) => void; onMove?: (id: string, newDate: Date) => void | Promise<void> }) {
   const start = startOfWeek(anchor, { weekStartsOn: 1 });
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   return (
@@ -477,10 +482,10 @@ function WeekGrid({ anchor, itemsByDate, onOpen, onPickDay, onAdd, onMove }: { a
       })}
     </div>
   );
-}
+});
 
 // ---------- Day ----------
-function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onAdd: (d: Date) => void }) {
+const DayView = memo(function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsByDate: Record<string, PreprodPauta[]>; onOpen: (item: PreprodPauta) => void; onAdd: (d: Date) => void }) {
   const items = itemsByDate[preprodDate(anchor)] || [];
   return (
     <div className="min-h-[400px] text-sm">
@@ -503,7 +508,7 @@ function DayView({ anchor, itemsByDate, onOpen, onAdd }: { anchor: Date; itemsBy
       </div>
     </div>
   );
-}
+});
 
 // ---------- New Pauta Dialog ----------
 type Step = 'kind' | 'release' | 'news_subject' | 'singles_pick' | 'research' | 'insumo' | 'config' | 'result' | 'titles' | 'description' | 'cover' | 'package';
@@ -1071,15 +1076,17 @@ function NewPautaDialog({
     toast.success(msg);
   };
 
-  const closeKeepingDraft = async () => {
-    if (pautaId) {
-      try { await persistData({ step }); } catch { /* tolerated */ }
-    }
+  const closeKeepingDraft = () => {
     onClose();
+    if (pautaId) {
+      void persistData({ step }).catch((error) => {
+        console.warn('[preprod] falha ao salvar rascunho ao fechar', error);
+      });
+    }
   };
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) void closeKeepingDraft(); // closing keeps the draft saved
+    if (!open) closeKeepingDraft(); // fecha primeiro; o rascunho continua salvando em segundo plano
   };
 
   return (
