@@ -11,10 +11,11 @@ import { EpisodePickerModal } from './EpisodePickerModal';
 interface EpisodePickerControlProps {
   filename: string;
   selectedId: string | null;
+  requestedId?: string | null;
   onSelect: (episode: RivaldoPreprodEpisode) => void;
 }
 
-export function EpisodePickerControl({ filename, selectedId, onSelect }: EpisodePickerControlProps) {
+export function EpisodePickerControl({ filename, selectedId, requestedId, onSelect }: EpisodePickerControlProps) {
   const { materials, refreshMaterials } = useApp();
   const [open, setOpen] = useState(false);
   const [pautas, setPautas] = useState<PreprodPauta[]>([]);
@@ -53,6 +54,15 @@ export function EpisodePickerControl({ filename, selectedId, onSelect }: Episode
   }, [loadPautas, refreshMirrors]);
 
   const groups = useMemo(() => buildRivaldoPreprodGroups(pautas, materials), [materials, pautas]);
+  const handledRequestedId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!requestedId || handledRequestedId.current === requestedId) return;
+    const episode = groups.flatMap((group) => group.items).find((item) => item.preprodPautaId === requestedId);
+    if (!episode) return;
+    handledRequestedId.current = requestedId;
+    onSelect(episode);
+  }, [groups, onSelect, requestedId]);
 
   const handleOpen = () => {
     setOpen(true);
