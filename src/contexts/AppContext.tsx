@@ -56,7 +56,7 @@ const defaultSettings: AppSettings = {
   theme_name: 'heavynauta',
   prompt_overrides_json: {},
   description_template_html: '',
-  ai_model: 'google/gemini-2.5-flash',
+  ai_model: 'deepseek/deepseek-v4-pro',
   google_query_templates_json: {},
 };
 

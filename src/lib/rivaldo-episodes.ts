@@ -17,6 +17,10 @@ export interface RivaldoPreprodEpisode {
   preprodPautaId: string;
   materialId?: string;
   repositoryUrl?: string | null;
+  genre?: string;
+  rawDownloadUrl?: string | null;
+  rawWebUrl?: string | null;
+  rawFilename?: string | null;
   isStandalone: true;
   searchText: string;
 }
@@ -67,6 +71,7 @@ export function buildRivaldoPreprodGroups(
     const weekId = format(weekStart, 'yyyy-MM-dd');
     const label = getPreprodLabel(pauta);
     const material = materialByPauta.get(pauta.id);
+    const raw = (pauta.data || {}).raw_asset as Record<string, unknown> | undefined;
 
     if (!groups.has(weekId)) {
       groups.set(weekId, {
@@ -85,6 +90,10 @@ export function buildRivaldoPreprodGroups(
       preprodPautaId: pauta.id,
       materialId: material?.id,
       repositoryUrl: material?.repository_url,
+      genre: String((pauta.data || {}).genre || '') || undefined,
+      rawDownloadUrl: typeof raw?.download_url === 'string' ? raw.download_url : null,
+      rawWebUrl: typeof raw?.web_url === 'string' ? raw.web_url : null,
+      rawFilename: typeof raw?.filename === 'string' ? raw.filename : null,
       isStandalone: true,
       searchText: searchablePreprodText(pauta, label),
     });

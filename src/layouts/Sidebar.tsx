@@ -1,6 +1,4 @@
-import {
-  LayoutDashboard, Disc, Palette, Mic, Calendar, Settings, BarChart3, Hammer
-} from 'lucide-react';
+import { LayoutDashboard, Mic, Settings, Hammer } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import heavynautaLogo from '@/assets/heavynauta-logo.jpg';
 import { useLocation } from 'react-router-dom';
@@ -20,11 +18,8 @@ import {
 
 const navItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
-  { title: 'Lançamentos', url: '/releases', icon: Disc },
-  { title: 'Pré-produção', url: '/pre-producao', icon: Hammer },
+  { title: 'Produção Editorial', url: '/pre-producao', icon: Hammer },
   { title: 'Rivaldo', url: '/rivaldo', icon: Mic },
-  { title: 'Calendário', url: '/calendar', icon: Calendar },
-  { title: 'Analytics', url: '/analytics', icon: BarChart3 },
   { title: 'Configurações', url: '/settings', icon: Settings },
 ];
 
@@ -41,7 +36,7 @@ export function AppSidebar() {
           {!collapsed && (
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-tight text-gradient-lavender">
-                Snakepit
+                Heavynauta
               </span>
               <span className="text-[10px] text-muted-foreground">
                 Heavynauta Workstation
@@ -56,7 +51,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Produção</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.slice(0, 4).map((item) => (
+              {navItems.slice(0, 3).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location.pathname === item.url}>
                     <NavLink
@@ -79,7 +74,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Sistema</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {navItems.slice(4).map((item) => (
+              {navItems.slice(3).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={location.pathname === item.url}>
                     <NavLink
@@ -101,7 +96,7 @@ export function AppSidebar() {
       <SidebarFooter className="p-4">
         {!collapsed && (
           <p className="text-[10px] text-muted-foreground text-center">
-            Snakepit 2.0 · Fase 1
+            Heavynauta · Produção Editorial
           </p>
         )}
       </SidebarFooter>

@@ -14,6 +14,7 @@ interface Props {
   onOpenChange: (v: boolean) => void;
   /** When provided, modal acts as a picker — clicking "Usar" returns the file. */
   onPick?: (file: File, track: BgmTrack) => void;
+  preferredGenres?: string[];
 }
 
 function formatDuration(secs: number | null): string {
@@ -23,7 +24,7 @@ function formatDuration(secs: number | null): string {
   return `${m}:${s}`;
 }
 
-export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
+export function BgmLibraryModal({ open, onOpenChange, onPick, preferredGenres = [] }: Props) {
   const { toast } = useToast();
   const { releases } = useApp();
   const [tracks, setTracks] = useState<BgmTrack[]>([]);
@@ -58,6 +59,13 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
     for (const t of tracks) for (const g of t.genres) if (g) set.add(g);
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [tracks]);
+
+  useEffect(() => {
+    if (!open || preferredGenres.length === 0 || allGenres.length === 0) return;
+    const wanted = new Set(preferredGenres.map((genre) => genre.toLowerCase()));
+    const matches = allGenres.filter((genre) => wanted.has(genre.toLowerCase()));
+    if (matches.length) setActiveGenres(new Set(matches));
+  }, [allGenres, open, preferredGenres]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -242,7 +250,7 @@ export function BgmLibraryModal({ open, onOpenChange, onPick }: Props) {
           <DialogTitle className="flex items-center gap-2 text-base">
             <Music className="w-4 h-4 text-primary" /> Biblioteca de BGM
           </DialogTitle>
-          <DialogDescription className="text-xs">Envie, organize por gêneros e selecione a trilha do episódio.</DialogDescription>
+          <DialogDescription className="text-xs">Envie, organize por gêneros e selecione a trilha do episódio.{preferredGenres.length ? ` Sugestão: ${preferredGenres.join(', ')}.` : ''}</DialogDescription>
         </DialogHeader>
 
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_320px] flex-1 min-h-0 overflow-y-auto md:overflow-hidden">

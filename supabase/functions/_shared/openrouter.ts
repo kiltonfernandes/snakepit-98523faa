@@ -1,26 +1,21 @@
 // Shared OpenRouter client for all AI edge functions.
-// Tries a chain of free models first (5s deadline to first byte each), then
-// falls back to the paid default. Supports optional openrouter:web_search tool.
+// DeepSeek V4 Pro is the primary model and GPT-OSS 120B is the fallback.
 //
 // Progress is broadcast back to clients as SSE meta events of the form:
 //   data: {"_meta":{"type":"trying"|"fallback"|"selected","model":"...","reason":"..."}}
 // The client should ignore data lines whose JSON has a top-level "_meta" key.
 
-export const OPENROUTER_FALLBACK_MODEL = "deepseek/deepseek-v4-flash";
-export const OPENROUTER_FREE_CHAIN = [
-  "moonshotai/kimi-k2.6:free",
-  "nvidia/nemotron-3-ultra-550b-a55b:free",
-  "qwen/qwen3-next-80b-a3b-instruct:free",
-  "sourceful/riverflow-v2.5-pro:free",
-  "sourceful/riverflow-v2.5-fast:free",
-];
+export const OPENROUTER_PRIMARY_MODEL = "deepseek/deepseek-v4-pro";
+export const OPENROUTER_FALLBACK_MODEL = "openai/gpt-oss-120b";
+/** Kept for older callers. It now represents the approved two-model chain. */
+export const OPENROUTER_FREE_CHAIN = [OPENROUTER_PRIMARY_MODEL, OPENROUTER_FALLBACK_MODEL];
 /** Default per-model "time to first byte" deadline. */
 const DEFAULT_DEADLINE_MS = 5000;
 /** Deadline for the paid fallback model — must not be aborted aggressively,
  *  especially when web_search tools are in use. */
 const FALLBACK_DEADLINE_MS = 90_000;
 /** Back-compat export (old code imports OPENROUTER_MODEL). */
-export const OPENROUTER_MODEL = OPENROUTER_FALLBACK_MODEL;
+export const OPENROUTER_MODEL = OPENROUTER_PRIMARY_MODEL;
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
 export interface CallOpenRouterOptions {
@@ -52,10 +47,10 @@ function buildSystem(system: string | undefined, bannedTerms?: string[]) {
 
 function buildModelChain(opts: CallOpenRouterOptions): string[] {
   if (Array.isArray(opts.models) && opts.models.length > 0) return opts.models;
-  // web_search is an OpenRouter-side tool that not all free models accept.
-  // To avoid silent failures, skip free chain when web search is on.
-  if (opts.webSearch) return [OPENROUTER_FALLBACK_MODEL];
-  return [...OPENROUTER_FREE_CHAIN, OPENROUTER_FALLBACK_MODEL];
+  // Pesquisa editorial nova usa Sonar diretamente. Esta opção permanece só
+  // para compatibilidade temporária com rotas antigas.
+  if (opts.webSearch) return [OPENROUTER_PRIMARY_MODEL, OPENROUTER_FALLBACK_MODEL];
+  return OPENROUTER_FREE_CHAIN;
 }
 
 function buildRequestBody(model: string, opts: CallOpenRouterOptions) {
@@ -83,18 +78,18 @@ function postOpenRouter(model: string, opts: CallOpenRouterOptions, signal: Abor
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": "https://snakepit.lovable.app",
-      "X-Title": "Snakepit",
+      "HTTP-Referer": "https://heavynauta.app",
+      "X-Title": "Heavynauta",
     },
     body: JSON.stringify(buildRequestBody(model, opts)),
     signal,
   });
 }
 
-/** Back-compat: single-shot call against the fallback model (no chain). */
+/** Back-compat: single-shot call against the approved primary model. */
 export async function callOpenRouter(opts: CallOpenRouterOptions): Promise<Response> {
   const ctl = new AbortController();
-  return await postOpenRouter(OPENROUTER_FALLBACK_MODEL, opts, ctl.signal);
+  return await postOpenRouter(OPENROUTER_PRIMARY_MODEL, opts, ctl.signal);
 }
 
 const encoder = new TextEncoder();

@@ -93,8 +93,21 @@ Deno.serve(async (req) => {
   }
   const { episodeId, reports } = reqParsed.data;
 
+  let extraInstructions = '';
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (serviceKey) {
+    const admin = createClient(supaUrl, serviceKey);
+    const { data: appSettings } = await admin
+      .from('app_settings')
+      .select('prompt_overrides_json')
+      .eq('singleton_id', 1)
+      .maybeSingle();
+    const overrides = (appSettings as { prompt_overrides_json?: Record<string, unknown> } | null)?.prompt_overrides_json;
+    if (typeof overrides?.rivaldo_treatment_v1 === 'string') extraInstructions = overrides.rivaldo_treatment_v1;
+  }
+
   // 3) Chamada única ao OpenRouter (structured output, sem retry, com timeout).
-  const messages = buildEpisodePlannerMessages(episodeId, reports);
+  const messages = buildEpisodePlannerMessages(episodeId, reports, extraInstructions);
   const jsonSchema = zodToJsonSchema(EpisodePlanV1Schema, { name: 'EpisodePlanV1', $refStrategy: 'none' });
   const openrouterBody = {
     model: PLANNER_MODEL,

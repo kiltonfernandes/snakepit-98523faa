@@ -7,9 +7,10 @@ import { BgmLibraryModal } from './BgmLibraryModal';
 interface BgmPickerCardProps {
   file: File | null;
   onFileChange: (file: File | null) => void;
+  suggestedGenres?: string[];
 }
 
-export function BgmPickerCard({ file, onFileChange }: BgmPickerCardProps) {
+export function BgmPickerCard({ file, onFileChange, suggestedGenres = [] }: BgmPickerCardProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -56,7 +57,7 @@ export function BgmPickerCard({ file, onFileChange }: BgmPickerCardProps) {
           </button>
         )}
       </motion.div>
-      <BgmLibraryModal open={open} onOpenChange={setOpen} onPick={(nextFile) => onFileChange(nextFile)} />
+      <BgmLibraryModal open={open} onOpenChange={setOpen} onPick={(nextFile) => onFileChange(nextFile)} preferredGenres={suggestedGenres} />
     </>
   );
 }

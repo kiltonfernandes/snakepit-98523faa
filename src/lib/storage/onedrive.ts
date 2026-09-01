@@ -65,6 +65,11 @@ export function buildOneDriveFolderPath(opts: { episodeDate?: string; isStandalo
     : buildEpisodeFolderPath(opts.episodeDate);
 }
 
+/** Raw recordings stay beside the editorial item until the final render exists. */
+export function buildEditorialRawFolderPath(pautaId: string): string {
+  return `Heavynauta/Episodios/${pautaId}/raw`;
+}
+
 /** Sanitizes a filename for OneDrive (no <>:"/\|?*) and strips control chars. */
 export function sanitizeFilename(name: string): string {
   const cleaned = name

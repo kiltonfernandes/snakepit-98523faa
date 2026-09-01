@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, HashRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,15 +10,9 @@ import { AiCallProgressProvider } from "@/contexts/AiCallProgressContext";
 import { AiCallProgressModal } from "@/components/AiCallProgressModal";
 import { AppLayout } from "@/layouts/AppLayout";
 import Dashboard from "@/pages/Dashboard";
-import Releases from "@/pages/Releases";
-import Pautas from "@/pages/Pautas";
-import PautasStandalone from "@/pages/PautasStandalone";
-import Materials from "@/pages/Materials";
-import PreProducao from "@/pages/PreProducao";
+import ProductionEditorial from "@/pages/ProductionEditorial";
 import Rivaldo from "@/pages/Rivaldo";
-import CalendarView from "@/pages/CalendarView";
 import Settings from "@/pages/Settings";
-import ReleaseAnalytics from "@/pages/ReleaseAnalytics";
 import PublicWeekView from "@/pages/PublicWeekView";
 import NotFound from "@/pages/NotFound";
 
@@ -39,14 +33,14 @@ const App = () => (
         <Routes>
           <Route element={<AppLayout />}>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/releases" element={<Releases />} />
-            <Route path="/pre-producao" element={<PreProducao />} />
-            <Route path="/pautas" element={<PautasStandalone />} />
-            <Route path="/pautas-legacy" element={<Pautas />} />
-            <Route path="/materials" element={<Materials />} />
+            <Route path="/pre-producao" element={<ProductionEditorial />} />
+            <Route path="/releases" element={<Navigate to="/pre-producao" replace />} />
+            <Route path="/pautas" element={<Navigate to="/pre-producao" replace />} />
+            <Route path="/pautas-legacy" element={<Navigate to="/pre-producao" replace />} />
+            <Route path="/materials" element={<Navigate to="/pre-producao" replace />} />
             <Route path="/rivaldo" element={<Rivaldo />} />
-            <Route path="/calendar" element={<CalendarView />} />
-            <Route path="/analytics" element={<ReleaseAnalytics />} />
+            <Route path="/calendar" element={<Navigate to="/pre-producao" replace />} />
+            <Route path="/analytics" element={<Navigate to="/pre-producao" replace />} />
             <Route path="/settings" element={<Settings />} />
           </Route>
           <Route path="/week/:weekId" element={<PublicWeekView />} />
