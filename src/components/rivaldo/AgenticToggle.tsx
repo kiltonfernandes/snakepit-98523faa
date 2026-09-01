@@ -8,7 +8,7 @@ import { useRivaldo } from '@/contexts/RivaldoContext';
 /**
  * Toggle + status pill do Rivaldo Agentic V1.
  *
- * "Agentic V1 habilitado" = flag ON. "Agentic executado" só aparece após
+ * A IA do Rivaldo começa desligada. "Agentic V1 habilitado" = flag ON. "Agentic executado" só aparece após
  * requestId real + plano validado + pelo menos 1 operação aplicada.
  * Em fallback, o pill mostra "Concluído com processador legado".
  */
@@ -39,7 +39,7 @@ export function AgenticToggle() {
       <div className="flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3 py-1.5">
         <FlaskConical className="w-3.5 h-3.5 text-primary" />
         <Label htmlFor="rivaldo-agentic" className="text-xs font-medium cursor-pointer">
-          Agentic V1 <span className="text-muted-foreground">(beta)</span>
+          IA do Rivaldo <span className="text-muted-foreground">(desligada por padrão)</span>
         </Label>
         <Switch id="rivaldo-agentic" checked={enabled} onCheckedChange={handleChange} />
         {enabled && agenticStatus === 'enabled_idle' && <Sparkles className="w-3.5 h-3.5 text-primary" />}
