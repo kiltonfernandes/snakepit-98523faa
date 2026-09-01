@@ -5,6 +5,7 @@ import { TARGET, POLICY } from './schemas.ts';
 export function buildEpisodePlannerMessages(
   episodeId: string,
   reports: AudioAnalysisReportV2[],
+  extraInstructions = '',
 ) {
   const system = `Você é o planejador Rivaldo Agentic V1 para voz de podcast.
 Devolva EXCLUSIVAMENTE JSON válido do EpisodePlanV1, com um trackPlan por report enviado.
@@ -47,7 +48,8 @@ Regras:
 - Regiões em segundos, startSec < endSec, dentro de [0, source.durationSec].
 - event_attenuate deve referenciar um finding do mesmo report.
 - Se a track já está no alvo, retorne operations vazias para ela.
-- Nunca invente estágios ou operações fora da lista.`;
+- Nunca invente estágios ou operações fora da lista.
+${extraInstructions ? `\nDIRETRIZES EDITÁVEIS DA EQUIPE:\n${extraInstructions}` : ''}`;
 
   const user = `EPISÓDIO: ${episodeId}
 RELATÓRIOS COM FINDINGS AGRUPADOS (v2, ${reports.length} track${reports.length > 1 ? 's' : ''}):
