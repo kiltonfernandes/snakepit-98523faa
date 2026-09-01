@@ -34,6 +34,7 @@ import {
   isSpotifyUrl,
   isTitleLocked,
   selectedEditorialTitle,
+  shuffleEditorialQueue,
   type EditorialPautaLike,
   type EditorialTitle,
 } from '@/lib/editorial-queue';
@@ -57,7 +58,7 @@ function dateLabel(date: string) {
 }
 
 function normalizeGenre(value: string) {
-  return value.toLocaleLowerCase('pt-BR').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  return value.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 function matchingBgm(genre: string, tracks: BgmTrack[]) {
@@ -267,7 +268,12 @@ export default function ProductionEditorial() {
         <EditorialCalendar month={month} items={automaticPautas} materials={materialByPauta} onOpen={setSelected} />
       )}
 
-      <QueueDialog open={queueOpen} onOpenChange={setQueueOpen} initialGenres={Array.from(new Set(tracks.flatMap((track) => track.genres))).sort()} onSaved={async () => { await load(); await requestProcessing(); }} />
+      <QueueDialog
+        open={queueOpen}
+        onOpenChange={(next) => { setQueueOpen(next); if (next) void load(); }}
+        bgmTracks={tracks}
+        onSaved={async () => { await load(); await requestProcessing(); }}
+      />
       <EpisodeDialog
         item={selected}
         material={selected ? materialByPauta.get(selected.id) || null : null}
@@ -322,12 +328,12 @@ function EditorialCalendar({ month, items, materials, onOpen }: { month: Date; i
   return <div className="rounded-xl border border-border bg-card p-3"><div className="mb-2 grid grid-cols-7 gap-1">{['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map((day) => <div key={day} className="py-1 text-center text-xs font-semibold text-muted-foreground">{day}</div>)}</div><div className="grid grid-cols-7 gap-1">{days.map((day) => { const key = format(day, 'yyyy-MM-dd'); const dateItems = byDate[key] || []; return <div key={key} className={cn('min-h-32 rounded-lg border border-border p-1.5', !isSameMonth(day, month) && 'opacity-35', isToday(day) && 'border-primary')}><div className={cn('mb-1 text-xs font-semibold', isToday(day) && 'text-primary')}>{format(day, 'd')}</div><div className="space-y-1">{dateItems.slice(0, 2).map((item) => <EditorialCard key={item.id} item={item} material={materials.get(item.id) || null} onOpen={onOpen} compact />)}{dateItems.length > 2 && <p className="px-1 text-[10px] text-muted-foreground">+{dateItems.length - 2} itens</p>}</div></div>; })}</div></div>;
 }
 
-function QueueDialog({ open, onOpenChange, initialGenres, onSaved }: { open: boolean; onOpenChange: (value: boolean) => void; initialGenres: string[]; onSaved: () => Promise<void> }) {
+function QueueDialog({ open, onOpenChange, bgmTracks, onSaved }: { open: boolean; onOpenChange: (value: boolean) => void; bgmTracks: BgmTrack[]; onSaved: () => Promise<void> }) {
   const [startDate, setStartDate] = useState(() => format(new Date(), 'yyyy-MM-dd'));
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [rows, setRows] = useState([{ artist: '', album: '', genre: '' }]);
   const [saving, setSaving] = useState(false);
-  const genres = useMemo(() => Array.from(new Set([...initialGenres, ...rows.map((row) => row.genre).filter(Boolean)])).sort((a, b) => a.localeCompare(b)), [initialGenres, rows]);
+  const genres = useMemo(() => Array.from(new Set([...bgmTracks.flatMap((track) => track.genres), ...rows.map((row) => row.genre).filter(Boolean)])).sort((a, b) => a.localeCompare(b)), [bgmTracks, rows]);
 
   const toggleWeekday = (day: number) => setWeekdays((current) => current.includes(day) ? current.filter((value) => value !== day) : [...current, day]);
   const changeRow = (index: number, field: 'artist' | 'album' | 'genre', value: string) => setRows((current) => current.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
@@ -336,23 +342,67 @@ function QueueDialog({ open, onOpenChange, initialGenres, onSaved }: { open: boo
   const save = async () => {
     const albums = rows.map((row) => ({ artist: row.artist.trim(), album: row.album.trim(), genre: row.genre.trim() })).filter((row) => row.artist && row.album);
     if (!startDate || weekdays.length === 0 || albums.length === 0) { toast.error('Informe data inicial, dias de publicação e pelo menos uma banda com álbum.'); return; }
+    const pendingBgm = albums.filter((album) => matchingBgm(album.genre, bgmTracks).length === 0);
+    const eligibleAlbums = albums.filter((album) => matchingBgm(album.genre, bgmTracks).length > 0);
+    if (eligibleAlbums.length === 0) { toast.error('Cadastre um BGM para o gênero informado antes de criar a pauta.'); return; }
     setSaving(true);
     try {
-      const dates = distributePublicationDates(startDate, weekdays, albums.length);
-      const inserts = albums.map((album, index) => ({ publication_date: dates[index], kind: 'review', status: 'planned', data: buildEditorialQueueData(album, index + 1) }));
+      const dates = distributePublicationDates(startDate, weekdays, eligibleAlbums.length);
+      const shuffledAlbums = shuffleEditorialQueue(eligibleAlbums);
+      const inserts = shuffledAlbums.map((album, index) => ({ publication_date: dates[index], kind: 'review', status: 'planned', data: buildEditorialQueueData(album, index + 1) }));
       const { error } = await supabase.from('preprod_pautas' as any).insert(inserts as any);
       if (error) throw error;
       const { error: processError } = await supabase.functions.invoke('process-editorial-queue', { body: { action: 'reconcile' } });
       if (processError) console.warn('[editorial] fila salva sem disparo imediato', processError.message);
-      toast.success(`${albums.length} álbuns adicionados. As três primeiras pautas começaram a ser preparadas.`);
-      setRows([{ artist: '', album: '', genre: '' }]);
-      onOpenChange(false);
+      if (pendingBgm.length > 0) {
+        setRows(pendingBgm);
+        toast.warning(`${eligibleAlbums.length} álbum(ns) adicionados. ${pendingBgm.length} aguardam BGM no Rivaldo.`);
+      } else {
+        toast.success(`${eligibleAlbums.length} álbuns adicionados. As três primeiras pautas começaram a ser preparadas.`);
+        setRows([{ artist: '', album: '', genre: '' }]);
+        onOpenChange(false);
+      }
       await onSaved();
     } catch (error) { toast.error(error instanceof Error ? error.message : 'Falha ao salvar a fila.'); }
     finally { setSaving(false); }
   };
 
-  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-4xl"><DialogHeader><DialogTitle>Adicionar álbuns à fila</DialogTitle><DialogDescription>Informe somente banda, álbum e gênero. As datas serão distribuídas na ordem da lista.</DialogDescription></DialogHeader><div className="grid gap-4 md:grid-cols-[220px_1fr]"><div className="space-y-4 rounded-lg border border-border bg-muted/20 p-3"><div className="space-y-1.5"><Label>Data inicial</Label><Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></div><div className="space-y-2"><Label>Dias de publicação</Label><div className="flex flex-wrap gap-1.5">{WEEKDAYS.map((day) => <Button key={day.value} type="button" size="sm" variant={weekdays.includes(day.value) ? 'default' : 'outline'} className="h-8 px-2 text-xs" onClick={() => toggleWeekday(day.value)}>{day.label}</Button>)}</div></div><p className="text-xs text-muted-foreground">Um álbum por dia selecionado. A primeira data não permitida avança para o próximo dia disponível.</p></div><div className="space-y-2"><div className="grid grid-cols-[1fr_1fr_1fr_34px] gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"><span>Banda</span><span>Álbum</span><span>Gênero</span><span /></div><ScrollArea className="h-72 rounded-lg border border-border"><div className="space-y-2 p-2">{rows.map((row, index) => <div key={index} className="grid grid-cols-[1fr_1fr_1fr_34px] gap-2"><Input value={row.artist} onChange={(event) => changeRow(index, 'artist', event.target.value)} placeholder="Banda" /><Input value={row.album} onChange={(event) => changeRow(index, 'album', event.target.value)} placeholder="Álbum" /><Input value={row.genre} onChange={(event) => changeRow(index, 'genre', event.target.value)} placeholder="Gênero" list="editorial-genre-options" /><Button type="button" variant="ghost" size="icon" disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}>×</Button></div>)}</div></ScrollArea><datalist id="editorial-genre-options">{genres.map((genre) => <option key={genre} value={genre} />)}</datalist><div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setRows((current) => [...current, { artist: '', album: '', genre: '' }])}><Plus className="mr-1 h-3.5 w-3.5" /> Linha</Button>{genres.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => applyGenreToBlank(genres[0])}>Aplicar “{genres[0]}” nas linhas vazias</Button>}</div></div></div><DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar fila</Button></DialogFooter></DialogContent></Dialog>;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>Adicionar álbuns à fila</DialogTitle>
+          <DialogDescription>Informe somente banda, álbum e gênero. Ao salvar, os álbuns serão sorteados antes de receberem as datas de publicação.</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 md:grid-cols-[220px_1fr]">
+          <div className="space-y-4 rounded-lg border border-border bg-muted/20 p-3">
+            <div className="space-y-1.5"><Label>Data inicial</Label><Input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></div>
+            <div className="space-y-2"><Label>Dias de publicação</Label><div className="flex flex-wrap gap-1.5">{WEEKDAYS.map((day) => <Button key={day.value} type="button" size="sm" variant={weekdays.includes(day.value) ? 'default' : 'outline'} className="h-8 px-2 text-xs" onClick={() => toggleWeekday(day.value)}>{day.label}</Button>)}</div></div>
+            <p className="text-xs text-muted-foreground">Um álbum por dia selecionado. A primeira data não permitida avança para o próximo dia disponível.</p>
+          </div>
+          <div className="space-y-2">
+            <div className="grid grid-cols-[1fr_1fr_1fr_34px] gap-2 px-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"><span>Banda</span><span>Álbum</span><span>Gênero</span><span /></div>
+            <ScrollArea className="h-72 rounded-lg border border-border">
+              <div className="space-y-2 p-2">
+                {rows.map((row, index) => {
+                  const hasAlbum = Boolean(row.artist.trim() && row.album.trim());
+                  const supported = matchingBgm(row.genre, bgmTracks).length > 0;
+                  const needsBgm = hasAlbum && !supported;
+                  return <div key={index} className={cn('rounded-md p-1', needsBgm && 'bg-amber-500/10')}>
+                    <div className="grid grid-cols-[1fr_1fr_1fr_34px] gap-2"><Input value={row.artist} onChange={(event) => changeRow(index, 'artist', event.target.value)} placeholder="Banda" /><Input value={row.album} onChange={(event) => changeRow(index, 'album', event.target.value)} placeholder="Álbum" /><Input value={row.genre} onChange={(event) => changeRow(index, 'genre', event.target.value)} placeholder="Gênero" list="editorial-genre-options" /><Button type="button" variant="ghost" size="icon" disabled={rows.length === 1} onClick={() => setRows((current) => current.filter((_, rowIndex) => rowIndex !== index))}>×</Button></div>
+                    {needsBgm && <p className="px-1 pt-1 text-[10px] text-amber-700 dark:text-amber-300">{row.genre.trim() ? `BGM para “${row.genre.trim()}” ainda não está na biblioteca do Rivaldo. Esta pauta não será criada.` : 'Escolha um gênero e cadastre um BGM correspondente no Rivaldo antes de criar a pauta.'}</p>}
+                  </div>;
+                })}
+              </div>
+            </ScrollArea>
+            <datalist id="editorial-genre-options">{genres.map((genre) => <option key={genre} value={genre} />)}</datalist>
+            <div className="flex flex-wrap gap-2"><Button type="button" variant="outline" size="sm" onClick={() => setRows((current) => [...current, { artist: '', album: '', genre: '' }])}><Plus className="mr-1 h-3.5 w-3.5" /> Linha</Button>{genres.length > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => applyGenreToBlank(genres[0])}>Aplicar “{genres[0]}” nas linhas vazias</Button>}</div>
+          </div>
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button><Button disabled={saving} onClick={save}>{saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Salvar fila</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 function EpisodeDialog({ item, material, genres, suggestedBgms, onClose, onUpdate, onUploadRaw, onSaveSpotify, onRegenerateTitles, onOpenRivaldo }: { item: QueueRow | null; material: EpisodeMaterial | null; genres: string[]; suggestedBgms: BgmTrack[]; onClose: () => void; onUpdate: (row: QueueRow, patch: Record<string, unknown>, status?: string) => Promise<QueueRow>; onUploadRaw: (row: QueueRow, file: File, onProgress: (percent: number) => void) => Promise<void>; onSaveSpotify: (row: QueueRow, spotifyLink: string) => Promise<void>; onRegenerateTitles: (row: QueueRow, titleIndex?: number) => Promise<void>; onOpenRivaldo: (row: QueueRow) => void }) {
