@@ -1,11 +1,11 @@
 // Shared OpenRouter client for all AI edge functions.
-// DeepSeek V4 Pro is the primary model and GPT-OSS 120B is the fallback.
+// DeepSeek V4 Flash 0731 is the primary model and GPT-OSS 120B is the fallback.
 //
 // Progress is broadcast back to clients as SSE meta events of the form:
 //   data: {"_meta":{"type":"trying"|"fallback"|"selected","model":"...","reason":"..."}}
 // The client should ignore data lines whose JSON has a top-level "_meta" key.
 
-export const OPENROUTER_PRIMARY_MODEL = "deepseek/deepseek-v4-pro";
+export const OPENROUTER_PRIMARY_MODEL = "deepseek/deepseek-v4-flash-0731";
 export const OPENROUTER_FALLBACK_MODEL = "openai/gpt-oss-120b";
 /** Kept for older callers. It now represents the approved two-model chain. */
 export const OPENROUTER_FREE_CHAIN = [OPENROUTER_PRIMARY_MODEL, OPENROUTER_FALLBACK_MODEL];
@@ -174,6 +174,7 @@ export async function callOpenRouterText(opts: CallOpenRouterOptions): Promise<{
   text: string;
   usage?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number };
   model?: string;
+  citations?: string[];
 }> {
   const chain = buildModelChain(opts);
   const deadlineMs = opts.deadlineMs ?? DEFAULT_DEADLINE_MS;
@@ -198,7 +199,7 @@ export async function callOpenRouterText(opts: CallOpenRouterOptions): Promise<{
       let text = "";
       if (typeof choice === "string") text = choice;
       else if (Array.isArray(choice)) text = choice.map((c: any) => (typeof c === "string" ? c : c?.text || "")).join("");
-      return { text, usage: data?.usage, model };
+      return { text, usage: data?.usage, model, citations: Array.isArray(data?.citations) ? data.citations.filter((citation: unknown): citation is string => typeof citation === "string") : undefined };
     } catch (e: any) {
       clearTimeout(timer);
       lastErr = e;
