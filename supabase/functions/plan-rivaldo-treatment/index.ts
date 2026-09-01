@@ -20,13 +20,8 @@ const MAX_OUTPUT_TOKENS = 8192;
 const REQUEST_TIMEOUT_MS = 30_000;
 const TEMPERATURE = 0.15;                 // dentro de [0.1, 0.15]
 
-// Allowlist de modelos aceitos (env `RIVALDO_PLANNER_MODEL_ALLOWLIST`
-// vírgula-separada sobrescreve; default = deepseek-v4-pro apenas).
-const DEFAULT_ALLOWLIST = ['deepseek/deepseek-v4-pro'];
-const ALLOWLIST = (Deno.env.get('RIVALDO_PLANNER_MODEL_ALLOWLIST') ?? DEFAULT_ALLOWLIST.join(','))
-  .split(',').map((s) => s.trim()).filter(Boolean);
-const REQUESTED_MODEL = Deno.env.get('RIVALDO_AUDIO_PLANNER_MODEL') ?? DEFAULT_ALLOWLIST[0];
-const PLANNER_MODEL = ALLOWLIST.includes(REQUESTED_MODEL) ? REQUESTED_MODEL : DEFAULT_ALLOWLIST[0];
+// O tratamento de áudio usa o endpoint aprovado pelo OpenRouter.
+const PLANNER_MODEL = 'deepseek/deepseek-v4-flash-0731';
 
 // CORS restrito aos domínios do Snakepit (env `RIVALDO_PLANNER_CORS_ORIGINS`
 // vírgula-separada sobrescreve).

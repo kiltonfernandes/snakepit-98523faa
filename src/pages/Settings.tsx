@@ -13,8 +13,8 @@ import { toast } from 'sonner';
 
 const PROMPTS = [
   { key: 'album_research_v1', title: 'Pesquisa do álbum', provider: 'Perplexity Sonar', description: 'Diretrizes extras para a coleta factual e desambiguação do release.', trigger: 'Quando um dos três próximos álbuns entra na fila de produção.' },
-  { key: 'review_complete_v1', title: 'Resenha completa', provider: 'DeepSeek V4 Pro · GPT-OSS fallback', description: 'Diretrizes extras para pauta, auditoria interna, descrição e três títulos.', trigger: 'Depois que a pesquisa factual está disponível.' },
-  { key: 'rivaldo_treatment_v1', title: 'Tratamento de áudio Rivaldo', provider: 'DeepSeek V4 Pro', description: 'Diretrizes extras para o planejador técnico de voz.', trigger: 'Quando o Rivaldo analisa o áudio raw selecionado.' },
+  { key: 'review_complete_v1', title: 'Resenha completa', provider: 'DeepSeek V4 Flash 0731 · GPT-OSS fallback', description: 'Diretrizes extras para pauta, auditoria interna, descrição e três títulos.', trigger: 'Depois que a pesquisa factual está disponível.' },
+  { key: 'rivaldo_treatment_v1', title: 'Tratamento de áudio Rivaldo', provider: 'DeepSeek V4 Flash 0731', description: 'Diretrizes extras para o planejador técnico de voz.', trigger: 'Quando o Rivaldo analisa o áudio raw selecionado.' },
 ] as const;
 
 type PromptKey = typeof PROMPTS[number]['key'];
