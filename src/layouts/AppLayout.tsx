@@ -28,7 +28,7 @@ export function AppLayout() {
             <SidebarTrigger className="mr-4" />
             <Breadcrumb className="ml-auto" aria-label="Versão da aplicação">
               <BreadcrumbList className="gap-1.5 text-xs">
-                <BreadcrumbItem className="text-muted-foreground">Snakepit</BreadcrumbItem>
+                <BreadcrumbItem className="text-muted-foreground">Heavynauta</BreadcrumbItem>
                 <BreadcrumbSeparator className="[&>svg]:h-3 [&>svg]:w-3" />
                 <BreadcrumbItem>
                   <BreadcrumbPage className="rounded-md border border-primary/25 bg-primary/10 px-2 py-1 font-mono text-xs font-semibold text-primary">
