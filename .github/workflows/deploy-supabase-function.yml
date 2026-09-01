@@ -1,4 +1,4 @@
-name: Deploy Rivaldo Edge Function
+name: Deploy Heavynauta Edge Functions
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - "supabase/functions/plan-rivaldo-treatment/**"
+      - "supabase/functions/process-editorial-queue/**"
+      - "supabase/functions/upload-episode-to-onedrive/**"
+      - "supabase/functions/_shared/**"
       - "supabase/config.toml"
       - ".github/workflows/deploy-supabase-function.yml"
   workflow_dispatch:
@@ -34,7 +37,10 @@ jobs:
         with:
           version: latest
 
-      - name: Deploy plan-rivaldo-treatment
+      - name: Deploy Heavynauta functions
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: supabase functions deploy plan-rivaldo-treatment --project-ref dfzuvcchzcpbnvtjaaca
+        run: |
+          supabase functions deploy process-editorial-queue --project-ref dfzuvcchzcpbnvtjaaca
+          supabase functions deploy upload-episode-to-onedrive --project-ref dfzuvcchzcpbnvtjaaca
+          supabase functions deploy plan-rivaldo-treatment --project-ref dfzuvcchzcpbnvtjaaca
