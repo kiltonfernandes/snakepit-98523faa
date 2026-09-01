@@ -316,6 +316,30 @@ export function RivaldoProvider({ children }: { children: React.ReactNode }) {
               if (!savedMaterial) throw new Error(`Nenhum episódio atualizado para ${materialId}`);
 
               updateMaterial(materialId, repositoryPatch);
+              if (upload.preprodPautaId) {
+                const { data: preprod, error: preprodError } = await supabase
+                  .from('preprod_pautas')
+                  .select('data')
+                  .eq('id', upload.preprodPautaId)
+                  .maybeSingle();
+                if (preprodError) throw preprodError;
+                const previousData = (preprod?.data || {}) as Record<string, unknown>;
+                const { error: lockError } = await supabase
+                  .from('preprod_pautas')
+                  .update({
+                    status: 'final',
+                    data: {
+                      ...previousData,
+                      editorial_stage: 'final_available',
+                      title_locked: true,
+                      final_uploaded_at: new Date().toISOString(),
+                      final_asset: { file_id: uploaded.fileId, web_url: uploaded.webUrl, filename: uploaded.filename },
+                    },
+                  })
+                  .eq('id', upload.preprodPautaId);
+                if (lockError) throw lockError;
+                addLog('MP3 final salvo: títulos travados', 'success');
+              }
               await refreshMaterials();
               addLog('Link salvo no episódio', 'success');
               dlog.log('materials', 'success', `Link salvo no episode_material ${materialId}`);
