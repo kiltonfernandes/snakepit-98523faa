@@ -137,6 +137,20 @@ export function distributePublicationDates(startDate: string, publicationWeekday
   return result;
 }
 
+
+/**
+ * Sorteia a ordem de uma nova lista antes de associá-la às datas de publicação.
+ * A cópia impede que a ordem digitada no formulário seja alterada visualmente.
+ */
+export function shuffleEditorialQueue<T>(items: readonly T[], random: () => number = Math.random): T[] {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const swapIndex = Math.floor(random() * (index + 1));
+    [shuffled[index], shuffled[swapIndex]] = [shuffled[swapIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
 export function buildEditorialQueueData(input: QueueAlbumInput, queuePosition: number): EditorialQueueData {
   return {
     automation_version: EDITORIAL_AUTOMATION_VERSION,
