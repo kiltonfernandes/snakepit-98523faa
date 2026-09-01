@@ -203,31 +203,21 @@ async function getAppSettings(client: ReturnType<typeof createClient>): Promise<
 }
 
 async function researchWithSonar(artist: string, album: string, genre: string, extraInstructions = "") {
-  const apiKey = Deno.env.get("PERPLEXITY_API_KEY") || Deno.env.get("PPLX_API_KEY");
-  if (!apiKey) throw new Error("PERPLEXITY_API_KEY não está configurada nas Edge Functions");
-  const response = await fetch("https://api.perplexity.ai/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model: "sonar",
-      temperature: 0.1,
-      messages: [
-        { role: "system", content: "Você pesquisa música pesada com rigor documental. Nunca invente fatos. Responda somente no formato solicitado." },
-        { role: "user", content: researchPrompt(artist, album, genre, extraInstructions) },
-      ],
-      web_search_options: { search_context_size: "low" },
-    }),
+  const generated = await callOpenRouterText({
+    system: "Você pesquisa música pesada com rigor documental. Nunca invente fatos. Responda somente no formato solicitado.",
+    user: researchPrompt(artist, album, genre, extraInstructions),
+    temperature: 0.1,
+    maxTokens: 6000,
+    deadlineMs: 90_000,
+    models: ["perplexity/sonar"],
   });
-  if (!response.ok) throw new Error(`Perplexity Sonar falhou [${response.status}]: ${(await response.text()).slice(0, 500)}`);
-  const payload = await response.json();
-  const text = payload?.choices?.[0]?.message?.content;
-  const dossier = parseJson(text);
-  if (!dossier) throw new Error("Sonar não retornou um dossiê JSON válido");
-  const citations = Array.isArray(payload?.citations) ? payload.citations : [];
+  const dossier = parseJson(generated.text);
+  if (!dossier) throw new Error("Perplexity Sonar não retornou um dossiê JSON válido");
+  const citations = generated.citations || [];
   if (!Array.isArray(dossier.source_notes) || dossier.source_notes.length === 0) {
     dossier.source_notes = citations.map((url: string, index: number) => ({ number: index + 1, url, title: url, kind: "source" }));
   }
-  return dossier;
+  return { dossier, model: generated.model || "perplexity/sonar" };
 }
 
 async function generateEditorial(args: {
@@ -327,7 +317,8 @@ async function processPauta(client: ReturnType<typeof createClient>, row: PautaR
     attempts: Number(existing.attempts || 0) + 1,
   });
   try {
-    const dossier = await researchWithSonar(artist, album, genre, settings.promptOverrides.album_research_v1 || "");
+    const researched = await researchWithSonar(artist, album, genre, settings.promptOverrides.album_research_v1 || "");
+    const dossier = researched.dossier;
     working = await updatePauta(client, working, "processing", { editorial_stage: "writing", research_dossier: dossier, research_sources: dossier.source_notes || [] });
     const generated = await generateEditorial({ artist, album, genre, dossier, settings });
     if (generated.output.status === "research_gap") {
@@ -344,7 +335,7 @@ async function processPauta(client: ReturnType<typeof createClient>, row: PautaR
       warnings: generated.output.warnings || [],
       title_locked: false,
       model_used: generated.model,
-      research_model: "sonar",
+      research_model: researched.model,
       prompt_version: "review_complete_v1",
       completed_at: new Date().toISOString(),
       processing_started_at: null,
