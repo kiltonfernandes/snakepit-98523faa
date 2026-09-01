@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { AlertCircle, CheckCircle2, Cloud, CloudUpload, ExternalLink, RefreshCw, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -58,13 +59,9 @@ const Rivaldo = () => {
   const [uiLogs, setUiLogs] = useState<LogEntry[]>([]);
   const [queueFeedback, setQueueFeedback] = useState<QueueFeedback>(null);
   const [isQueueSubmitting, setIsQueueSubmitting] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const desktopMode = isDesktopRuntime();
   const desktopApi = getDesktopApi();
-
-  const selectEpisode = useCallback((episode: RivaldoPreprodEpisode) => {
-    setSelectedEpisode(episode);
-    setFilename(episode.value);
-  }, []);
 
   // Use context state for browser mode, local state for desktop mode
   const progress = desktopMode ? (desktopState?.jobs[0]?.progress ?? 0) : rivaldo.progress;
@@ -81,6 +78,24 @@ const Rivaldo = () => {
   const addUiLog = useCallback((message: string, type: LogEntry['type'] = 'info') => {
     setUiLogs((prev) => [...prev, { timestamp: Date.now(), message, type }].slice(-60));
   }, []);
+
+  const selectEpisode = useCallback(async (episode: RivaldoPreprodEpisode) => {
+    setSelectedEpisode(episode);
+    setFilename(episode.value);
+    setSearchParams({}, { replace: true });
+    const rawUrl = episode.rawDownloadUrl || episode.rawWebUrl;
+    if (!rawUrl) return;
+    try {
+      const response = await fetch(rawUrl);
+      if (!response.ok) throw new Error(`download ${response.status}`);
+      const blob = await response.blob();
+      setMasterMode('single');
+      setMasterFile(new File([blob], episode.rawFilename || `${episode.value}.mp3`, { type: blob.type || 'audio/mpeg' }));
+      addUiLog('Áudio raw carregado da pauta.', 'success');
+    } catch (error) {
+      addUiLog(`Não foi possível baixar o raw automaticamente: ${error instanceof Error ? error.message : 'erro desconhecido'}. Use o link do OneDrive.`, 'error');
+    }
+  }, [addUiLog, setSearchParams]);
 
   const handleDesktopJobQueued = useCallback((job: DesktopState['jobs'][number]) => {
     setDesktopState((prev) => mergeQueuedJobIntoState(prev, job));
@@ -156,7 +171,7 @@ const Rivaldo = () => {
     <div className="flex flex-col h-full">
       <div className="px-6 py-4 flex items-center gap-4 border-b border-border">
         <HeavynautaBrand compact />
-        <EpisodePickerControl filename={filename} selectedId={selectedEpisode?.id ?? null} onSelect={selectEpisode} />
+        <EpisodePickerControl filename={filename} selectedId={selectedEpisode?.id ?? null} requestedId={searchParams.get('preprod')} onSelect={selectEpisode} />
         <div className="ml-auto flex items-center gap-2">
           <AgenticToggle />
           <BulkControls
@@ -178,7 +193,7 @@ const Rivaldo = () => {
           <MultiTrackMaster mode={masterMode} onModeChange={setMasterMode} singleFile={masterFile} onSingleFileChange={setMasterFile} multiFiles={masterTracks} onMultiFilesChange={setMasterTracks} processingProfile={processingProfile} disabled={isProcessing} />
 
           <div className="grid grid-cols-3 gap-4">
-            <BgmPickerCard file={files.bgm} onFileChange={(file) => handleFileChange('bgm', file)} />
+            <BgmPickerCard file={files.bgm} onFileChange={(file) => handleFileChange('bgm', file)} suggestedGenres={selectedEpisode?.genre ? [selectedEpisode.genre] : []} />
 
             {NON_MASTER_SLOTS.map((slot, index) => (
               <UploadSlot key={slot.key} label={slot.label} sublabel={slot.sublabel} file={files[slot.key]} onFileChange={(file) => handleFileChange(slot.key, file)} index={index + 2} presets={slot.presets} />
@@ -212,7 +227,7 @@ const Rivaldo = () => {
                   <Checkbox id="upload-cloud" checked={uploadToCloud} onCheckedChange={(v) => setUploadToCloud(v === true)} disabled={isProcessing} />
                   <Label htmlFor="upload-cloud" className="text-xs font-mono cursor-pointer flex items-center gap-1.5">
                     <Cloud className="w-3.5 h-3.5" /> Enviar para OneDrive
-                    <span className="text-muted-foreground">(Snakepit/{new Date().getFullYear()}-W##)</span>
+                    <span className="text-muted-foreground">(OneDrive/{new Date().getFullYear()}-W##)</span>
                   </Label>
                 </div>
                 {selectedEpisode?.repositoryUrl && (
