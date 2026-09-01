@@ -88,18 +88,25 @@ Deno.serve(async (req) => {
   }
   const { episodeId, reports } = reqParsed.data;
 
-  let extraInstructions = '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (serviceKey) {
-    const admin = createClient(supaUrl, serviceKey);
-    const { data: appSettings } = await admin
-      .from('app_settings')
-      .select('prompt_overrides_json')
-      .eq('singleton_id', 1)
-      .maybeSingle();
-    const overrides = (appSettings as { prompt_overrides_json?: Record<string, unknown> } | null)?.prompt_overrides_json;
-    if (typeof overrides?.rivaldo_treatment_v1 === 'string') extraInstructions = overrides.rivaldo_treatment_v1;
+  if (!serviceKey) return json({ error: 'server_misconfigured' }, 500, cors);
+  const admin = createClient(supaUrl, serviceKey);
+  const { data: appSettings, error: settingsError } = await admin
+    .from('app_settings')
+    .select('rivaldo_agentic_v1_enabled, prompt_overrides_json')
+    .eq('singleton_id', 1)
+    .maybeSingle();
+  if (settingsError) return json({ error: 'settings_unavailable' }, 503, cors);
+
+  // Defesa no servidor: mesmo que alguém tente chamar a função diretamente,
+  // nenhuma chamada ao OpenRouter é feita enquanto a chave da IA estiver OFF.
+  if ((appSettings as { rivaldo_agentic_v1_enabled?: boolean } | null)?.rivaldo_agentic_v1_enabled !== true) {
+    return json({ error: 'agentic_disabled' }, 403, cors);
   }
+
+  let extraInstructions = '';
+  const overrides = (appSettings as { prompt_overrides_json?: Record<string, unknown> } | null)?.prompt_overrides_json;
+  if (typeof overrides?.rivaldo_treatment_v1 === 'string') extraInstructions = overrides.rivaldo_treatment_v1;
 
   // 3) Chamada única ao OpenRouter (structured output, sem retry, com timeout).
   const messages = buildEpisodePlannerMessages(episodeId, reports, extraInstructions);
